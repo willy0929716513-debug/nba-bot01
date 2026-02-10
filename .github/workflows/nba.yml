@@ -2,7 +2,7 @@ name: NBA Bot Daily
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # UTC 0 = 台灣 08:00
+    - cron: "45 23 * * *"  # UTC 23:45 = 台灣 07:45
   workflow_dispatch:
 
 jobs:
@@ -26,4 +26,5 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: python nba_bot.py
+
 
