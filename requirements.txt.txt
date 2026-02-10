@@ -1,0 +1,5 @@
+requests
+discord-webhook
+numpy
+pandas
+
