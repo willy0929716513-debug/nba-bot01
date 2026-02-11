@@ -6,6 +6,13 @@ import datetime
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 
+# ===== 檢查環境變數 =====
+if not API_KEY:
+    raise ValueError("ODDS_API_KEY 沒有設定")
+
+if not WEBHOOK_URL:
+    raise ValueError("DISCORD_WEBHOOK 沒有設定")
+
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
 # ===== 中文隊名 =====
@@ -62,8 +69,25 @@ def analyze():
         "oddsFormat": "decimal"
     }
 
-    res = requests.get(BASE_URL, params=params)
-    games = res.json()
+    try:
+        res = requests.get(BASE_URL, params=params, timeout=10)
+    except requests.exceptions.RequestException as e:
+        send_discord(f"❌ 抓取 Odds API 失敗: {e}")
+        return
+
+    if res.status_code != 200:
+        send_discord(f"❌ API回傳錯誤 {res.status_code}:\n{res.text}")
+        return
+
+    try:
+        games = res.json()
+    except:
+        send_discord(f"❌ Odds API 回傳非JSON:\n{res.text}")
+        return
+
+    if not games:
+        send_discord("❌ 今日沒有比賽資料")
+        return
 
     recommend_text = "**🔥推薦下注（職業模型V4）**\n"
     all_text = "\n\n全部比賽\n"
@@ -145,15 +169,13 @@ def analyze():
             if k > 0.03:
                 recs.append(f"🔴🔥 勝負：{away} (Kelly {k})")
 
-        # ===== 讓分推薦（看讓幾分）=====
+        # ===== 讓分推薦 =====
         if home_spread is not None:
-
             if prob_home > 0.60:
                 if home_spread <= -6:
                     recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
                 if home_spread <= -8 and prob_home > 0.65:
                     recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
-
             elif prob_home < 0.40:
                 if home_spread >= 6:
                     recs.append(f"🔴🔥 讓分：{away} {-home_spread:+}")
@@ -163,7 +185,6 @@ def analyze():
         # ===== 大小分推薦 =====
         if total_point is not None:
             diff = abs(prob_home - 0.5)
-
             if diff > 0.18:
                 recs.append(f"🔴🔥 大小分：小於 {total_point}")
             elif diff < 0.06:
@@ -180,11 +201,12 @@ def analyze():
         for r in recs:
             all_text += r + "\n"
 
+    # ===== 發送 Discord =====
     send_discord(recommend_text)
     send_discord(all_text)
 
 
-# ===== 執行 =====
+# ===== 主程式執行 =====
 if __name__ == "__main__":
     print("執行時間:", datetime.datetime.now())
     analyze()
