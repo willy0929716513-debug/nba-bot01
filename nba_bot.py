@@ -6,7 +6,7 @@ import datetime
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 
-# ===== 檢查環境變數 =====
+# ===== 環境檢查 =====
 if not API_KEY:
     raise ValueError("ODDS_API_KEY 沒有設定")
 
@@ -15,39 +15,47 @@ if not WEBHOOK_URL:
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-# ===== 中文隊名 =====
+# ===== 中文隊名對照（完整英文名 + fallback簡寫） =====
 TEAM_CN = {
-    "Lakers": "湖人",
-    "Warriors": "勇士",
-    "Celtics": "塞爾提克",
-    "Bucks": "公鹿",
-    "Nuggets": "金塊",
-    "Thunder": "雷霆",
-    "Suns": "太陽",
-    "Clippers": "快艇",
-    "Heat": "熱火",
-    "76ers": "七六人",
-    "Kings": "國王",
-    "Pelicans": "鵜鶘",
-    "Timberwolves": "灰狼",
-    "Mavericks": "獨行俠",
-    "Knicks": "尼克",
-    "Magic": "魔術",
-    "Hornets": "黃蜂",
-    "Pistons": "活塞",
-    "Raptors": "暴龍",
-    "Bulls": "公牛",
-    "Spurs": "馬刺",
-    "Jazz": "爵士",
-    "Nets": "籃網",
-    "Hawks": "老鷹",
-    "Cavaliers": "騎士",
-    "Pacers": "溜馬",
-    "Grizzlies": "灰熊",
-    "Trail Blazers": "拓荒者"
+    "Los Angeles Lakers": "湖人",
+    "Golden State Warriors": "勇士",
+    "Boston Celtics": "塞爾提克",
+    "Milwaukee Bucks": "公鹿",
+    "Denver Nuggets": "金塊",
+    "Oklahoma City Thunder": "雷霆",
+    "Phoenix Suns": "太陽",
+    "Los Angeles Clippers": "快艇",
+    "Miami Heat": "熱火",
+    "Philadelphia 76ers": "七六人",
+    "Sacramento Kings": "國王",
+    "New Orleans Pelicans": "鵜鶘",
+    "Minnesota Timberwolves": "灰狼",
+    "Dallas Mavericks": "獨行俠",
+    "New York Knicks": "尼克",
+    "Orlando Magic": "魔術",
+    "Charlotte Hornets": "黃蜂",
+    "Detroit Pistons": "活塞",
+    "Toronto Raptors": "暴龍",
+    "Chicago Bulls": "公牛",
+    "San Antonio Spurs": "馬刺",
+    "Utah Jazz": "爵士",
+    "Brooklyn Nets": "籃網",
+    "Atlanta Hawks": "老鷹",
+    "Cleveland Cavaliers": "騎士",
+    "Indiana Pacers": "溜馬",
+    "Memphis Grizzlies": "灰熊",
+    "Portland Trail Blazers": "拓荒者"
 }
 
-# ===== Discord 分段 =====
+def get_team_cn(name):
+    # 先找完整名稱
+    if name in TEAM_CN:
+        return TEAM_CN[name]
+    # 再找簡寫（最後一個單字）
+    short = name.split()[-1]
+    return TEAM_CN.get(short, name)
+
+# ===== Discord 分段發送 =====
 def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
@@ -96,8 +104,8 @@ def analyze():
         home_en = g["home_team"]
         away_en = g["away_team"]
 
-        home = TEAM_CN.get(home_en, home_en)
-        away = TEAM_CN.get(away_en, away_en)
+        home = get_team_cn(home_en)
+        away = get_team_cn(away_en)
 
         try:
             markets = g["bookmakers"][0]["markets"]
@@ -169,18 +177,20 @@ def analyze():
             if k > 0.03:
                 recs.append(f"🔴🔥 勝負：{away} (Kelly {k})")
 
-        # ===== 讓分推薦 =====
+        # ===== 讓分推薦（正負都顯示） =====
         if home_spread is not None:
+            # 主勝率高，推薦主隊讓分
             if prob_home > 0.60:
-                if home_spread <= -6:
+                if home_spread < 0:
                     recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
-                if home_spread <= -8 and prob_home > 0.65:
-                    recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
+                else:
+                    recs.append(f"🔴🔥 讓分：{away} {abs(home_spread):+}")
+            # 主勝率低，推薦客隊讓分
             elif prob_home < 0.40:
-                if home_spread >= 6:
-                    recs.append(f"🔴🔥 讓分：{away} {-home_spread:+}")
-                if home_spread >= 8 and prob_home < 0.35:
-                    recs.append(f"🔴🔥 讓分：{away} {-home_spread:+}")
+                if home_spread < 0:
+                    recs.append(f"🔴🔥 讓分：{away} {abs(home_spread):+}")
+                else:
+                    recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
 
         # ===== 大小分推薦 =====
         if total_point is not None:
@@ -196,7 +206,7 @@ def analyze():
             for r in recs:
                 recommend_text += r + "\n"
 
-        # ===== 全部比賽 =====
+        # ===== 全部比賽區 =====
         all_text += game_line
         for r in recs:
             all_text += r + "\n"
