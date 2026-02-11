@@ -1,14 +1,14 @@
 import requests
-from datetime import datetime
+import os
+import datetime
 
-# ===== 你的設定 =====
-API_KEY = "4c7bb99948506cb694deb4dcbf43de76"
-
-WEBHOOK = "https://discordapp.com/api/webhooks/1470301767785775145/pGwf_zhEOYLwhDwBrW1BzsUDlfDjC0vtHFgknuTo24jdV10Fd2tPtsNvZBHCSgOyuGIg"
+# ===== 環境變數 =====
+API_KEY = os.getenv("ODDS_API_KEY")
+WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-# ===== 中文隊名對照 =====
+# ===== 中文隊名 =====
 TEAM_CN = {
     "Lakers": "湖人",
     "Warriors": "勇士",
@@ -40,12 +40,12 @@ TEAM_CN = {
     "Trail Blazers": "拓荒者"
 }
 
-# ===== Discord分段（避免2000字錯誤）=====
+# ===== Discord 分段 =====
 def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
         part = text[i:i+MAX]
-        requests.post(WEBHOOK, json={"content": part})
+        requests.post(WEBHOOK_URL, json={"content": part})
 
 # ===== Kelly公式 =====
 def kelly(prob, odds=1.91):
@@ -53,12 +53,7 @@ def kelly(prob, odds=1.91):
     k = (prob * b - (1 - prob)) / b
     return max(0, round(k, 3))
 
-# ===== EMA實力模型（簡化版）=====
-def team_power(moneyline):
-    prob = 1 / moneyline
-    return prob
-
-# ===== 主要分析 =====
+# ===== 主分析 =====
 def analyze():
     params = {
         "apiKey": API_KEY,
@@ -70,15 +65,18 @@ def analyze():
     res = requests.get(BASE_URL, params=params)
     games = res.json()
 
-    recommend_text = "**🔥推薦下注（職業模型）**\n"
+    recommend_text = "**🔥推薦下注（職業模型V4）**\n"
     all_text = "\n\n全部比賽\n"
 
     for g in games:
-        home = TEAM_CN.get(g["home_team"], g["home_team"])
-        away = TEAM_CN.get(g["away_team"], g["away_team"])
+        home_en = g["home_team"]
+        away_en = g["away_team"]
+
+        home = TEAM_CN.get(home_en, home_en)
+        away = TEAM_CN.get(away_en, away_en)
 
         try:
-            book = g["bookmakers"][0]["markets"]
+            markets = g["bookmakers"][0]["markets"]
         except:
             continue
 
@@ -86,7 +84,7 @@ def analyze():
         spread = None
         total = None
 
-        for m in book:
+        for m in markets:
             if m["key"] == "h2h":
                 h2h = m["outcomes"]
             elif m["key"] == "spreads":
@@ -98,27 +96,37 @@ def analyze():
             continue
 
         # ===== 勝負 =====
-        home_ml = [o for o in h2h if TEAM_CN.get(o["name"], o["name"]) == home][0]["price"]
-        away_ml = [o for o in h2h if TEAM_CN.get(o["name"], o["name"]) == away][0]["price"]
+        try:
+            home_ml = [o for o in h2h if o["name"] == home_en][0]["price"]
+            away_ml = [o for o in h2h if o["name"] == away_en][0]["price"]
+        except:
+            continue
 
-        home_power_val = team_power(home_ml)
-        away_power_val = team_power(away_ml)
-
-        prob_home = home_power_val / (home_power_val + away_power_val)
+        home_power = 1 / home_ml
+        away_power = 1 / away_ml
+        prob_home = home_power / (home_power + away_power)
 
         # ===== 讓分 =====
+        home_spread = None
         spread_text = ""
         if spread:
-            home_spread = [o for o in spread if TEAM_CN.get(o["name"], o["name"]) == home][0]["point"]
-            spread_text = f"{home} {home_spread:+}"
+            try:
+                home_spread = [o for o in spread if o["name"] == home_en][0]["point"]
+                spread_text = f"{home} {home_spread:+}"
+            except:
+                pass
 
         # ===== 大小分 =====
+        total_point = None
         total_text = ""
         if total:
-            total_point = total[0]["point"]
-            total_text = f"{total_point}"
+            try:
+                total_point = total[0]["point"]
+                total_text = str(total_point)
+            except:
+                pass
 
-        # ===== 判斷推薦 =====
+        # ===== 比賽資訊 =====
         game_line = f"\n{away} vs {home}\n"
         game_line += f"主勝率：{prob_home:.2f}\n"
         game_line += f"讓分：{spread_text}\n"
@@ -126,35 +134,48 @@ def analyze():
 
         recs = []
 
-        # 勝負推薦
+        # ===== 勝負推薦 =====
         if prob_home > 0.58:
             k = kelly(prob_home)
             if k > 0.03:
                 recs.append(f"🔴🔥 勝負：{home} (Kelly {k})")
+
         elif prob_home < 0.42:
             k = kelly(1 - prob_home)
             if k > 0.03:
                 recs.append(f"🔴🔥 勝負：{away} (Kelly {k})")
 
-        # 讓分推薦
-        if spread and abs(prob_home - 0.5) > 0.12:
-            if prob_home > 0.62:
-                recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
-            elif prob_home < 0.38:
-                recs.append(f"🔴🔥 讓分：{away} {-home_spread:+}")
+        # ===== 讓分推薦（看讓幾分）=====
+        if home_spread is not None:
 
-        # 大小分推薦
-        if total:
-            if prob_home > 0.65 or prob_home < 0.35:
+            if prob_home > 0.60:
+                if home_spread <= -6:
+                    recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
+                if home_spread <= -8 and prob_home > 0.65:
+                    recs.append(f"🔴🔥 讓分：{home} {home_spread:+}")
+
+            elif prob_home < 0.40:
+                if home_spread >= 6:
+                    recs.append(f"🔴🔥 讓分：{away} {-home_spread:+}")
+                if home_spread >= 8 and prob_home < 0.35:
+                    recs.append(f"🔴🔥 讓分：{away} {-home_spread:+}")
+
+        # ===== 大小分推薦 =====
+        if total_point is not None:
+            diff = abs(prob_home - 0.5)
+
+            if diff > 0.18:
                 recs.append(f"🔴🔥 大小分：小於 {total_point}")
+            elif diff < 0.06:
+                recs.append(f"🔴🔥 大小分：大於 {total_point}")
 
-        # 加入推薦區
+        # ===== 推薦區 =====
         if recs:
             recommend_text += game_line
             for r in recs:
                 recommend_text += r + "\n"
 
-        # 全部比賽區
+        # ===== 全部比賽 =====
         all_text += game_line
         for r in recs:
             all_text += r + "\n"
@@ -164,4 +185,6 @@ def analyze():
 
 
 # ===== 執行 =====
-analyze()
+if __name__ == "__main__":
+    print("執行時間:", datetime.datetime.now())
+    analyze()
