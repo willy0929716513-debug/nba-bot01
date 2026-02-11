@@ -1,9 +1,8 @@
-name: NBA Daily Bot
+name: NBA Bot
 
 on:
   schedule:
-    # 台灣時間 07:45 (UTC 23:45)
-    - cron: "45 23 * * *"
+    - cron: '45 23 * * *'   # 台灣 07:45
   workflow_dispatch:
 
 jobs:
@@ -11,20 +10,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 下載程式碼
-        uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v3
 
-      - name: 設定 Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: 安裝套件
-        run: |
-          pip install requests
+    - name: Install packages
+      run: pip install -r requirements.txt
 
-      - name: 執行 NBA Bot
-        run: python nba_bot.py
-
-
-
+    - name: Run NBA Bot
+      run: python nba_bot.py
+      env:
+        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
