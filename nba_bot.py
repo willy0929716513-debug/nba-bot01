@@ -65,7 +65,6 @@ def kelly(prob, odds=1.91):
 
 # ===== EMA實力（模擬近況）=====
 def ema_power(prob):
-    # 模擬近期狀態：向極端靠一點
     if prob > 0.6:
         return prob + 0.03
     elif prob < 0.4:
@@ -163,10 +162,10 @@ def analyze():
                     signal_count += 1
 
         # ===== 至少2個訊號才推薦 =====
-if signal_count >= 2:
-    recommend_text += game_info
-    for r in recs:
-        recommend_text += r + "\n"
+        if signal_count >= 2:
+            recommend_text += game_info
+            for r in recs:
+                recommend_text += r + "\n"
 
         # 全部比賽
         all_text += game_info
