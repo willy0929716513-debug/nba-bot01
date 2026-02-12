@@ -1,18 +1,15 @@
 import os
 import requests
 
-# ===== 讀取環境變數 =====
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not ODDS_API_KEY:
     raise ValueError("ODDS_API_KEY 沒有設定")
-if not WEBHOOK_URL:
-    raise ValueError("WEBHOOK_URL 沒有設定")
 
 URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-# ===== 中文隊名對照 =====
+# 中文隊名
 team_map = {
     "Milwaukee Bucks": "公鹿",
     "Orlando Magic": "魔術",
@@ -49,21 +46,10 @@ team_map = {
 def zh(name):
     return team_map.get(name, name)
 
-# ===== Kelly公式 =====
 def kelly(prob, odds=1.91):
     b = odds - 1
     return max((prob * b - (1 - prob)) / b, 0)
 
-# ===== 分段發送 Discord =====
-def send_discord(message):
-    MAX_LEN = 1900
-    for i in range(0, len(message), MAX_LEN):
-        part = message[i:i+MAX_LEN]
-        r = requests.post(WEBHOOK_URL, json={"content": part})
-        if r.status_code != 200:
-            print("Discord 發送失敗:", r.status_code, r.text)
-
-# ===== 分析比賽 =====
 def analyze():
     params = {
         "apiKey": ODDS_API_KEY,
@@ -72,11 +58,7 @@ def analyze():
         "oddsFormat": "decimal"
     }
 
-    res = requests.get(URL, params=params)
-    games = res.json()
-    if not games:
-        send_discord("今天沒有比賽或 Odds API 無資料")
-        return
+    games = requests.get(URL, params=params).json()
 
     recommend_list = []
     normal_list = []
@@ -84,14 +66,12 @@ def analyze():
     for game in games:
         home = game["home_team"]
         away = game["away_team"]
+
         home_zh = zh(home)
         away_zh = zh(away)
 
-        if not game.get("bookmakers"):
-            continue
-
         for book in game["bookmakers"]:
-            markets = book.get("markets", [])
+            markets = book["markets"]
 
             h2h = None
             spreads = None
@@ -105,14 +85,16 @@ def analyze():
             if not h2h or not spreads:
                 continue
 
-            # 勝率計算
+            # 賠率轉勝率
             home_odds = next(o["price"] for o in h2h if o["name"] == home)
             away_odds = next(o["price"] for o in h2h if o["name"] == away)
+
             home_prob = 1 / home_odds
             away_prob = 1 / away_odds
-            total_prob = home_prob + away_prob
-            home_prob /= total_prob
-            away_prob /= total_prob
+            total = home_prob + away_prob
+
+            home_prob /= total
+            away_prob /= total
 
             home_k = kelly(home_prob)
             away_k = kelly(away_prob)
@@ -121,35 +103,47 @@ def analyze():
             home_spread = next(o["point"] for o in spreads if o["name"] == home)
             away_spread = next(o["point"] for o in spreads if o["name"] == away)
 
-            text = f"{away_zh} vs {home_zh}\n主勝率：{home_prob:.2f}\n讓分：{home_zh} {home_spread:+}\n"
+            text = f"{away_zh} vs {home_zh}\n"
+            text += f"主勝率：{home_prob:.2f}\n"
+            text += f"讓分：{home_zh} {home_spread:+}\n"
 
             reco = ""
-            # ===== 勝負推薦 =====
-            if home_prob >= 0.63 and home_k >= 0.06:
+
+            # ===== 勝負推薦（嚴格）=====
+            if home_prob >= 0.68 and home_k >= 0.06:
                 reco += f"🔴🔥 勝負：{home_zh} (Kelly {home_k:.2f})\n"
-            elif home_prob <= 0.37 and away_k >= 0.06:
+
+            elif home_prob <= 0.32 and away_k >= 0.06:
                 reco += f"🔴🔥 勝負：{away_zh} (Kelly {away_k:.2f})\n"
 
-            # ===== 讓分推薦 =====
-            if home_prob >= 0.68 and home_spread <= -6:
+            # ===== 讓分推薦（機構條件）=====
+            if home_prob >= 0.75 and home_spread <= -6:
                 reco += f"🔴🔥 讓分：{home_zh} {home_spread:+}\n"
-            elif home_prob <= 0.32 and away_spread >= 6:
+
+            elif home_prob <= 0.25 and away_spread >= 6:
                 reco += f"🔴🔥 讓分：{away_zh} {away_spread:+}\n"
 
             if reco:
                 recommend_list.append(text + reco + "\n")
             else:
                 normal_list.append(text + "\n")
+
             break
 
-    # 組訊息
-    message = "**🔥推薦下注（職業模型V7 放寬版）**\n\n"
-    message += "".join(recommend_list) if recommend_list else "今日無強勢推薦\n\n"
+    message = "**🔥推薦下注（職業模型V7）**\n\n"
+
+    if recommend_list:
+        message += "".join(recommend_list)
+    else:
+        message += "今日無強勢推薦\n\n"
+
     message += "\n---\n\n**全部比賽**\n\n"
     message += "".join(normal_list)
 
-    send_discord(message)
+    if WEBHOOK_URL:
+        requests.post(WEBHOOK_URL, json={"content": message})
+    else:
+        print(message)
 
-# ===== 執行 =====
 if __name__ == "__main__":
     analyze()
