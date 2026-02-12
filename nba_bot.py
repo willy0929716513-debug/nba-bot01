@@ -10,7 +10,7 @@ if not API_KEY:
     raise ValueError("ODDS_API_KEY 沒有設定")
 
 if not WEBHOOK_URL:
-    raise ValueError("DISCORD_WEBHOOK 沒有設定")
+    raise ValueError("WEBHOOK_URL 沒有設定")
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
@@ -53,7 +53,9 @@ def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
         part = text[i:i+MAX]
-        requests.post(WEBHOOK_URL, json={"content": part})
+        r = requests.post(WEBHOOK_URL, json={"content": part})
+        if r.status_code != 200:
+            print("Discord 發送失敗:", r.status_code, r.text)
 
 # ===== Kelly公式 =====
 def kelly(prob, odds=1.91):
@@ -79,14 +81,14 @@ def analyze():
     params = {
         "apiKey": API_KEY,
         "regions": "us",
-        "markets": "h2h,spreads,totals",
+        "markets": "h2h,spreads",
         "oddsFormat": "decimal"
     }
 
     res = requests.get(BASE_URL, params=params)
     games = res.json()
 
-    recommend_text = "**🔥推薦下注（職業模型V7）**\n"
+    recommend_text = "**🔥推薦下注（職業模型V7 精準版）**\n"
     all_text = "\n\n全部比賽\n"
 
     for g in games:
@@ -103,15 +105,12 @@ def analyze():
 
         h2h = None
         spreads = None
-        totals = None
 
         for m in markets:
             if m["key"] == "h2h":
                 h2h = m["outcomes"]
             elif m["key"] == "spreads":
                 spreads = m["outcomes"]
-            elif m["key"] == "totals":
-                totals = m["outcomes"]
 
         if not h2h:
             continue
@@ -137,23 +136,15 @@ def analyze():
             spread_val = home_spread
             spread_text = f"{home} {home_spread:+}"
 
-        # ===== 大小分 =====
-        total_text = ""
-        total_val = None
-        if totals:
-            total_val = totals[0]["point"]
-            total_text = f"{total_val}"
-
         # ===== 顯示內容 =====
         game_info = f"\n{away} vs {home}\n"
         game_info += f"主勝率：{p_home:.2f}\n"
         game_info += f"讓分：{spread_text}\n"
-        game_info += f"大小分：{total_text}\n"
 
         recs = []
         signal_count = 0
 
-        # ===== 勝負（嚴格）=====
+        # ===== 勝負推薦（嚴格）=====
         if p_home > 0.67 and k_home > 0.05:
             recs.append(f"🔴🔥 勝負：{home} (Kelly {k_home})")
             signal_count += 1
@@ -161,7 +152,7 @@ def analyze():
             recs.append(f"🔴🔥 勝負：{away} (Kelly {k_away})")
             signal_count += 1
 
-        # ===== 讓分（只推合理區間）=====
+        # ===== 讓分推薦（合理範圍）=====
         if spread_val is not None:
             if 3 <= abs(spread_val) <= 9:
                 if p_home > 0.70:
@@ -171,17 +162,8 @@ def analyze():
                     recs.append(f"🔴🔥 讓分：{away} {-spread_val:+}")
                     signal_count += 1
 
-        # ===== 大小分（極端盤）=====
-        if total_val is not None:
-            if total_val >= 238:
-                recs.append(f"🔴🔥 大小分：小於 {total_val}")
-                signal_count += 1
-            elif total_val <= 210:
-                recs.append(f"🔴🔥 大小分：大於 {total_val}")
-                signal_count += 1
-
-        # ===== 至少2個訊號才推薦 =====
-        if signal_count >= 2:
+        # ===== 至少1個訊號才推薦 =====
+        if signal_count >= 1:
             recommend_text += game_info
             for r in recs:
                 recommend_text += r + "\n"
