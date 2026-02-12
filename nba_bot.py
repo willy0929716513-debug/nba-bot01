@@ -162,11 +162,11 @@ def analyze():
                     recs.append(f"🔴🔥 讓分：{away} {-spread_val:+}")
                     signal_count += 1
 
-        # ===== 至少1個訊號才推薦 =====
-        if signal_count >= 1:
-            recommend_text += game_info
-            for r in recs:
-                recommend_text += r + "\n"
+        # ===== 至少2個訊號才推薦 =====
+if signal_count >= 2:
+    recommend_text += game_info
+    for r in recs:
+        recommend_text += r + "\n"
 
         # 全部比賽
         all_text += game_info
