@@ -1,6 +1,7 @@
 import os
 import requests
 
+# 環境變數
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
@@ -9,7 +10,7 @@ if not ODDS_API_KEY:
 
 URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-# 中文隊名
+# 中文隊名對照
 team_map = {
     "Milwaukee Bucks": "公鹿",
     "Orlando Magic": "魔術",
@@ -58,7 +59,11 @@ def analyze():
         "oddsFormat": "decimal"
     }
 
-    games = requests.get(URL, params=params).json()
+    res = requests.get(URL, params=params)
+    games = res.json()
+    if not games:
+        print("今天沒有比賽或 Odds API 無資料")
+        return
 
     recommend_list = []
     normal_list = []
@@ -70,8 +75,11 @@ def analyze():
         home_zh = zh(home)
         away_zh = zh(away)
 
+        if not game.get("bookmakers"):
+            continue
+
         for book in game["bookmakers"]:
-            markets = book["markets"]
+            markets = book.get("markets", [])
 
             h2h = None
             spreads = None
@@ -85,14 +93,13 @@ def analyze():
             if not h2h or not spreads:
                 continue
 
-            # 賠率轉勝率
+            # 勝率計算
             home_odds = next(o["price"] for o in h2h if o["name"] == home)
             away_odds = next(o["price"] for o in h2h if o["name"] == away)
 
             home_prob = 1 / home_odds
             away_prob = 1 / away_odds
             total = home_prob + away_prob
-
             home_prob /= total
             away_prob /= total
 
@@ -109,34 +116,26 @@ def analyze():
 
             reco = ""
 
-            # ===== 勝負推薦（嚴格）=====
-            if home_prob >= 0.68 and home_k >= 0.06:
+            # 勝負推薦（稍微放寬）
+            if home_prob >= 0.63 and home_k >= 0.06:
                 reco += f"🔴🔥 勝負：{home_zh} (Kelly {home_k:.2f})\n"
-
-            elif home_prob <= 0.32 and away_k >= 0.06:
+            elif home_prob <= 0.37 and away_k >= 0.06:
                 reco += f"🔴🔥 勝負：{away_zh} (Kelly {away_k:.2f})\n"
 
-            # ===== 讓分推薦（機構條件）=====
-            if home_prob >= 0.75 and home_spread <= -6:
+            # 讓分推薦（稍微放寬）
+            if home_prob >= 0.68 and home_spread <= -6:
                 reco += f"🔴🔥 讓分：{home_zh} {home_spread:+}\n"
-
-            elif home_prob <= 0.25 and away_spread >= 6:
+            elif home_prob <= 0.32 and away_spread >= 6:
                 reco += f"🔴🔥 讓分：{away_zh} {away_spread:+}\n"
 
             if reco:
                 recommend_list.append(text + reco + "\n")
             else:
                 normal_list.append(text + "\n")
-
             break
 
-    message = "**🔥推薦下注（職業模型V7）**\n\n"
-
-    if recommend_list:
-        message += "".join(recommend_list)
-    else:
-        message += "今日無強勢推薦\n\n"
-
+    message = "**🔥推薦下注（職業模型V7 放寬版）**\n\n"
+    message += "".join(recommend_list) if recommend_list else "今日無強勢推薦\n\n"
     message += "\n---\n\n**全部比賽**\n\n"
     message += "".join(normal_list)
 
