@@ -2,23 +2,29 @@ name: NBA Bot
 
 on:
   schedule:
-    - cron: '30 23 * * *'  # UTC 23:30 = 台灣 07:30
+    # 每天台灣時間 7:30 → UTC -8 = 23:30 前一天
+    - cron: '30 23 * * *'
   workflow_dispatch:
+
+env:
+  ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+  WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: pip install requests
-      - name: Run NBA Bot
-        env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: python nba_bot.py
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: pip install requests
+
+    - name: Run NBA Bot
+      run: python nba_bot.py
