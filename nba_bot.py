@@ -75,7 +75,7 @@ def analyze():
     res = requests.get(URL, params=params)
     games = res.json()
     if not games:
-        print("今天沒有比賽或 Odds API 無資料")
+        send_discord("今天沒有比賽或 Odds API 無資料")
         return
 
     recommend_list = []
