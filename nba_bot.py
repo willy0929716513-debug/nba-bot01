@@ -1,7 +1,7 @@
 import os
 import requests
 
-# ===== 環境變數 =====
+# ===== 讀取環境變數 =====
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
@@ -124,13 +124,13 @@ def analyze():
             text = f"{away_zh} vs {home_zh}\n主勝率：{home_prob:.2f}\n讓分：{home_zh} {home_spread:+}\n"
 
             reco = ""
-            # ===== 勝負推薦（稍微放寬）=====
+            # ===== 勝負推薦 =====
             if home_prob >= 0.63 and home_k >= 0.06:
                 reco += f"🔴🔥 勝負：{home_zh} (Kelly {home_k:.2f})\n"
             elif home_prob <= 0.37 and away_k >= 0.06:
                 reco += f"🔴🔥 勝負：{away_zh} (Kelly {away_k:.2f})\n"
 
-            # ===== 讓分推薦（稍微放寬）=====
+            # ===== 讓分推薦 =====
             if home_prob >= 0.68 and home_spread <= -6:
                 reco += f"🔴🔥 讓分：{home_zh} {home_spread:+}\n"
             elif home_prob <= 0.32 and away_spread >= 6:
