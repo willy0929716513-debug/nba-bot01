@@ -10,7 +10,7 @@ if not API_KEY:
     raise ValueError("ODDS_API_KEY 沒有設定")
 
 if not WEBHOOK_URL:
-    raise ValueError("WEBHOOK_URL 沒有設定")
+    raise ValueError("DISCORD_WEBHOOK 沒有設定")
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
@@ -53,9 +53,7 @@ def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
         part = text[i:i+MAX]
-        r = requests.post(WEBHOOK_URL, json={"content": part})
-        if r.status_code != 200:
-            print("Discord 發送失敗:", r.status_code, r.text)
+        requests.post(WEBHOOK_URL, json={"content": part})
 
 # ===== Kelly公式 =====
 def kelly(prob, odds=1.91):
@@ -63,7 +61,7 @@ def kelly(prob, odds=1.91):
     k = (prob * b - (1 - prob)) / b
     return max(0, round(k, 3))
 
-# ===== EMA實力（模擬近況）=====
+# ===== EMA近況模擬 =====
 def ema_power(prob):
     if prob > 0.6:
         return prob + 0.03
@@ -87,8 +85,8 @@ def analyze():
     res = requests.get(BASE_URL, params=params)
     games = res.json()
 
-    recommend_text = "**🔥推薦下注（職業模型V7 精準版）**\n"
-    all_text = "\n\n全部比賽\n"
+    recommend_text = "**🔥推薦下注（V7 精準版）**\n"
+    has_recommend = False
 
     for g in games:
         home_en = g["home_team"]
@@ -120,7 +118,7 @@ def analyze():
 
         p_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
 
-        # ===== EMA + 主場 =====
+        # EMA + 主場
         p_home = ema_power(p_home)
         p_home = home_adjust(p_home)
 
@@ -143,7 +141,7 @@ def analyze():
         recs = []
         signal_count = 0
 
-        # ===== 勝負推薦（嚴格）=====
+        # ===== 勝負訊號 =====
         if p_home > 0.67 and k_home > 0.05:
             recs.append(f"🔴🔥 勝負：{home} (Kelly {k_home})")
             signal_count += 1
@@ -151,7 +149,7 @@ def analyze():
             recs.append(f"🔴🔥 勝負：{away} (Kelly {k_away})")
             signal_count += 1
 
-        # ===== 讓分推薦（合理範圍）=====
+        # ===== 讓分訊號 =====
         if spread_val is not None:
             if 3 <= abs(spread_val) <= 9:
                 if p_home > 0.70:
@@ -161,19 +159,18 @@ def analyze():
                     recs.append(f"🔴🔥 讓分：{away} {-spread_val:+}")
                     signal_count += 1
 
-        # ===== 至少2個訊號才推薦 =====
+        # ===== 至少2訊號才推薦 =====
         if signal_count >= 2:
+            has_recommend = True
             recommend_text += game_info
             for r in recs:
                 recommend_text += r + "\n"
 
-        # 全部比賽
-        all_text += game_info
-        for r in recs:
-            all_text += r + "\n"
+    # ===== 沒推薦時 =====
+    if not has_recommend:
+        recommend_text += "\n今天沒有符合條件的比賽（嚴格篩選）"
 
     send_discord(recommend_text)
-    send_discord(all_text)
 
 # ===== 執行 =====
 if __name__ == "__main__":
