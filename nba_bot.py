@@ -48,30 +48,33 @@ TEAM_CN = {
     "Houston Rockets": "火箭"
 }
 
-# ===== Discord分段 =====
+# ===== Discord =====
 def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
-        part = text[i:i+MAX]
-        requests.post(WEBHOOK_URL, json={"content": part})
+        requests.post(WEBHOOK_URL, json={"content": text[i:i+MAX]})
 
-# ===== Kelly公式 =====
+# ===== Kelly =====
 def kelly(prob, odds=1.91):
     b = odds - 1
     k = (prob * b - (1 - prob)) / b
     return max(0, round(k, 3))
 
-# ===== EMA近況模擬 =====
-def ema_power(prob):
-    if prob > 0.6:
-        return prob + 0.03
-    elif prob < 0.4:
-        return prob - 0.03
-    return prob
+# ===== 模型機率（V8核心）=====
+def model_probability(market_prob):
+    """
+    對市場機率做偏移，模擬模型判斷
+    市場越極端，回歸一點（避免過熱熱門）
+    """
+    if market_prob > 0.7:
+        market_prob -= 0.04
+    elif market_prob < 0.3:
+        market_prob += 0.04
 
-# ===== 主場加權 =====
-def home_adjust(prob):
-    return min(prob + 0.03, 0.97)
+    # 主場優勢
+    market_prob += 0.02
+
+    return min(max(market_prob, 0.05), 0.95)
 
 # ===== 主程式 =====
 def analyze():
@@ -85,8 +88,8 @@ def analyze():
     res = requests.get(BASE_URL, params=params)
     games = res.json()
 
-    recommend_text = "**🔥推薦下注（V7 精準版）**\n"
-    has_recommend = False
+    text = "**🔥推薦下注（V8 市場錯價模型）**\n"
+    rec_count = 0
 
     for g in games:
         home_en = g["home_team"]
@@ -116,61 +119,58 @@ def analyze():
         home_ml = [o for o in h2h if o["name"] == home_en][0]["price"]
         away_ml = [o for o in h2h if o["name"] == away_en][0]["price"]
 
-        p_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
+        market_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
+        model_home = model_probability(market_home)
 
-        # EMA + 主場
-        p_home = ema_power(p_home)
-        p_home = home_adjust(p_home)
+        value_home = model_home - market_home
+        value_away = (1-model_home) - (1-market_home)
 
-        k_home = kelly(p_home)
-        k_away = kelly(1 - p_home)
+        k_home = min(kelly(model_home), 0.2)
+        k_away = min(kelly(1-model_home), 0.2)
 
         # ===== 讓分 =====
-        spread_text = ""
         spread_val = None
+        spread_text = ""
         if spreads:
             home_spread = [o for o in spreads if o["name"] == home_en][0]["point"]
             spread_val = home_spread
             spread_text = f"{home} {home_spread:+}"
 
-        # ===== 顯示內容 =====
-        game_info = f"\n{away} vs {home}\n"
-        game_info += f"主勝率：{p_home:.2f}\n"
-        game_info += f"讓分：{spread_text}\n"
-
         recs = []
-        signal_count = 0
+        signal = 0
 
-        # ===== 勝負訊號 =====
-        if p_home > 0.67 and k_home > 0.05:
-            recs.append(f"🔴🔥 勝負：{home} (Kelly {k_home})")
-            signal_count += 1
-        elif p_home < 0.33 and k_away > 0.05:
-            recs.append(f"🔴🔥 勝負：{away} (Kelly {k_away})")
-            signal_count += 1
+        # ===== 錯價條件（核心）=====
+        if value_home > 0.04 and k_home > 0.05:
+            recs.append(f"🔴🔥 勝負：{home} (Value {value_home:.2f}, Kelly {k_home})")
+            signal += 1
+        elif value_away > 0.04 and k_away > 0.05:
+            recs.append(f"🔴🔥 勝負：{away} (Value {value_away:.2f}, Kelly {k_away})")
+            signal += 1
 
-        # ===== 讓分訊號 =====
+        # ===== 讓分確認（第二訊號）=====
         if spread_val is not None:
-            if 3 <= abs(spread_val) <= 9:
-                if p_home > 0.70:
+            if 2.5 <= abs(spread_val) <= 6:
+                if model_home > 0.65:
                     recs.append(f"🔴🔥 讓分：{home} {spread_val:+}")
-                    signal_count += 1
-                elif p_home < 0.30:
+                    signal += 1
+                elif model_home < 0.35:
                     recs.append(f"🔴🔥 讓分：{away} {-spread_val:+}")
-                    signal_count += 1
+                    signal += 1
 
-        # ===== 至少2訊號才推薦 =====
-        if signal_count >= 2:
-            has_recommend = True
-            recommend_text += game_info
+        # ===== 至少兩訊號 =====
+        if signal >= 2:
+            rec_count += 1
+            text += f"\n{away} vs {home}\n"
+            text += f"市場主勝率：{market_home:.2f}\n"
+            text += f"模型主勝率：{model_home:.2f}\n"
+            text += f"讓分：{spread_text}\n"
             for r in recs:
-                recommend_text += r + "\n"
+                text += r + "\n"
 
-    # ===== 沒推薦時 =====
-    if not has_recommend:
-        recommend_text += "\n今天沒有符合條件的比賽（嚴格篩選）"
+    if rec_count == 0:
+        text += "\n今日沒有明顯錯價機會"
 
-    send_discord(recommend_text)
+    send_discord(text)
 
 # ===== 執行 =====
 if __name__ == "__main__":
