@@ -13,6 +13,43 @@ if not WEBHOOK_URL:
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
+# ===== 中文隊名 =====
+TEAM_CN = {
+    "Los Angeles Lakers": "湖人",
+    "LA Clippers": "快艇",
+    "Golden State Warriors": "勇士",
+    "Boston Celtics": "塞爾提克",
+    "Milwaukee Bucks": "公鹿",
+    "Denver Nuggets": "金塊",
+    "Phoenix Suns": "太陽",
+    "Miami Heat": "熱火",
+    "Philadelphia 76ers": "七六人",
+    "Dallas Mavericks": "獨行俠",
+    "Sacramento Kings": "國王",
+    "Minnesota Timberwolves": "灰狼",
+    "New York Knicks": "尼克",
+    "Cleveland Cavaliers": "騎士",
+    "Memphis Grizzlies": "灰熊",
+    "Chicago Bulls": "公牛",
+    "Toronto Raptors": "暴龍",
+    "Houston Rockets": "火箭",
+    "Oklahoma City Thunder": "雷霆",
+    "Atlanta Hawks": "老鷹",
+    "Indiana Pacers": "溜馬",
+    "Brooklyn Nets": "籃網",
+    "Utah Jazz": "爵士",
+    "San Antonio Spurs": "馬刺",
+    "Orlando Magic": "魔術",
+    "Charlotte Hornets": "黃蜂",
+    "Detroit Pistons": "活塞",
+    "Washington Wizards": "巫師",
+    "Portland Trail Blazers": "拓荒者",
+    "New Orleans Pelicans": "鵜鶘"
+}
+
+def cn(team):
+    return TEAM_CN.get(team, team)
+
 def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
@@ -24,7 +61,6 @@ def kelly(prob, odds=1.91):
     return max(0, round(k, 3))
 
 def adjust_model(p):
-    # 簡單修正
     if p > 0.6:
         p += 0.02
     elif p < 0.4:
@@ -48,11 +84,13 @@ def analyze():
     res = requests.get(BASE_URL, params=params)
     games = res.json()
 
-    candidates = []
+    best_per_game = []
 
     for g in games:
         home = g["home_team"]
         away = g["away_team"]
+
+        best_pick = None
 
         for book in g["bookmakers"]:
             h2h = None
@@ -73,55 +111,59 @@ def analyze():
             except:
                 continue
 
-            # ===== Moneyline =====
+            # Moneyline
             p_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
             model_p = adjust_model(p_home)
 
             edge_ml = model_p - p_home
             k_ml = kelly(model_p)
 
-            candidates.append({
-                "game": f"{away} vs {home}",
+            pick_ml = {
+                "game": f"{cn(away)} vs {cn(home)}",
                 "type": "不讓分",
-                "pick": home,
+                "pick": cn(home),
                 "edge": edge_ml,
                 "kelly": k_ml
-            })
+            }
 
-            # ===== Spread =====
+            best_pick = pick_ml
+
+            # Spread
             if spreads:
                 try:
                     spread_home = [o for o in spreads if o["name"] == home][0]
                     spread_point = spread_home["point"]
-                    spread_price = spread_home["price"]
 
-                    # 簡單讓分模型（依勝率推估）
                     spread_prob = model_p - (spread_point * 0.015)
                     spread_prob = min(max(spread_prob, 0.05), 0.95)
 
                     edge_sp = spread_prob - 0.5
                     k_sp = kelly(spread_prob)
 
-                    candidates.append({
-                        "game": f"{away} vs {home}",
-                        "type": f"讓分 {spread_point:+}",
-                        "pick": home,
-                        "edge": edge_sp,
-                        "kelly": k_sp
-                    })
+                    if edge_sp > edge_ml:
+                        best_pick = {
+                            "game": f"{cn(away)} vs {cn(home)}",
+                            "type": f"讓分 {spread_point:+}",
+                            "pick": cn(home),
+                            "edge": edge_sp,
+                            "kelly": k_sp
+                        }
                 except:
                     pass
 
-    if not candidates:
+        if best_pick:
+            best_per_game.append(best_pick)
+
+    if not best_per_game:
         send_discord("今日沒有NBA賽事")
         return
 
     # 排序
-    candidates.sort(key=lambda x: x["edge"], reverse=True)
+    best_per_game.sort(key=lambda x: x["edge"], reverse=True)
 
-    top2 = candidates[:2]
+    top2 = best_per_game[:2]
 
-    text = "**🔥今日最佳兩場（含讓分）**\n"
+    text = "**🔥今日最佳兩場（不重複版）**\n"
 
     for c in top2:
         text += f"\n{c['game']}\n"
