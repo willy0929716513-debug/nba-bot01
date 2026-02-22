@@ -2,16 +2,17 @@ import requests
 import os
 from datetime import datetime, timedelta
 
-# ===== 環境變數 =====
+# ===== 環境變數設定 =====
+# 請確保在你的系統環境中設定了這兩個變數
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 
 if not API_KEY or not WEBHOOK_URL:
-    raise ValueError("請確保 API_KEY 與 WEBHOOK_URL 已設定")
+    print("❌ 錯誤：請檢查 ODDS_API_KEY 或 DISCORD_WEBHOOK 是否已設定。")
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-# 中文映射 (保持不變)
+# ===== 中文隊名映射 =====
 TEAM_CN = {
     "Los Angeles Lakers": "湖人", "LA Clippers": "快艇", "Golden State Warriors": "勇士",
     "Boston Celtics": "塞爾提克", "Milwaukee Bucks": "公鹿", "Denver Nuggets": "金塊",
@@ -25,76 +26,97 @@ TEAM_CN = {
     "Washington Wizards": "巫師", "Portland Trail Blazers": "拓荒者", "New Orleans Pelicans": "鵜鶘"
 }
 
-def cn(team): return TEAM_CN.get(team, team)
+def cn(team): 
+    return TEAM_CN.get(team, team)
 
-# ===== 核心邏輯 =====
+# ===== 核心數學函式 =====
 
 def get_no_vig_prob(h2h_outcomes):
-    """計算去抽水後的公平機率"""
+    """計算去抽水後的公平市場機率 (Normalization)"""
     try:
-        inv_sum = sum(1/o["price"] for o in h2h_outcomes)
-        # 返回字典 {隊名: 公平機率}
-        return {o["name"]: (1/o["price"]) / inv_sum for o in h2h_outcomes}
-    except: return None
+        # 計算賠率倒數總和 (通常 > 1.0)
+        inv_sum = sum(1 / o["price"] for o in h2h_outcomes)
+        # 歸一化回機率 (總和為 1.0)
+        return {o["name"]: (1 / o["price"]) / inv_sum for o in h2h_outcomes}
+    except:
+        return None
 
 def kelly_criterion(prob, odds, fraction=0.1):
-    """分段凱利公式，預設只投 10% (保守派)"""
-    if prob <= (1/odds): return 0
+    """
+    凱利公式：(bp - q) / b
+    fraction: 凱利下注比例，0.1 代表『十分之一凱利』，是極度保守且安全的做法。
+    """
+    if prob <= (1 / odds): 
+        return 0
     b = odds - 1
     k = (prob * b - (1 - prob)) / b
     return round(k * fraction, 4)
 
 def estimate_spread_prob(win_prob, spread):
     """
-    根據不讓分勝率與讓分分值，估算讓分盤勝率
-    NBA 經驗公式：1 分差距約等於 2.8% 勝率變動
+    根據主隊不讓分勝率與讓分值，估算過盤機率。
+    NBA 實證研究：讓分每變動 1 分，勝率約變動 2.5% ~ 3%。
     """
-    # spread 是對主隊的讓分，例如 -5.5
-    # 如果 win_prob 是 0.5 (平手)，讓 -5.5 分的勝率會大幅下降
+    # spread 為主隊數值，如 -5.5 代表主讓 5.5
+    # 若 spread 為負（讓分），過盤難度增加，機率下降
     adjustment = spread * 0.028 
     spread_prob = win_prob + adjustment
     return min(max(spread_prob, 0.05), 0.95)
 
+def format_pick_name(team_name, point=None):
+    """格式化輸出推薦字樣，例如：湖人 -5.5 或 勇士 +3"""
+    if point is None:
+        return f"{cn(team_name)} (不讓分)"
+    # 使用 :+g 格式化讓正號出現，且自動處理整數/浮點數
+    return f"{cn(team_name)} {point:+g}"
+
+# ===== 主程式邏輯 =====
+
 def analyze():
     params = {
         "apiKey": API_KEY,
-        "regions": "us", # 可改為 "eu" 或 "au" 增加更多博彩商
+        "regions": "us", # 可根據需求改為 'eu', 'au' 增加博彩商數量
         "markets": "h2h,spreads",
         "oddsFormat": "decimal"
     }
 
     try:
-        res = requests.get(BASE_URL, params=params)
-        games = res.json()
+        response = requests.get(BASE_URL, params=params)
+        games = response.json()
     except Exception as e:
-        print(f"API 請求失敗: {e}")
+        print(f"API 連結失敗: {e}")
         return
 
     all_picks = []
 
     for g in games:
-        # 時間過濾 (避開凌晨)
+        # --- 時間過濾 ---
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z", "+00:00"))
         tw_time = utc_time + timedelta(hours=8)
+        # 只看台灣時間早上 6 點後的比賽 (避開可能已開賽或深夜場)
         if tw_time.hour < 6: continue
 
         home = g["home_team"]
         away = g["away_team"]
         
-        # --- 1. Line Shopping: 找出市場最佳賠率與公平機率 ---
+        # --- Line Shopping: 從多個博彩商中抓取最佳賠率 ---
         best_h2h = {home: 0, away: 0}
         best_spread = {"point": 0, home: 0, away: 0}
         market_probs = []
 
-        for book in g["bookmakers"]:
-            for m in book["markets"]:
+        for book in g.get("bookmakers", []):
+            for m in book.get("markets", []):
+                # 處理不讓分
                 if m["key"] == "h2h":
-                    probs = get_no_vig_prob(m["outcomes"])
-                    if probs: market_probs.append(probs)
+                    p_dict = get_no_vig_prob(m["outcomes"])
+                    if p_dict: market_probs.append(p_dict)
                     for o in m["outcomes"]:
                         best_h2h[o["name"]] = max(best_h2h[o["name"]], o["price"])
                 
+                # 處理讓分
                 if m["key"] == "spreads":
+                    # 我們以第一家找到的讓分點數為基準，比較不同家的賠率
+                    # 在實務上，點數可能不同（如 -5.5 vs -6.0），此處簡化處理
                     for o in m["outcomes"]:
                         if o["name"] == home:
                             best_spread["point"] = o["point"]
@@ -104,66 +126,78 @@ def analyze():
 
         if not market_probs: continue
 
-        # 平均市場公平機率作為參考
+        # 計算市場平均公平機率作為『基準勝率』
         avg_p_home = sum(p[home] for p in market_probs) / len(market_probs)
         
-        # --- 2. 策略：找出被市場「低估」的最佳賠率 ---
-        # 這裡假設如果某家博彩商給出的賠率高於市場平均隱含賠率，則存在 Edge
-        # 在實際應用中，你應在此處替換為你自己的 AI 預測勝率
-        my_p_home = avg_p_home 
-
-        # 檢查不讓分盤 (Moneyline)
+        # --- 策略：尋找 Edge (優勢) ---
+        # 這裡的邏輯是：如果市場最佳賠率高於公平隱含機率，則存在獲利空間
+        
+        # 1. 不讓分檢查
         for team in [home, away]:
-            prob = my_p_home if team == home else (1 - my_p_home)
+            prob = avg_p_home if team == home else (1 - avg_p_home)
             odds = best_h2h[team]
             k = kelly_criterion(prob, odds)
-            if k > 0:
+            if k > 0.001: # 排除極小下注
                 all_picks.append({
                     "game": f"{cn(away)} @ {cn(home)}",
-                    "pick": f"{cn(team)} (不讓分)",
+                    "pick": format_pick_name(team),
                     "odds": odds,
-                    "edge": round(prob - (1/odds), 3),
+                    "edge": prob - (1 / odds),
                     "kelly": k
                 })
 
-        # 檢查讓分盤 (Spreads)
-        if best_spread[home] > 0:
-            sp_prob_home = estimate_spread_prob(my_p_home, best_spread["point"])
-            # 檢查主隊讓分
-            k_h = kelly_criterion(sp_prob_home, best_spread[home])
-            if k_h > 0:
+        # 2. 讓分盤檢查
+        if best_spread[home] > 0 and best_spread[away] > 0:
+            h_point = best_spread["point"]
+            p_spread_home = estimate_spread_prob(avg_p_home, h_point)
+            
+            # 主隊過盤評估
+            k_h = kelly_criterion(p_spread_home, best_spread[home])
+            if k_h > 0.001:
                 all_picks.append({
                     "game": f"{cn(away)} @ {cn(home)}",
-                    "pick": f"{cn(home)} (讓分 {best_spread['point']})",
+                    "pick": format_pick_name(home, h_point),
                     "odds": best_spread[home],
-                    "edge": round(sp_prob_home - (1/best_spread[home]), 3),
+                    "edge": p_spread_home - (1 / best_spread[home]),
                     "kelly": k_h
                 })
-            # 檢查客隊讓分 (反向機率)
-            k_a = kelly_criterion(1-sp_prob_home, best_spread[away])
-            if k_a > 0:
+
+            # 客隊過盤評估 (點數反轉)
+            a_point = -h_point
+            k_a = kelly_criterion(1 - p_spread_home, best_spread[away])
+            if k_a > 0.001:
                 all_picks.append({
                     "game": f"{cn(away)} @ {cn(home)}",
-                    "pick": f"{cn(away)} (讓分 {-best_spread['point']})",
+                    "pick": format_pick_name(away, a_point),
                     "odds": best_spread[away],
-                    "edge": round((1-sp_prob_home) - (1/best_spread[away]), 3),
+                    "edge": (1 - p_spread_home) - (1 / best_spread[away]),
                     "kelly": k_a
                 })
 
-    # --- 3. 輸出最優兩場 ---
+    # --- 整理與發送 ---
     all_picks.sort(key=lambda x: x["edge"], reverse=True)
     top_picks = all_picks[:2]
 
     if not top_picks:
-        send_discord("今日無足夠優勢賽事。")
-    else:
-        msg = "🚀 **NBA 策略分析 V12.0 (Line Shopping + 10% Kelly)**\n"
-        for p in top_picks:
-            msg += f"\n🏀 **{p['game']}**\n推薦：{p['pick']}\n賠率：{p['odds']} | Edge：{p['edge']:.1%}\n建議水位：{p['kelly']:.1%} 倉位\n"
-        send_discord(msg)
+        send_discord("📢 今日經過篩選，無具備 Edge (優勢) 的 NBA 賽事推薦。")
+        return
+
+    msg = "🔥 **NBA 策略分析 V12.1 (精準讓分符號版)**\n"
+    msg += f"分析時間: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+    msg += "---"
+    for p in top_picks:
+        msg += f"\n🏀 **{p['game']}**"
+        msg += f"\n推薦：`{p['pick']}`"
+        msg += f"\n賠率：`{p['odds']}` | 預估優勢：`{p['edge']:.1%}`"
+        msg += f"\n建議倉位：`{p['kelly']:.1%}`\n"
+
+    send_discord(msg)
 
 def send_discord(text):
-    requests.post(WEBHOOK_URL, json={"content": text})
+    try:
+        requests.post(WEBHOOK_URL, json={"content": text})
+    except Exception as e:
+        print(f"Discord 發送失敗: {e}")
 
 if __name__ == "__main__":
     analyze()
