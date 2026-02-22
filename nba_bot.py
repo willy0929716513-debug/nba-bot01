@@ -56,12 +56,20 @@ def kelly(prob, odds=1.91):
     k = (prob * b - (1 - prob)) / b
     return max(0, round(k, 3))
 
-def sharp_adjust(p):
-    if p > 0.75:
-        p -= 0.05
-    elif p < 0.30:
-        p += 0.05
-    return min(max(p, 0.05), 0.95)
+def sharp_model(market_prob):
+    """
+    Sharp 模型：
+    - 過熱熱門削弱
+    - 被低估冷門提升
+    """
+    if market_prob > 0.75:
+        market_prob -= 0.06
+    elif market_prob > 0.65:
+        market_prob -= 0.03
+    elif market_prob < 0.30:
+        market_prob += 0.05
+
+    return min(max(market_prob, 0.05), 0.95)
 
 def analyze():
     params = {
@@ -74,7 +82,7 @@ def analyze():
     res = requests.get(BASE_URL, params=params)
     games = res.json()
 
-    text = "**🔥推薦下注（V10 專業模型）**\n"
+    text = "**🔥推薦下注（V9 Sharp 模型）**\n"
     rec_count = 0
 
     for g in games:
@@ -84,33 +92,15 @@ def analyze():
         home = TEAM_CN.get(home_en, home_en)
         away = TEAM_CN.get(away_en, away_en)
 
-        market_probs = []
-
-        # ===== 計算多書平均機率 =====
-        for book in g["bookmakers"]:
-            for m in book["markets"]:
-                if m["key"] == "h2h":
-                    outcomes = m["outcomes"]
-                    try:
-                        home_ml = [o for o in outcomes if o["name"] == home_en][0]["price"]
-                        away_ml = [o for o in outcomes if o["name"] == away_en][0]["price"]
-                        p_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
-                        market_probs.append(p_home)
-                    except:
-                        continue
-
-        if len(market_probs) < 2:
+        try:
+            markets = g["bookmakers"][0]["markets"]
+        except:
             continue
 
-        avg_market = sum(market_probs) / len(market_probs)
-        model_prob = sharp_adjust(avg_market)
-
-        # 使用第一間書作為下注點
-        first_book = g["bookmakers"][0]
         h2h = None
         spreads = None
 
-        for m in first_book["markets"]:
+        for m in markets:
             if m["key"] == "h2h":
                 h2h = m["outcomes"]
             elif m["key"] == "spreads":
@@ -121,40 +111,56 @@ def analyze():
 
         home_ml = [o for o in h2h if o["name"] == home_en][0]["price"]
         away_ml = [o for o in h2h if o["name"] == away_en][0]["price"]
-        book_prob = (1/home_ml) / ((1/home_ml)+(1/away_ml))
 
-        value_edge = model_prob - book_prob
+        market_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
+        model_home = sharp_model(market_home)
 
-        k_home = min(kelly(model_prob), 0.15)
+        value_home = model_home - market_home
+        value_away = (1-model_home) - (1-market_home)
+
+        k_home = min(kelly(model_home), 0.18)
+        k_away = min(kelly(1-model_home), 0.18)
 
         spread_val = None
+        spread_text = ""
         if spreads:
-            spread_val = [o for o in spreads if o["name"] == home_en][0]["point"]
+            home_spread = [o for o in spreads if o["name"] == home_en][0]["point"]
+            spread_val = home_spread
+            spread_text = f"{home} {home_spread:+}"
 
         recs = []
         signal = 0
 
-        # ===== Value ≥ 6% =====
-        if value_edge >= 0.06 and k_home > 0.03:
-            recs.append(f"🔴🔥 勝負：{home} (Edge {value_edge:.2f}, Kelly {k_home})")
+        # ===== Value條件（≥5%）=====
+        if value_home >= 0.05 and k_home > 0.04:
+            recs.append(f"🔴🔥 勝負：{home} (Value {value_home:.2f}, Kelly {k_home})")
+            signal += 1
+        elif value_away >= 0.05 and k_away > 0.04:
+            recs.append(f"🔴🔥 勝負：{away} (Value {value_away:.2f}, Kelly {k_away})")
             signal += 1
 
-        # ===== 讓分驗證 =====
-        if spread_val and 2.5 <= abs(spread_val) <= 6:
-            if model_prob > 0.70:
-                recs.append(f"🔴🔥 讓分：{home} {spread_val:+}")
-                signal += 1
+        # ===== 讓分確認（避免大熱門陷阱）=====
+        if spread_val is not None:
+            if 2.5 <= abs(spread_val) <= 6:
+                if model_home > 0.68:
+                    recs.append(f"🔴🔥 讓分：{home} {spread_val:+}")
+                    signal += 1
+                elif model_home < 0.32:
+                    recs.append(f"🔴🔥 讓分：{away} {-spread_val:+}")
+                    signal += 1
 
+        # 至少兩訊號
         if signal >= 2:
             rec_count += 1
             text += f"\n{away} vs {home}\n"
-            text += f"市場平均機率：{avg_market:.2f}\n"
-            text += f"模型機率：{model_prob:.2f}\n"
+            text += f"市場主勝率：{market_home:.2f}\n"
+            text += f"模型主勝率：{model_home:.2f}\n"
+            text += f"讓分：{spread_text}\n"
             for r in recs:
                 text += r + "\n"
 
     if rec_count == 0:
-        text += "\n今日沒有專業等級錯價"
+        text += "\n今日無明顯Sharp機會"
 
     send_discord(text)
 
