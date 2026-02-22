@@ -8,7 +8,6 @@ WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 
 if not API_KEY:
     raise ValueError("ODDS_API_KEY 沒有設定")
-
 if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL 沒有設定")
 
@@ -86,25 +85,21 @@ def analyze():
 
     res = requests.get(BASE_URL, params=params)
     games = res.json()
-
     best_per_game = []
 
     for g in games:
         home = g["home_team"]
         away = g["away_team"]
-
         best_pick = None
 
         for book in g["bookmakers"]:
             h2h = None
             spreads = None
-
             for m in book["markets"]:
                 if m["key"] == "h2h":
                     h2h = m["outcomes"]
                 elif m["key"] == "spreads":
                     spreads = m["outcomes"]
-
             if not h2h:
                 continue
 
@@ -117,36 +112,32 @@ def analyze():
             # ===== Moneyline =====
             p_market = (1/home_ml) / ((1/home_ml)+(1/away_ml))
             p_model = adjust_model(p_market)
-
-            edge_ml = p_model - p_market
-            k_ml = kelly(p_model)
+            edge_ml = round(p_model - p_market, 3)
+            k_ml = round(kelly(p_model),3)
 
             best_pick = {
                 "game": f"{cn(away)} vs {cn(home)}",
                 "type": "不讓分",
-                "pick": cn(home),
+                "pick": cn(home) if p_model > 0.5 else cn(away),
                 "edge": edge_ml,
                 "kelly": k_ml
             }
 
-            # ===== 超保守讓分模型 =====
+            # ===== 保守讓分（3~6 分） =====
             if spreads:
                 try:
                     spread_home = [o for o in spreads if o["name"] == home][0]
                     spread_point = spread_home["point"]
-
-                    if 3 <= abs(spread_point) <= 6:  # 黃金區間
+                    if 3 <= abs(spread_point) <= 6:
                         spread_prob = p_model - (spread_point * 0.006)
                         spread_prob = min(max(spread_prob, 0.1), 0.9)
-
-                        edge_sp = spread_prob - 0.5
-                        k_sp = kelly(spread_prob)
-
+                        edge_sp = round(spread_prob - 0.5,3)
+                        k_sp = round(kelly(spread_prob),3)
                         if edge_sp > edge_ml and edge_sp > 0.05 and k_sp > 0.05:
                             best_pick = {
                                 "game": f"{cn(away)} vs {cn(home)}",
                                 "type": f"讓分 {spread_point:+}",
-                                "pick": cn(home),
+                                "pick": cn(home) if spread_prob > 0.5 else cn(away),
                                 "edge": edge_sp,
                                 "kelly": k_sp
                             }
@@ -160,18 +151,17 @@ def analyze():
         send_discord("今日沒有NBA賽事")
         return
 
-    # ===== 取前兩場最佳 =====
+    # ===== 前兩場最佳 =====
     best_per_game.sort(key=lambda x: x["edge"], reverse=True)
     top2 = best_per_game[:2]
 
-    text = "**🔥今日最佳兩場（V10.5 超保守，玩法清楚標註）**\n"
-
+    text = "**🔥今日最佳兩場（V10.5 超保守）**\n"
     for c in top2:
         text += f"\n{c['game']}\n"
         text += f"玩法：{c['type']}\n"
         text += f"推薦：{c['pick']}\n"
         text += f"Edge：{c['edge']:.3f}\n"
-        text += f"Kelly：{c['kelly']}\n"
+        text += f"Kelly：{c['kelly']:.3f}\n"
 
     send_discord(text)
 
