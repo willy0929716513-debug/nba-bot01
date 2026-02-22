@@ -25,7 +25,7 @@ def kelly(prob, odds=1.91):
     k = (prob * b - (1 - prob)) / b
     return max(0, round(k, 3))
 
-# ===== EMA + 市場修正 =====
+# ===== 模型修正 =====
 def ema_adjust(p):
     if p > 0.6:
         p += 0.02
@@ -38,9 +38,9 @@ def home_adjust(p):
 
 def public_fade(p):
     if p > 0.75:
-        p -= 0.04
+        p -= 0.03
     if p < 0.25:
-        p += 0.04
+        p += 0.03
     return p
 
 # ===== 主程式 =====
@@ -76,7 +76,7 @@ def analyze():
                     except:
                         continue
 
-        if len(market_probs) < 2:
+        if len(market_probs) == 0:
             continue
 
         market_avg = sum(market_probs) / len(market_probs)
@@ -86,44 +86,55 @@ def analyze():
         model_p = home_adjust(model_p)
         model_p = public_fade(model_p)
 
-        # ===== 與第一家比較 =====
-        first_book = g["bookmakers"][0]["markets"][0]["outcomes"]
-        home_ml = [o for o in first_book if o["name"] == home][0]["price"]
-        away_ml = [o for o in first_book if o["name"] == away][0]["price"]
+        # 用第一家當下注盤
+        try:
+            first_book = g["bookmakers"][0]["markets"][0]["outcomes"]
+            home_ml = [o for o in first_book if o["name"] == home][0]["price"]
+            away_ml = [o for o in first_book if o["name"] == away][0]["price"]
+        except:
+            continue
 
         book_p = (1/home_ml) / ((1/home_ml)+(1/away_ml))
 
         edge = model_p - book_p
         k = kelly(model_p)
 
-        # ===== 基本門檻 =====
-        if edge >= 0.04 and k >= 0.03:
-            candidates.append({
-                "game": f"{away} vs {home}",
-                "model": model_p,
-                "market": book_p,
-                "edge": edge,
-                "kelly": k
-            })
+        candidates.append({
+            "game": f"{away} vs {home}",
+            "model": model_p,
+            "market": book_p,
+            "edge": edge,
+            "kelly": k
+        })
 
-    # ===== 沒有推薦 =====
+    # ===== 沒有比賽 =====
     if not candidates:
-        send_discord("今日無明顯價值場次（V10）")
+        send_discord("今日沒有NBA賽事")
         return
 
     # ===== 按 Edge 排序 =====
     candidates.sort(key=lambda x: x["edge"], reverse=True)
 
-    # 只推前2場
-    top_games = candidates[:2]
+    # ===== 取前2場 =====
+    top_games = []
+    for c in candidates:
+        if c["kelly"] >= 0.01:
+            top_games.append(c)
+        if len(top_games) == 2:
+            break
 
-    text = "**🔥今日最佳推薦（V10 Pro）**\n"
+    if not top_games:
+        send_discord("今日無可投注場次（Kelly過低）")
+        return
+
+    # ===== 發送 =====
+    text = "**🔥今日最佳兩場（V10 Daily Top2）**\n"
 
     for c in top_games:
         text += f"\n{c['game']}\n"
         text += f"模型機率 {c['model']:.2f}\n"
         text += f"市場機率 {c['market']:.2f}\n"
-        text += f"Edge {c['edge']:.2f}\n"
+        text += f"Edge {c['edge']:.3f}\n"
         text += f"Kelly {c['kelly']}\n"
         text += "🔴🔥 推薦下注\n"
 
