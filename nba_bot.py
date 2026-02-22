@@ -65,13 +65,13 @@ def kelly(prob, odds=1.91):
 
 # ===== 模型微調 =====
 def adjust_model(p):
-    # 強隊微強，弱隊微弱
+    # 強隊微強
     if p > 0.6:
         p += 0.02
     elif p < 0.4:
         p -= 0.02
 
-    # 避免極端（市場已經很準）
+    # 避免市場極端過熱
     if p > 0.75:
         p -= 0.03
     if p < 0.25:
@@ -119,11 +119,11 @@ def analyze():
                 continue
 
             # ===== Moneyline =====
-            p_home_market = (1/home_ml) / ((1/home_ml)+(1/away_ml))
-            p_home_model = adjust_model(p_home_market)
+            p_market = (1/home_ml) / ((1/home_ml)+(1/away_ml))
+            p_model = adjust_model(p_market)
 
-            edge_ml = p_home_model - p_home_market
-            k_ml = kelly(p_home_model)
+            edge_ml = p_model - p_market
+            k_ml = kelly(p_model)
 
             best_pick = {
                 "game": f"{cn(away)} vs {cn(home)}",
@@ -133,23 +133,23 @@ def analyze():
                 "kelly": k_ml
             }
 
-            # ===== 保守讓分模型 =====
+            # ===== 超保守讓分模型 =====
             if spreads:
                 try:
                     spread_home = [o for o in spreads if o["name"] == home][0]
                     spread_point = spread_home["point"]
 
-                    # 避開極端讓分
-                    if abs(spread_point) <= 10:
+                    # 只允許黃金區間 3～6 分
+                    if 3 <= abs(spread_point) <= 6:
 
-                        spread_prob = p_home_model - (spread_point * 0.008)
+                        spread_prob = p_model - (spread_point * 0.006)
                         spread_prob = min(max(spread_prob, 0.1), 0.9)
 
                         edge_sp = spread_prob - 0.5
                         k_sp = kelly(spread_prob)
 
-                        # 讓分需更高優勢
-                        if edge_sp > edge_ml and edge_sp > 0.03:
+                        # 嚴格條件
+                        if edge_sp > edge_ml and edge_sp > 0.05 and k_sp > 0.05:
                             best_pick = {
                                 "game": f"{cn(away)} vs {cn(home)}",
                                 "type": f"讓分 {spread_point:+}",
@@ -167,11 +167,11 @@ def analyze():
         send_discord("今日沒有NBA賽事")
         return
 
-    # 排序選前兩場
+    # ===== 取前兩場 =====
     best_per_game.sort(key=lambda x: x["edge"], reverse=True)
     top2 = best_per_game[:2]
 
-    text = "**🔥今日最佳兩場（V10 保守版）**\n"
+    text = "**🔥今日最佳兩場（V10.5 超保守）**\n"
 
     for c in top2:
         text += f"\n{c['game']}\n"
