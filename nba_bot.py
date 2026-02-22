@@ -13,42 +13,35 @@ if not WEBHOOK_URL:
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-# ===== Discord =====
 def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
         requests.post(WEBHOOK_URL, json={"content": text[i:i+MAX]})
 
-# ===== Kelly =====
 def kelly(prob, odds=1.91):
     b = odds - 1
     k = (prob * b - (1 - prob)) / b
     return max(0, round(k, 3))
 
-# ===== 模型修正 =====
-def ema_adjust(p):
+def adjust_model(p):
+    # 簡單修正
     if p > 0.6:
         p += 0.02
     elif p < 0.4:
         p -= 0.02
-    return p
 
-def home_adjust(p):
-    return min(p + 0.03, 0.97)
-
-def public_fade(p):
     if p > 0.75:
         p -= 0.03
     if p < 0.25:
         p += 0.03
-    return p
 
-# ===== 主程式 =====
+    return min(max(p, 0.05), 0.95)
+
 def analyze():
     params = {
         "apiKey": API_KEY,
         "regions": "us",
-        "markets": "h2h",
+        "markets": "h2h,spreads",
         "oddsFormat": "decimal"
     }
 
@@ -61,86 +54,84 @@ def analyze():
         home = g["home_team"]
         away = g["away_team"]
 
-        market_probs = []
-
-        # 多書平均
         for book in g["bookmakers"]:
+            h2h = None
+            spreads = None
+
             for m in book["markets"]:
                 if m["key"] == "h2h":
-                    outcomes = m["outcomes"]
-                    try:
-                        home_ml = [o for o in outcomes if o["name"] == home][0]["price"]
-                        away_ml = [o for o in outcomes if o["name"] == away][0]["price"]
-                        p_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
-                        market_probs.append(p_home)
-                    except:
-                        continue
+                    h2h = m["outcomes"]
+                elif m["key"] == "spreads":
+                    spreads = m["outcomes"]
 
-        if len(market_probs) == 0:
-            continue
+            if not h2h:
+                continue
 
-        market_avg = sum(market_probs) / len(market_probs)
+            try:
+                home_ml = [o for o in h2h if o["name"] == home][0]["price"]
+                away_ml = [o for o in h2h if o["name"] == away][0]["price"]
+            except:
+                continue
 
-        # ===== 模型機率 =====
-        model_p = ema_adjust(market_avg)
-        model_p = home_adjust(model_p)
-        model_p = public_fade(model_p)
+            # ===== Moneyline =====
+            p_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
+            model_p = adjust_model(p_home)
 
-        # 用第一家當下注盤
-        try:
-            first_book = g["bookmakers"][0]["markets"][0]["outcomes"]
-            home_ml = [o for o in first_book if o["name"] == home][0]["price"]
-            away_ml = [o for o in first_book if o["name"] == away][0]["price"]
-        except:
-            continue
+            edge_ml = model_p - p_home
+            k_ml = kelly(model_p)
 
-        book_p = (1/home_ml) / ((1/home_ml)+(1/away_ml))
+            candidates.append({
+                "game": f"{away} vs {home}",
+                "type": "不讓分",
+                "pick": home,
+                "edge": edge_ml,
+                "kelly": k_ml
+            })
 
-        edge = model_p - book_p
-        k = kelly(model_p)
+            # ===== Spread =====
+            if spreads:
+                try:
+                    spread_home = [o for o in spreads if o["name"] == home][0]
+                    spread_point = spread_home["point"]
+                    spread_price = spread_home["price"]
 
-        candidates.append({
-            "game": f"{away} vs {home}",
-            "model": model_p,
-            "market": book_p,
-            "edge": edge,
-            "kelly": k
-        })
+                    # 簡單讓分模型（依勝率推估）
+                    spread_prob = model_p - (spread_point * 0.015)
+                    spread_prob = min(max(spread_prob, 0.05), 0.95)
 
-    # ===== 沒有比賽 =====
+                    edge_sp = spread_prob - 0.5
+                    k_sp = kelly(spread_prob)
+
+                    candidates.append({
+                        "game": f"{away} vs {home}",
+                        "type": f"讓分 {spread_point:+}",
+                        "pick": home,
+                        "edge": edge_sp,
+                        "kelly": k_sp
+                    })
+                except:
+                    pass
+
     if not candidates:
         send_discord("今日沒有NBA賽事")
         return
 
-    # ===== 按 Edge 排序 =====
+    # 排序
     candidates.sort(key=lambda x: x["edge"], reverse=True)
 
-    # ===== 取前2場 =====
-    top_games = []
-    for c in candidates:
-        if c["kelly"] >= 0.01:
-            top_games.append(c)
-        if len(top_games) == 2:
-            break
+    top2 = candidates[:2]
 
-    if not top_games:
-        send_discord("今日無可投注場次（Kelly過低）")
-        return
+    text = "**🔥今日最佳兩場（含讓分）**\n"
 
-    # ===== 發送 =====
-    text = "**🔥今日最佳兩場（V10 Daily Top2）**\n"
-
-    for c in top_games:
+    for c in top2:
         text += f"\n{c['game']}\n"
-        text += f"模型機率 {c['model']:.2f}\n"
-        text += f"市場機率 {c['market']:.2f}\n"
-        text += f"Edge {c['edge']:.3f}\n"
-        text += f"Kelly {c['kelly']}\n"
-        text += "🔴🔥 推薦下注\n"
+        text += f"玩法：{c['type']}\n"
+        text += f"推薦：{c['pick']}\n"
+        text += f"Edge：{c['edge']:.3f}\n"
+        text += f"Kelly：{c['kelly']}\n"
 
     send_discord(text)
 
-# ===== 執行 =====
 if __name__ == "__main__":
     print("執行時間:", datetime.now())
     analyze()
