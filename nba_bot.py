@@ -56,18 +56,18 @@ def send_discord(text):
     for i in range(0, len(text), MAX):
         requests.post(WEBHOOK_URL, json={"content": text[i:i+MAX]})
 
-# ===== Kelly =====
+# ===== Kelly 計算 =====
 def kelly(prob, odds=1.91):
     b = odds - 1
     k = (prob * b - (1 - prob)) / b
-    return max(0, round(k, 3))
+    return round(k, 3)  # 不截斷 0
 
 # ===== 模型微調 =====
 def adjust_model(p):
     if p > 0.6:
-        p += 0.02
+        p += 0.05
     elif p < 0.4:
-        p -= 0.02
+        p -= 0.05
     if p > 0.75:
         p -= 0.03
     if p < 0.25:
@@ -113,8 +113,9 @@ def analyze():
             p_market = (1/home_ml) / ((1/home_ml)+(1/away_ml))
             p_model = adjust_model(p_market)
             edge_ml = round(p_model - p_market, 3)
-            k_ml = round(kelly(p_model),3)
+            k_ml = kelly(p_model)
 
+            # 初始推薦為不讓分
             best_pick = {
                 "game": f"{cn(away)} vs {cn(home)}",
                 "type": "不讓分",
@@ -133,7 +134,8 @@ def analyze():
                         spread_prob = min(max(spread_prob, 0.1), 0.9)
                         edge_sp = round(spread_prob - 0.5,3)
                         k_sp = round(kelly(spread_prob),3)
-                        if edge_sp > edge_ml and edge_sp > 0.05 and k_sp > 0.05:
+                        # 比較哪個 Edge 大且 > 0.02
+                        if edge_sp > edge_ml and edge_sp > 0.02 and k_sp > 0:
                             best_pick = {
                                 "game": f"{cn(away)} vs {cn(home)}",
                                 "type": f"讓分 {spread_point:+}",
@@ -155,7 +157,7 @@ def analyze():
     best_per_game.sort(key=lambda x: x["edge"], reverse=True)
     top2 = best_per_game[:2]
 
-    text = "**🔥今日最佳兩場（V10.5 超保守）**\n"
+    text = "**🔥今日最佳兩場（V11 超保守）**\n"
     for c in top2:
         text += f"\n{c['game']}\n"
         text += f"玩法：{c['type']}\n"
