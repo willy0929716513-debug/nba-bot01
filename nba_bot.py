@@ -1,182 +1,149 @@
-import requests
 import os
-from datetime import datetime
+import requests
 
-# ===== 環境變數 =====
-API_KEY = os.getenv("ODDS_API_KEY")
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
+ODDS_API_KEY = os.getenv("ODDS_API_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-if not API_KEY:
+if not ODDS_API_KEY:
     raise ValueError("ODDS_API_KEY 沒有設定")
 
-if not WEBHOOK_URL:
-    raise ValueError("DISCORD_WEBHOOK 沒有設定")
+URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
-
-# ===== 中文隊名 =====
-TEAM_CN = {
-    "Los Angeles Lakers": "湖人",
-    "Golden State Warriors": "勇士",
-    "Boston Celtics": "塞爾提克",
+# 中文隊名
+team_map = {
     "Milwaukee Bucks": "公鹿",
-    "Denver Nuggets": "金塊",
-    "Oklahoma City Thunder": "雷霆",
-    "Phoenix Suns": "太陽",
-    "LA Clippers": "快艇",
-    "Miami Heat": "熱火",
+    "Orlando Magic": "魔術",
+    "Boston Celtics": "塞爾提克",
+    "Chicago Bulls": "公牛",
+    "Cleveland Cavaliers": "騎士",
+    "Washington Wizards": "巫師",
     "Philadelphia 76ers": "七六人",
-    "Sacramento Kings": "國王",
+    "New York Knicks": "尼克",
+    "Brooklyn Nets": "籃網",
+    "Indiana Pacers": "溜馬",
+    "Toronto Raptors": "暴龍",
+    "Detroit Pistons": "活塞",
+    "Miami Heat": "熱火",
     "New Orleans Pelicans": "鵜鶘",
     "Minnesota Timberwolves": "灰狼",
-    "Dallas Mavericks": "獨行俠",
-    "New York Knicks": "尼克",
-    "Orlando Magic": "魔術",
-    "Charlotte Hornets": "黃蜂",
-    "Detroit Pistons": "活塞",
-    "Toronto Raptors": "暴龍",
-    "Chicago Bulls": "公牛",
-    "San Antonio Spurs": "馬刺",
-    "Utah Jazz": "爵士",
-    "Brooklyn Nets": "籃網",
-    "Atlanta Hawks": "老鷹",
-    "Cleveland Cavaliers": "騎士",
-    "Indiana Pacers": "溜馬",
-    "Memphis Grizzlies": "灰熊",
     "Portland Trail Blazers": "拓荒者",
-    "Washington Wizards": "巫師",
-    "Houston Rockets": "火箭"
+    "Oklahoma City Thunder": "雷霆",
+    "Phoenix Suns": "太陽",
+    "Denver Nuggets": "金塊",
+    "Memphis Grizzlies": "灰熊",
+    "Los Angeles Clippers": "快艇",
+    "Houston Rockets": "火箭",
+    "Los Angeles Lakers": "湖人",
+    "Golden State Warriors": "勇士",
+    "Atlanta Hawks": "老鷹",
+    "Charlotte Hornets": "黃蜂",
+    "Sacramento Kings": "國王",
+    "Utah Jazz": "爵士",
+    "Dallas Mavericks": "獨行俠",
+    "San Antonio Spurs": "馬刺"
 }
 
-# ===== Discord 發送 =====
-def send_discord(text):
-    MAX = 1900
-    for i in range(0, len(text), MAX):
-        part = text[i:i+MAX]
-        requests.post(WEBHOOK_URL, json={"content": part})
+def zh(name):
+    return team_map.get(name, name)
 
-# ===== Kelly公式 =====
 def kelly(prob, odds=1.91):
     b = odds - 1
-    k = (prob * b - (1 - prob)) / b
-    return max(0, round(k, 3))
+    return max((prob * b - (1 - prob)) / b, 0)
 
-# ===== EMA近況 =====
-def ema_power(prob):
-    if prob > 0.6:
-        return prob + 0.03
-    elif prob < 0.4:
-        return prob - 0.03
-    return prob
-
-# ===== 主場優勢 =====
-def home_adjust(prob):
-    return min(prob + 0.03, 0.97)
-
-# ===== 主程式 =====
 def analyze():
     params = {
-        "apiKey": API_KEY,
+        "apiKey": ODDS_API_KEY,
         "regions": "us",
         "markets": "h2h,spreads",
         "oddsFormat": "decimal"
     }
 
-    res = requests.get(BASE_URL, params=params)
-    games = res.json()
+    games = requests.get(URL, params=params).json()
 
-    recommend_text = "**🔥推薦下注（V7.1 精準版）**\n"
-    recommend_count = 0
+    recommend_list = []
+    normal_list = []
 
-    for g in games:
-        home_en = g["home_team"]
-        away_en = g["away_team"]
+    for game in games:
+        home = game["home_team"]
+        away = game["away_team"]
 
-        home = TEAM_CN.get(home_en, home_en)
-        away = TEAM_CN.get(away_en, away_en)
+        home_zh = zh(home)
+        away_zh = zh(away)
 
-        try:
-            markets = g["bookmakers"][0]["markets"]
-        except:
-            continue
+        for book in game["bookmakers"]:
+            markets = book["markets"]
 
-        h2h = None
-        spreads = None
+            h2h = None
+            spreads = None
 
-        for m in markets:
-            if m["key"] == "h2h":
-                h2h = m["outcomes"]
-            elif m["key"] == "spreads":
-                spreads = m["outcomes"]
+            for m in markets:
+                if m["key"] == "h2h":
+                    h2h = m["outcomes"]
+                if m["key"] == "spreads":
+                    spreads = m["outcomes"]
 
-        if not h2h:
-            continue
+            if not h2h or not spreads:
+                continue
 
-        # ===== 市場機率 =====
-        home_ml = [o for o in h2h if o["name"] == home_en][0]["price"]
-        away_ml = [o for o in h2h if o["name"] == away_en][0]["price"]
+            # 賠率轉勝率
+            home_odds = next(o["price"] for o in h2h if o["name"] == home)
+            away_odds = next(o["price"] for o in h2h if o["name"] == away)
 
-        market_prob = (1/home_ml) / ((1/home_ml)+(1/away_ml))
-        p_home = market_prob
+            home_prob = 1 / home_odds
+            away_prob = 1 / away_odds
+            total = home_prob + away_prob
 
-        # ===== 模型調整 =====
-        p_home = ema_power(p_home)
-        p_home = home_adjust(p_home)
+            home_prob /= total
+            away_prob /= total
 
-        # 機率收縮（避免過度自信）
-        p_home = 0.7 * p_home + 0.3 * market_prob
+            home_k = kelly(home_prob)
+            away_k = kelly(away_prob)
 
-        # Kelly（上限0.25）
-        k_home = min(kelly(p_home), 0.25)
-        k_away = min(kelly(1 - p_home), 0.25)
+            # 讓分
+            home_spread = next(o["point"] for o in spreads if o["name"] == home)
+            away_spread = next(o["point"] for o in spreads if o["name"] == away)
 
-        # ===== 讓分 =====
-        spread_val = None
-        spread_text = ""
+            text = f"{away_zh} vs {home_zh}\n"
+            text += f"主勝率：{home_prob:.2f}\n"
+            text += f"讓分：{home_zh} {home_spread:+}\n"
 
-        if spreads:
-            home_spread = [o for o in spreads if o["name"] == home_en][0]["point"]
-            spread_val = home_spread
-            spread_text = f"{home} {home_spread:+}"
+            reco = ""
 
-        # ===== 推薦邏輯 =====
-        recs = []
-        signal_count = 0
+            # ===== 勝負推薦（嚴格）=====
+            if home_prob >= 0.68 and home_k >= 0.06:
+                reco += f"🔴🔥 勝負：{home_zh} (Kelly {home_k:.2f})\n"
 
-        # 勝負訊號
-        if p_home > 0.67 and k_home > 0.05:
-            recs.append(f"🔴🔥 勝負：{home} (Kelly {k_home})")
-            signal_count += 1
-        elif p_home < 0.33 and k_away > 0.05:
-            recs.append(f"🔴🔥 勝負：{away} (Kelly {k_away})")
-            signal_count += 1
+            elif home_prob <= 0.32 and away_k >= 0.06:
+                reco += f"🔴🔥 勝負：{away_zh} (Kelly {away_k:.2f})\n"
 
-        # 讓分訊號（穩定區間3~6）
-        if spread_val is not None:
-            if 3 <= abs(spread_val) <= 6:
-                if p_home > 0.70:
-                    recs.append(f"🔴🔥 讓分：{home} {spread_val:+}")
-                    signal_count += 1
-                elif p_home < 0.30:
-                    recs.append(f"🔴🔥 讓分：{away} {-spread_val:+}")
-                    signal_count += 1
+            # ===== 讓分推薦（機構條件）=====
+            if home_prob >= 0.75 and home_spread <= -6:
+                reco += f"🔴🔥 讓分：{home_zh} {home_spread:+}\n"
 
-        # ===== 至少兩個訊號才推薦 =====
-        if signal_count >= 2:
-            recommend_count += 1
-            recommend_text += f"\n{away} vs {home}\n"
-            recommend_text += f"主勝率：{p_home:.2f}\n"
-            recommend_text += f"讓分：{spread_text}\n"
-            for r in recs:
-                recommend_text += r + "\n"
+            elif home_prob <= 0.25 and away_spread >= 6:
+                reco += f"🔴🔥 讓分：{away_zh} {away_spread:+}\n"
 
-    # 沒有推薦
-    if recommend_count == 0:
-        recommend_text += "\n今日無高勝率推薦"
+            if reco:
+                recommend_list.append(text + reco + "\n")
+            else:
+                normal_list.append(text + "\n")
 
-    send_discord(recommend_text)
+            break
 
-# ===== 執行 =====
+    message = "**🔥推薦下注（職業模型V7）**\n\n"
+
+    if recommend_list:
+        message += "".join(recommend_list)
+    else:
+        message += "今日無強勢推薦\n\n"
+
+    message += "\n---\n\n**全部比賽**\n\n"
+    message += "".join(normal_list)
+
+    if WEBHOOK_URL:
+        requests.post(WEBHOOK_URL, json={"content": message})
+    else:
+        print(message)
+
 if __name__ == "__main__":
-    print("執行時間:", datetime.now())
     analyze()
