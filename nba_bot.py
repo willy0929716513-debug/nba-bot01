@@ -60,7 +60,7 @@ def send_discord(text):
 def kelly(prob, odds=1.91):
     b = odds - 1
     k = (prob * b - (1 - prob)) / b
-    return round(k, 3)
+    return round(k, 3)  # 不截斷 0
 
 # ===== 模型微調 =====
 def adjust_model(p):
@@ -134,8 +134,8 @@ def analyze():
                         spread_prob = min(max(spread_prob, 0.1), 0.9)
                         edge_sp = round(spread_prob - 0.5,3)
                         k_sp = round(kelly(spread_prob),3)
-                        # 選擇 Edge 最大且 ≥0.03
-                        if edge_sp > edge_ml and edge_sp >= 0.03:
+                        # 比較哪個 Edge 大且 > 0.02
+                        if edge_sp > edge_ml and edge_sp > 0.02 and k_sp > 0:
                             best_pick = {
                                 "game": f"{cn(away)} vs {cn(home)}",
                                 "type": f"讓分 {spread_point:+}",
@@ -146,18 +146,18 @@ def analyze():
                 except:
                     pass
 
-        if best_pick and best_pick["edge"] >= 0.03:
+        if best_pick:
             best_per_game.append(best_pick)
 
     if not best_per_game:
-        send_discord("今日沒有符合穩定標準的NBA賽事")
+        send_discord("今日沒有NBA賽事")
         return
 
     # ===== 前兩場最佳 =====
     best_per_game.sort(key=lambda x: x["edge"], reverse=True)
     top2 = best_per_game[:2]
 
-    text = "**🔥今日最佳兩場（V11.2 超保守 & 穩定）**\n"
+    text = "**🔥今日最佳兩場（V11 超保守）**\n"
     for c in top2:
         text += f"\n{c['game']}\n"
         text += f"玩法：{c['type']}\n"
