@@ -48,18 +48,20 @@ TEAM_CN = {
     "Houston Rockets": "火箭"
 }
 
-# ===== Discord分段 =====
+# ===== Discord 分段發送 =====
 def send_discord(text):
     MAX = 1900
     for i in range(0, len(text), MAX):
         part = text[i:i+MAX]
         requests.post(WEBHOOK_URL, json={"content": part})
 
+
 # ===== Kelly公式 =====
 def kelly(prob, odds=1.91):
     b = odds - 1
     k = (prob * b - (1 - prob)) / b
     return max(0, round(k, 3))
+
 
 # ===== EMA近況模擬 =====
 def ema_power(prob):
@@ -69,9 +71,11 @@ def ema_power(prob):
         return prob - 0.03
     return prob
 
+
 # ===== 主場加權 =====
 def home_adjust(prob):
     return min(prob + 0.03, 0.97)
+
 
 # ===== 主程式 =====
 def analyze():
@@ -82,8 +86,13 @@ def analyze():
         "oddsFormat": "decimal"
     }
 
-    res = requests.get(BASE_URL, params=params)
-    games = res.json()
+    try:
+        res = requests.get(BASE_URL, params=params)
+        res.raise_for_status()
+        games = res.json()
+    except Exception as e:
+        send_discord(f"API錯誤: {e}")
+        return
 
     recommend_text = "**🔥推薦下注（V7 精準版）**\n"
     has_recommend = False
@@ -95,10 +104,11 @@ def analyze():
         home = TEAM_CN.get(home_en, home_en)
         away = TEAM_CN.get(away_en, away_en)
 
-        try:
-            markets = g["bookmakers"][0]["markets"]
-        except:
+        bookmakers = g.get("bookmakers", [])
+        if not bookmakers:
             continue
+
+        markets = bookmakers[0].get("markets", [])
 
         h2h = None
         spreads = None
@@ -113,10 +123,13 @@ def analyze():
             continue
 
         # ===== 市場機率 =====
-        home_ml = [o for o in h2h if o["name"] == home_en][0]["price"]
-        away_ml = [o for o in h2h if o["name"] == away_en][0]["price"]
+        try:
+            home_ml = next(o for o in h2h if o["name"] == home_en)["price"]
+            away_ml = next(o for o in h2h if o["name"] == away_en)["price"]
+        except:
+            continue
 
-        p_home = (1/home_ml) / ((1/home_ml)+(1/away_ml))
+        p_home = (1/home_ml) / ((1/home_ml) + (1/away_ml))
 
         # EMA + 主場
         p_home = ema_power(p_home)
@@ -128,10 +141,14 @@ def analyze():
         # ===== 讓分 =====
         spread_text = ""
         spread_val = None
+
         if spreads:
-            home_spread = [o for o in spreads if o["name"] == home_en][0]["point"]
-            spread_val = home_spread
-            spread_text = f"{home} {home_spread:+}"
+            try:
+                home_spread = next(o for o in spreads if o["name"] == home_en)["point"]
+                spread_val = home_spread
+                spread_text = f"{home} {home_spread:+}"
+            except:
+                pass
 
         # ===== 顯示內容 =====
         game_info = f"\n{away} vs {home}\n"
@@ -166,11 +183,11 @@ def analyze():
             for r in recs:
                 recommend_text += r + "\n"
 
-    # ===== 沒推薦時 =====
     if not has_recommend:
         recommend_text += "\n今天沒有符合條件的比賽（嚴格篩選）"
 
     send_discord(recommend_text)
+
 
 # ===== 執行 =====
 if __name__ == "__main__":
