@@ -1,13 +1,13 @@
 import requests
 import os
 from datetime import datetime, timedelta
+from collections import defaultdict
 
-# ===== V15.4 Market Scanner 參數 =====
-EDGE_THRESHOLD = 0.022      # 基本門檻
-KELLY_CAP = 0.06            # 單場最高倉位 6%
-SPREAD_COEF = 0.22
-ODDS_MIN = 1.45             
-ODDS_MAX = 3.50             # 稍微放寬上限，尋找受讓倒打機會
+# ===== V15.5 Chronos 參數 =====
+EDGE_THRESHOLD = 0.025
+KELLY_CAP = 0.05
+SPREAD_COEF = 0.18          # 降低讓分敏感度，修正昨日大分差失誤
+ODDS_MIN, ODDS_MAX = 1.45, 3.50
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
@@ -29,16 +29,14 @@ TEAM_CN = {
 def cn(t): return TEAM_CN.get(t, t)
 
 def get_rank_info(edge):
-    """根據 Edge 給予等級與圖示"""
-    if edge >= 0.05: return "💎 鑽石級 (S)", "這是今日最強優勢場次，建議優先關注。"
-    if edge >= 0.035: return "🔥 推薦級 (A)", "優勢明顯，具備良好的投資報酬比。"
-    return "✅ 穩健級 (B)", "符合門檻，建議按倉位平穩操作。"
+    if edge >= 0.05: return "💎 鑽石級 (S)", "🔥"
+    if edge >= 0.035: return "🔥 推薦級 (A)", "⭐"
+    return "✅ 穩健級 (B)", "▫️"
 
 def kelly(prob, odds):
     b = odds - 1
     if prob <= 1/odds: return 0
-    k = (prob * b - (1 - prob)) / b
-    return min(round(max(0, k), 4), KELLY_CAP)
+    return min(round(max(0, (prob * b - (1 - prob)) / b), 4), KELLY_CAP)
 
 def analyze():
     try:
@@ -46,78 +44,68 @@ def analyze():
         games = res.json()
     except: return
 
-    all_picks = []
+    # 使用字典按日期分類場次
+    dated_picks = defaultdict(list)
+
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
-        if (utc_time + timedelta(hours=8)).hour < 6: continue
+        tw_time = utc_time + timedelta(hours=8)
+        date_str = tw_time.strftime('%m/%d (週%w)').replace('週0','週日').replace('週1','週一').replace('週2','週二').replace('週3','週三').replace('週4','週四').replace('週5','週五').replace('週6','週六')
 
         home_en, away_en = g["home_team"], g["away_team"]
         bookmakers = g.get("bookmakers", [])
         if not bookmakers: continue
-        
         m_list = bookmakers[0].get("markets", [])
         h2h = next((m["outcomes"] for m in m_list if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in m_list if m["key"] == "spreads"), None)
         if not h2h: continue
 
-        # 勝率計算
         h_ml = next(o for o in h2h if o["name"] == home_en)["price"]
         a_ml = next(o for o in h2h if o["name"] == away_en)["price"]
-        p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.03, 0.96)
+        p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.02, 0.95)
         p_away = 1 - p_home
 
-        game_picks = []
-        # (A) 獨贏
+        game_candidates = []
+        # 獨贏 & 讓分邏輯
         for t_en, prob, odds in [(home_en, p_home, h_ml), (away_en, p_away, a_ml)]:
             edge = prob - (1/odds)
             if edge >= EDGE_THRESHOLD and ODDS_MIN <= odds <= ODDS_MAX:
-                game_picks.append({
-                    "game": f"{cn(away_en)} @ {cn(home_en)}",
-                    "pick": f"獨贏：{cn(t_en)}",
-                    "odds": odds, "edge": edge, "kelly": kelly(prob, odds)
-                })
+                game_candidates.append({"pick": f"獨贏：{cn(t_en)}", "odds": odds, "edge": edge, "prob": prob})
 
-        # (B) 讓分盤
         if spreads:
             for o in spreads:
                 point, odds = o["point"], o["price"]
+                if abs(point) > 14.5: edge_penalty = 0.02 # 大分差懲罰
+                else: edge_penalty = 0
+                
                 if ODDS_MIN <= odds <= ODDS_MAX:
                     p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
-                    edge = p_spread - (1/odds)
+                    edge = p_spread - (1/odds) - edge_penalty
                     if edge >= EDGE_THRESHOLD:
                         prefix = "受讓" if point > 0 else "讓分"
-                        game_picks.append({
-                            "game": f"{cn(away_en)} @ {cn(home_en)}",
-                            "pick": f"{prefix}：{cn(o['name'])} ({point:+})",
-                            "odds": odds, "edge": edge, "kelly": kelly(p_spread, odds)
-                        })
+                        game_candidates.append({"pick": f"{prefix}：{cn(o['name'])} ({point:+})", "odds": odds, "edge": edge, "prob": p_spread})
 
-        if game_picks:
-            game_picks.sort(key=lambda x: x["edge"], reverse=True)
-            all_picks.append(game_picks[0])
+        if game_candidates:
+            game_candidates.sort(key=lambda x: x["edge"], reverse=True)
+            best = game_candidates[0]
+            dated_picks[date_str].append({
+                "game": f"{cn(away_en)} @ {cn(home_en)}",
+                "pick": best["pick"], "odds": best["odds"], "edge": best["edge"], "kelly": kelly(best["prob"], best["odds"])
+            })
 
-    # ===== 全量排序輸出 =====
-    all_picks.sort(key=lambda x: x["edge"], reverse=True)
+    # 輸出訊息
+    msg = f"⏳ NBA V15.5 Chronos - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += f"*(昨日偏差修正：引入大分差懲罰與敏感度調降)*\n"
 
-    msg = f"📡 NBA V15.4 Market Scanner - {datetime.now().strftime('%m/%d %H:%M')}\n---"
-    
-    total_roi = 0
-    if not all_picks:
-        msg += "\n今日掃描完成，目前市場價格精確，無達標優勢場次。"
-    else:
-        for r in all_picks:
-            rank, note = get_rank_info(r["edge"])
-            potential = r["kelly"] * (r["odds"] - 1)
-            total_roi += potential
-            
-            msg += f"\n🏀 **{r['game']}**"
-            msg += f"\n> {rank} | **{r['pick']}**"
-            msg += f"\n> 賠率：{r['odds']:.2f} | 預期優勢：{r['edge']:.2%}"
-            msg += f"\n> 建議倉位：{r['kelly']:.2%} (收益貢獻: +{potential:.2%})\n"
-
-        msg += f"\n---"
-        msg += f"\n💰 **全組合總預期回報：+{total_roi:.2%}**"
-        msg += f"\n*(註：以上包含今日所有符合 {EDGE_THRESHOLD:.1%} 優勢門檻之選項)*"
+    # 按日期由近到遠排序
+    for date in sorted(dated_picks.keys()):
+        msg += f"\n📅 **{date}**\n"
+        # 日期內按 Edge 降序排
+        picks = sorted(dated_picks[date], key=lambda x: x["edge"], reverse=True)
+        for r in picks:
+            rank, emoji = get_rank_info(r["edge"])
+            msg += f"> {emoji} **{r['pick']}** | {r['game']}\n"
+            msg += f"> 賠率：{r['odds']:.2f} | 優勢：{r['edge']:.2%} | 倉位：{r['kelly']:.2%}\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
