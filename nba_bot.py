@@ -3,11 +3,11 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== V15.5 Chronos 參數 =====
-EDGE_THRESHOLD = 0.025
-KELLY_CAP = 0.05
-SPREAD_COEF = 0.18          # 降低讓分敏感度，修正昨日大分差失誤
-ODDS_MIN, ODDS_MAX = 1.45, 3.50
+# ===== V15.6 Reality Check 參數 =====
+EDGE_THRESHOLD = 0.022      # 回歸 2.2% 門檻
+KELLY_CAP = 0.05            # 倉位上限維持 5%
+SPREAD_COEF = 0.16          # 進一步調降讓分敏感度，追求更真實的勝率
+ODDS_MIN, ODDS_MAX = 1.45, 3.20
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
@@ -29,8 +29,8 @@ TEAM_CN = {
 def cn(t): return TEAM_CN.get(t, t)
 
 def get_rank_info(edge):
-    if edge >= 0.05: return "💎 鑽石級 (S)", "🔥"
-    if edge >= 0.035: return "🔥 推薦級 (A)", "⭐"
+    if edge >= 0.045: return "💎 鑽石級 (S)", "🔥"
+    if edge >= 0.032: return "🔥 推薦級 (A)", "⭐"
     return "✅ 穩健級 (B)", "▫️"
 
 def kelly(prob, odds):
@@ -44,7 +44,6 @@ def analyze():
         games = res.json()
     except: return
 
-    # 使用字典按日期分類場次
     dated_picks = defaultdict(list)
 
     for g in games:
@@ -66,24 +65,34 @@ def analyze():
         p_away = 1 - p_home
 
         game_candidates = []
-        # 獨贏 & 讓分邏輯
+        # (A) 獨贏
         for t_en, prob, odds in [(home_en, p_home, h_ml), (away_en, p_away, a_ml)]:
             edge = prob - (1/odds)
             if edge >= EDGE_THRESHOLD and ODDS_MIN <= odds <= ODDS_MAX:
                 game_candidates.append({"pick": f"獨贏：{cn(t_en)}", "odds": odds, "edge": edge, "prob": prob})
 
+        # (B) 讓分盤 (引入階梯懲罰)
         if spreads:
             for o in spreads:
                 point, odds = o["point"], o["price"]
-                if abs(point) > 14.5: edge_penalty = 0.02 # 大分差懲罰
-                else: edge_penalty = 0
+                
+                # --- 階梯式讓分懲罰邏輯 ---
+                abs_pt = abs(point)
+                if abs_pt > 15: penalty = 0.045
+                elif abs_pt > 10.5: penalty = 0.025
+                elif abs_pt > 6.5: penalty = 0.010
+                else: penalty = 0
                 
                 if ODDS_MIN <= odds <= ODDS_MAX:
                     p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
-                    edge = p_spread - (1/odds) - edge_penalty
+                    edge = p_spread - (1/odds) - penalty
+                    
                     if edge >= EDGE_THRESHOLD:
                         prefix = "受讓" if point > 0 else "讓分"
-                        game_candidates.append({"pick": f"{prefix}：{cn(o['name'])} ({point:+})", "odds": odds, "edge": edge, "prob": p_spread})
+                        game_candidates.append({
+                            "pick": f"{prefix}：{cn(o['name'])} ({point:+})",
+                            "odds": odds, "edge": edge, "prob": p_spread
+                        })
 
         if game_candidates:
             game_candidates.sort(key=lambda x: x["edge"], reverse=True)
@@ -93,19 +102,17 @@ def analyze():
                 "pick": best["pick"], "odds": best["odds"], "edge": best["edge"], "kelly": kelly(best["prob"], best["odds"])
             })
 
-    # 輸出訊息
-    msg = f"⏳ NBA V15.5 Chronos - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += f"*(昨日偏差修正：引入大分差懲罰與敏感度調降)*\n"
+    # 輸出格式化
+    msg = f"🛡️ NBA V15.6 Reality Check - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += f"*(實戰優化：已實施階梯式深盤懲罰，過濾高風險垃圾時間場次)*\n"
 
-    # 按日期由近到遠排序
     for date in sorted(dated_picks.keys()):
         msg += f"\n📅 **{date}**\n"
-        # 日期內按 Edge 降序排
         picks = sorted(dated_picks[date], key=lambda x: x["edge"], reverse=True)
         for r in picks:
             rank, emoji = get_rank_info(r["edge"])
             msg += f"> {emoji} **{r['pick']}** | {r['game']}\n"
-            msg += f"> 賠率：{r['odds']:.2f} | 優勢：{r['edge']:.2%} | 倉位：{r['kelly']:.2%}\n"
+            msg += f"> 賠率：{r['odds']:.2f} | 修正優勢：{r['edge']:.2%} | 倉位：{r['kelly']:.2%}\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
