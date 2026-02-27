@@ -1,12 +1,13 @@
 import requests
 import os
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 # ===== V16.0 Dual-Mode 參數 =====
-STRICT_EDGE = 0.022         # 第一階段：嚴格門檻
-BUY_POINT_EDGE = 0.018      # 第二階段：買分門檻
-KELLY_CAP = 0.05
-SPREAD_COEF = 0.20
+STRICT_EDGE = 0.022         # 第一階段：獵人模式門檻 (2.2%)
+BUY_POINT_EDGE = 0.018      # 第二階段：買分模式門檻 (1.8%)
+KELLY_CAP = 0.05            # 單場最高倉位 5%
+SPREAD_COEF = 0.20          # 讓分敏感度校正
 ODDS_MIN, ODDS_MAX = 1.35, 3.50
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -30,8 +31,8 @@ def cn(t): return TEAM_CN.get(t, t)
 
 def get_penalty(point):
     abs_pt = abs(point)
-    if abs_pt > 15: return 0.045
-    if abs_pt >= 8.5: return 0.015
+    if abs_pt > 15: return 0.045  # 深盤嚴厲懲罰
+    if abs_pt >= 8.5: return 0.015 # 中盤輕微懲罰
     return 0
 
 def kelly(prob, odds):
@@ -39,7 +40,7 @@ def kelly(prob, odds):
     if prob <= 1/odds: return 0
     return min(round(max(0, (prob * b - (1 - prob)) / b), 4), KELLY_CAP)
 
-def analyze_mode(games, mode="Strict"):
+def run_analysis(games, mode="Strict"):
     found_picks = []
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
@@ -53,63 +54,70 @@ def analyze_mode(games, mode="Strict"):
         spreads = next((m["outcomes"] for m in m_list if m["key"] == "spreads"), None)
         if not h2h: continue
 
-        # 基礎勝率
-        h_ml, a_ml = next(o for o in h2h if o["name"] == home_en)["price"], next(o for o in h2h if o["name"] == away_en)["price"]
+        # 基礎概率推算
+        h_ml = next(o for o in h2h if o["name"] == home_en)["price"]
+        a_ml = next(o for o in h2h if o["name"] == away_en)["price"]
         p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.02, 0.95)
         p_away = 1 - p_home
 
         candidates = []
         if mode == "Strict":
-            # 獨贏與原始讓分
+            # 原始邏輯：獵人模式
             if spreads:
                 for o in spreads:
                     pt, odds = o["point"], o["price"]
                     p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
                     edge = p_spread - (1/odds) - get_penalty(pt)
-                    if edge >= STRICT_EDGE:
+                    if edge >= STRICT_EDGE and ODDS_MIN <= odds <= ODDS_MAX:
                         candidates.append({"pick": f"{'讓分' if pt<0 else '受讓'}({pt:+})：{cn(o['name'])}", "odds": odds, "edge": edge, "prob": p_spread})
         else:
-            # 買分模式 (-1.0分)
+            # 進階邏輯：買分模式 (自動少讓 1 分)
             if spreads:
                 for o in spreads:
                     pt, odds = o["point"], o["price"]
-                    adj_pt = pt + 1 if pt < 0 else pt - 1
-                    adj_odds = odds - 0.14 # 買分賠率損耗
+                    adj_pt = pt + 1 if pt < 0 else pt - 1 # 買 1 分
+                    adj_odds = odds - 0.15               # 買分賠率衰減模擬
                     p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
                     edge = p_spread - (1/adj_odds) - get_penalty(adj_pt)
-                    if edge >= BUY_POINT_EDGE:
+                    if edge >= BUY_POINT_EDGE and ODDS_MIN <= adj_odds <= ODDS_MAX:
                         candidates.append({"pick": f"🛡️ 買分({adj_pt:+})：{cn(o['name'])}", "odds": adj_odds, "edge": edge, "prob": p_spread})
 
         if candidates:
             candidates.sort(key=lambda x: x["edge"], reverse=True)
             best = candidates[0]
-            found_picks.append({"game": f"{cn(away_en)} @ {cn(home_en)}", "date": tw_time.strftime('%m/%d'), "pick": best["pick"], "odds": best["odds"], "edge": best["edge"], "prob": best["prob"]})
-    
+            found_picks.append({
+                "game": f"{cn(away_en)} @ {cn(home_en)}",
+                "date": tw_time.strftime('%m/%d (週%w)'),
+                "pick": best["pick"], "odds": best["odds"], "edge": best["edge"], "prob": best["prob"]
+            })
     return found_picks
 
 def main():
     try:
         res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"})
         games = res.json()
-    except: return
+    except Exception as e:
+        print(f"Error: {e}"); return
 
-    # 階段一：嚴格掃描
-    results = analyze_mode(games, mode="Strict")
-    current_mode = "獵人模式"
+    # Step 1: 優先跑獵人模式
+    picks = run_analysis(games, mode="Strict")
+    current_mode = "🎯 獵人模式 (高優勢)"
 
-    # 階段二：如果沒單，啟動買分模式
-    if not results:
-        results = analyze_mode(games, mode="BuyPoint")
-        current_mode = "買分模式"
+    # Step 2: 若沒推薦，自動切換至買分模式
+    if not picks:
+        picks = run_analysis(games, mode="BuyPoint")
+        current_mode = "🛡️ 買分模式 (高勝率)"
 
     msg = f"🛰️ NBA V16.0 Dual-Mode - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += f"*(當前啟動：{current_mode})*\n"
+    msg += f"*(策略運作：{current_mode})*\n"
 
-    if not results:
-        msg += "\n🚫 市場極度精準，買分後仍無足夠優勢，建議空倉。"
+    if not picks:
+        msg += "\n🚫 今日所有場次（含買分後）皆無投資價值，建議空倉觀察。"
     else:
-        for r in sorted(results, key=lambda x: x["edge"], reverse=True):
-            msg += f"\n📅 {r['date']} | **{r['game']}**\n> 💰 {r['pick']}\n> 賠率：{r['odds']:.2f} | 優勢：{r['edge']:.2%} | 倉位：{kelly(r['prob'], r['odds']):.2%}\n"
+        for r in sorted(picks, key=lambda x: x["edge"], reverse=True):
+            msg += f"\n📅 {r['date']} | **{r['game']}**\n"
+            msg += f"> 💰 {r['pick']} | 賠率：{r['odds']:.2f}\n"
+            msg += f"> 📈 優勢：{r['edge']:.2%} | 倉位：{kelly(r['prob'], r['odds']):.2%}\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
