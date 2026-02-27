@@ -3,10 +3,10 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== V15.6 Reality Check 參數 =====
-EDGE_THRESHOLD = 0.022      # 回歸 2.2% 門檻
-KELLY_CAP = 0.05            # 倉位上限維持 5%
-SPREAD_COEF = 0.16          # 進一步調降讓分敏感度，追求更真實的勝率
+# ===== V15.7 Sniper 參數 =====
+EDGE_THRESHOLD = 0.020      # 狙擊手門檻，微降以捕捉中低盤價值
+KELLY_CAP = 0.05
+SPREAD_COEF = 0.18          # 回升至 0.18，在中低盤展現更多侵略性
 ODDS_MIN, ODDS_MAX = 1.45, 3.20
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -22,15 +22,15 @@ TEAM_CN = {
     "Orlando Magic": "魔術","Charlotte Hornets": "黃蜂","Detroit Pistons": "活塞",
     "Toronto Raptors": "暴龍","Chicago Bulls": "公牛","San Antonio Spurs": "馬刺",
     "Utah Jazz": "爵士","Brooklyn Nets": "籃網","Atlanta Hawks": "老鷹",
-    "Cleveland Cavaliers": "騎士","Indiana Pacers": "溜馬","Memphis Grizzlies": "灰熊",
+    "Cleveland Cavaliers": "騎士","Indiana Pacers": "溜幫","Memphis Grizzlies": "灰熊",
     "Portland Trail Blazers": "拓荒者","Washington Wizards": "巫師","Houston Rockets": "火箭"
 }
 
 def cn(t): return TEAM_CN.get(t, t)
 
 def get_rank_info(edge):
-    if edge >= 0.045: return "💎 鑽石級 (S)", "🔥"
-    if edge >= 0.032: return "🔥 推薦級 (A)", "⭐"
+    if edge >= 0.042: return "💎 狙擊級 (S)", "🎯"
+    if edge >= 0.030: return "🔥 精選級 (A)", "⭐"
     return "✅ 穩健級 (B)", "▫️"
 
 def kelly(prob, odds):
@@ -61,6 +61,7 @@ def analyze():
 
         h_ml = next(o for o in h2h if o["name"] == home_en)["price"]
         a_ml = next(o for o in h2h if o["name"] == away_en)["price"]
+        # 基礎勝率校正
         p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.02, 0.95)
         p_away = 1 - p_home
 
@@ -71,16 +72,15 @@ def analyze():
             if edge >= EDGE_THRESHOLD and ODDS_MIN <= odds <= ODDS_MAX:
                 game_candidates.append({"pick": f"獨贏：{cn(t_en)}", "odds": odds, "edge": edge, "prob": prob})
 
-        # (B) 讓分盤 (引入階梯懲罰)
+        # (B) 讓分盤 (狙擊手階梯懲罰)
         if spreads:
             for o in spreads:
                 point, odds = o["point"], o["price"]
-                
-                # --- 階梯式讓分懲罰邏輯 ---
                 abs_pt = abs(point)
+                
+                # V15.7 狙擊手校準
                 if abs_pt > 15: penalty = 0.045
-                elif abs_pt > 10.5: penalty = 0.025
-                elif abs_pt > 6.5: penalty = 0.010
+                elif abs_pt >= 8.5: penalty = 0.015
                 else: penalty = 0
                 
                 if ODDS_MIN <= odds <= ODDS_MAX:
@@ -102,9 +102,8 @@ def analyze():
                 "pick": best["pick"], "odds": best["odds"], "edge": best["edge"], "kelly": kelly(best["prob"], best["odds"])
             })
 
-    # 輸出格式化
-    msg = f"🛡️ NBA V15.6 Reality Check - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += f"*(實戰優化：已實施階梯式深盤懲罰，過濾高風險垃圾時間場次)*\n"
+    msg = f"🎯 NBA V15.7 Sniper - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += f"*(策略更新：封鎖深盤，釋放中盤狙擊空間)*\n"
 
     for date in sorted(dated_picks.keys()):
         msg += f"\n📅 **{date}**\n"
@@ -112,7 +111,7 @@ def analyze():
         for r in picks:
             rank, emoji = get_rank_info(r["edge"])
             msg += f"> {emoji} **{r['pick']}** | {r['game']}\n"
-            msg += f"> 賠率：{r['odds']:.2f} | 修正優勢：{r['edge']:.2%} | 倉位：{r['kelly']:.2%}\n"
+            msg += f"> 賠率：{r['odds']:.2f} | 狙擊優勢：{r['edge']:.2%} | 倉位：{r['kelly']:.2%}\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
