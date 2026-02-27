@@ -3,11 +3,11 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== V16.0 Dual-Mode 參數 =====
-STRICT_EDGE = 0.022         # 第一階段：獵人模式門檻 (2.2%)
-BUY_POINT_EDGE = 0.018      # 第二階段：買分模式門檻 (1.8%)
-KELLY_CAP = 0.05            # 單場最高倉位 5%
-SPREAD_COEF = 0.20          # 讓分敏感度校正
+# ===== V16.2 Optimist 參數 =====
+STRICT_EDGE = 0.020         # 獵人門檻降至 2.0%
+BUY_POINT_EDGE = 0.015      # 買分門檻降至 1.5%
+KELLY_CAP = 0.05
+SPREAD_COEF = 0.20
 ODDS_MIN, ODDS_MAX = 1.35, 3.50
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -31,8 +31,9 @@ def cn(t): return TEAM_CN.get(t, t)
 
 def get_penalty(point):
     abs_pt = abs(point)
-    if abs_pt > 15: return 0.045  # 深盤嚴厲懲罰
-    if abs_pt >= 8.5: return 0.015 # 中盤輕微懲罰
+    # --- V16.2 懲罰減半邏輯 ---
+    if abs_pt > 15: return 0.025  # 原本 4.5%
+    if abs_pt >= 8.5: return 0.005 # 原本 1.5%
     return 0
 
 def kelly(prob, odds):
@@ -54,7 +55,6 @@ def run_analysis(games, mode="Strict"):
         spreads = next((m["outcomes"] for m in m_list if m["key"] == "spreads"), None)
         if not h2h: continue
 
-        # 基礎概率推算
         h_ml = next(o for o in h2h if o["name"] == home_en)["price"]
         a_ml = next(o for o in h2h if o["name"] == away_en)["price"]
         p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.02, 0.95)
@@ -62,7 +62,6 @@ def run_analysis(games, mode="Strict"):
 
         candidates = []
         if mode == "Strict":
-            # 原始邏輯：獵人模式
             if spreads:
                 for o in spreads:
                     pt, odds = o["point"], o["price"]
@@ -71,12 +70,11 @@ def run_analysis(games, mode="Strict"):
                     if edge >= STRICT_EDGE and ODDS_MIN <= odds <= ODDS_MAX:
                         candidates.append({"pick": f"{'讓分' if pt<0 else '受讓'}({pt:+})：{cn(o['name'])}", "odds": odds, "edge": edge, "prob": p_spread})
         else:
-            # 進階邏輯：買分模式 (自動少讓 1 分)
             if spreads:
                 for o in spreads:
                     pt, odds = o["point"], o["price"]
-                    adj_pt = pt + 1 if pt < 0 else pt - 1 # 買 1 分
-                    adj_odds = odds - 0.15               # 買分賠率衰減模擬
+                    adj_pt = pt + 1 if pt < 0 else pt - 1
+                    adj_odds = odds - 0.15
                     p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
                     edge = p_spread - (1/adj_odds) - get_penalty(adj_pt)
                     if edge >= BUY_POINT_EDGE and ODDS_MIN <= adj_odds <= ODDS_MAX:
@@ -99,16 +97,15 @@ def main():
     except Exception as e:
         print(f"Error: {e}"); return
 
-    # Step 1: 優先跑獵人模式
+    # 執行 V16.2 樂觀模式
     picks = run_analysis(games, mode="Strict")
-    current_mode = "🎯 獵人模式 (高優勢)"
+    current_mode = "🏹 樂觀獵人 (低懲罰)"
 
-    # Step 2: 若沒推薦，自動切換至買分模式
     if not picks:
         picks = run_analysis(games, mode="BuyPoint")
-        current_mode = "🛡️ 買分模式 (高勝率)"
+        current_mode = "🛡️ 樂觀買分 (低懲罰)"
 
-    msg = f"🛰️ NBA V16.0 Dual-Mode - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg = f"🚀 NBA V16.2 Optimist - {datetime.now().strftime('%m/%d %H:%M')}\n"
     msg += f"*(策略運作：{current_mode})*\n"
 
     if not picks:
