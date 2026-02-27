@@ -3,11 +3,11 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== V15.7 Sniper 參數 =====
-EDGE_THRESHOLD = 0.020      # 狙擊手門檻，微降以捕捉中低盤價值
+# ===== V15.8 Insight 參數 =====
+EDGE_THRESHOLD = 0.018      # 稍微放寬門檻以增加掃描廣度
 KELLY_CAP = 0.05
-SPREAD_COEF = 0.18          # 回升至 0.18，在中低盤展現更多侵略性
-ODDS_MIN, ODDS_MAX = 1.45, 3.20
+SPREAD_COEF = 0.20          # 恢復適中的敏感度
+ODDS_MIN, ODDS_MAX = 1.35, 3.20
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
@@ -22,38 +22,32 @@ TEAM_CN = {
     "Orlando Magic": "魔術","Charlotte Hornets": "黃蜂","Detroit Pistons": "活塞",
     "Toronto Raptors": "暴龍","Chicago Bulls": "公牛","San Antonio Spurs": "馬刺",
     "Utah Jazz": "爵士","Brooklyn Nets": "籃網","Atlanta Hawks": "老鷹",
-    "Cleveland Cavaliers": "騎士","Indiana Pacers": "溜幫","Memphis Grizzlies": "灰熊",
+    "Cleveland Cavaliers": "騎士","Indiana Pacers": "溜馬","Memphis Grizzlies": "灰熊",
     "Portland Trail Blazers": "拓荒者","Washington Wizards": "巫師","Houston Rockets": "火箭"
 }
 
 def cn(t): return TEAM_CN.get(t, t)
 
-def get_rank_info(edge):
-    if edge >= 0.042: return "💎 狙擊級 (S)", "🎯"
-    if edge >= 0.030: return "🔥 精選級 (A)", "⭐"
-    return "✅ 穩健級 (B)", "▫️"
-
-def kelly(prob, odds):
-    b = odds - 1
-    if prob <= 1/odds: return 0
-    return min(round(max(0, (prob * b - (1 - prob)) / b), 4), KELLY_CAP)
-
 def analyze():
     try:
         res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"})
         games = res.json()
-    except: return
+    except Exception as e:
+        print(f"API Error: {e}")
+        return
 
-    dated_picks = defaultdict(list)
+    all_picks = []
+    insights = [] # 儲存未達標但有價值的資訊
 
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
         tw_time = utc_time + timedelta(hours=8)
-        date_str = tw_time.strftime('%m/%d (週%w)').replace('週0','週日').replace('週1','週一').replace('週2','週二').replace('週3','週三').replace('週4','週四').replace('週5','週五').replace('週6','週六')
+        date_str = tw_time.strftime('%m/%d (週%w)')
 
         home_en, away_en = g["home_team"], g["away_team"]
         bookmakers = g.get("bookmakers", [])
         if not bookmakers: continue
+        
         m_list = bookmakers[0].get("markets", [])
         h2h = next((m["outcomes"] for m in m_list if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in m_list if m["key"] == "spreads"), None)
@@ -61,59 +55,67 @@ def analyze():
 
         h_ml = next(o for o in h2h if o["name"] == home_en)["price"]
         a_ml = next(o for o in h2h if o["name"] == away_en)["price"]
-        # 基礎勝率校正
         p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.02, 0.95)
         p_away = 1 - p_home
 
-        game_candidates = []
-        # (A) 獨贏
+        # 掃描邏輯
+        candidates = []
+        # 獨贏
         for t_en, prob, odds in [(home_en, p_home, h_ml), (away_en, p_away, a_ml)]:
             edge = prob - (1/odds)
-            if edge >= EDGE_THRESHOLD and ODDS_MIN <= odds <= ODDS_MAX:
-                game_candidates.append({"pick": f"獨贏：{cn(t_en)}", "odds": odds, "edge": edge, "prob": prob})
+            if edge > 0.005: # 只要有優勢就記錄
+                candidates.append({"type": "獨贏", "team": cn(t_en), "odds": odds, "edge": edge, "prob": prob})
 
-        # (B) 讓分盤 (狙擊手階梯懲罰)
+        # 讓分
         if spreads:
             for o in spreads:
                 point, odds = o["point"], o["price"]
                 abs_pt = abs(point)
-                
-                # V15.7 狙擊手校準
-                if abs_pt > 15: penalty = 0.045
-                elif abs_pt >= 8.5: penalty = 0.015
-                else: penalty = 0
-                
-                if ODDS_MIN <= odds <= ODDS_MAX:
-                    p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
-                    edge = p_spread - (1/odds) - penalty
-                    
-                    if edge >= EDGE_THRESHOLD:
-                        prefix = "受讓" if point > 0 else "讓分"
-                        game_candidates.append({
-                            "pick": f"{prefix}：{cn(o['name'])} ({point:+})",
-                            "odds": odds, "edge": edge, "prob": p_spread
-                        })
+                penalty = 0.045 if abs_pt > 15 else (0.015 if abs_pt >= 8.5 else 0)
+                p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
+                edge = p_spread - (1/odds) - penalty
+                if edge > 0.005:
+                    candidates.append({"type": f"{'受讓' if point > 0 else '讓分'}({point:+})", "team": cn(o['name']), "odds": odds, "edge": edge, "prob": p_spread})
 
-        if game_candidates:
-            game_candidates.sort(key=lambda x: x["edge"], reverse=True)
-            best = game_candidates[0]
-            dated_picks[date_str].append({
+        if candidates:
+            candidates.sort(key=lambda x: x["edge"], reverse=True)
+            best = candidates[0]
+            pick_info = {
                 "game": f"{cn(away_en)} @ {cn(home_en)}",
-                "pick": best["pick"], "odds": best["odds"], "edge": best["edge"], "kelly": kelly(best["prob"], best["odds"])
-            })
+                "date": date_str,
+                "pick": f"{best['type']}：{best['team']}",
+                "odds": best["odds"],
+                "edge": best["edge"],
+                "prob": best["prob"]
+            }
+            # 判斷是否達標
+            if best["edge"] >= EDGE_THRESHOLD and ODDS_MIN <= best["odds"] <= ODDS_MAX:
+                all_picks.append(pick_info)
+            else:
+                insights.append(pick_info)
 
-    msg = f"🎯 NBA V15.7 Sniper - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += f"*(策略更新：封鎖深盤，釋放中盤狙擊空間)*\n"
+    # 輸出組合
+    msg = f"👁️ NBA V15.8 Insight - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    
+    if all_picks:
+        msg += "\n🎯 **精選推薦 (達標場次)**"
+        for r in sorted(all_picks, key=lambda x: x["edge"], reverse=True):
+            msg += f"\n📅 {r['date']} | **{r['game']}**\n> 💰 {r['pick']} | 賠率：{r['odds']:.2f}\n> 📈 優勢：{r['edge']:.2%} | 倉位：{kelly(r['prob'], r['odds']):.2%}"
+    else:
+        msg += "\n🚫 今日無達標場次。"
 
-    for date in sorted(dated_picks.keys()):
-        msg += f"\n📅 **{date}**\n"
-        picks = sorted(dated_picks[date], key=lambda x: x["edge"], reverse=True)
-        for r in picks:
-            rank, emoji = get_rank_info(r["edge"])
-            msg += f"> {emoji} **{r['pick']}** | {r['game']}\n"
-            msg += f"> 賠率：{r['odds']:.2f} | 狙擊優勢：{r['edge']:.2%} | 倉位：{r['kelly']:.2%}\n"
+    if insights:
+        msg += "\n\n🔍 **觀察名單 (優勢不足或賠率過低)**"
+        for r in sorted(insights, key=lambda x: x["edge"], reverse=True)[:3]: # 只列前三場
+            reason = "賠率過低" if r["odds"] < ODDS_MIN else "優勢未達 1.8%"
+            msg += f"\n> {r['game']}：{r['pick']} (Edge: {r['edge']:.1%}, {reason})"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
+
+def kelly(prob, odds):
+    b = odds - 1
+    if prob <= 1/odds: return 0
+    return min(round(max(0, (prob * b - (1 - prob)) / b), 4), KELLY_CAP)
 
 if __name__ == "__main__":
     analyze()
