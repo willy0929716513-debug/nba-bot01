@@ -2,12 +2,12 @@ import requests
 import os
 from datetime import datetime, timedelta
 
-# ===== V15.3 Investor 參數 =====
-EDGE_THRESHOLD = 0.022
-KELLY_CAP = 0.05
+# ===== V15.4 Market Scanner 參數 =====
+EDGE_THRESHOLD = 0.022      # 基本門檻
+KELLY_CAP = 0.06            # 單場最高倉位 6%
 SPREAD_COEF = 0.22
 ODDS_MIN = 1.45             
-ODDS_MAX = 3.00
+ODDS_MAX = 3.50             # 稍微放寬上限，尋找受讓倒打機會
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
@@ -27,6 +27,12 @@ TEAM_CN = {
 }
 
 def cn(t): return TEAM_CN.get(t, t)
+
+def get_rank_info(edge):
+    """根據 Edge 給予等級與圖示"""
+    if edge >= 0.05: return "💎 鑽石級 (S)", "這是今日最強優勢場次，建議優先關注。"
+    if edge >= 0.035: return "🔥 推薦級 (A)", "優勢明顯，具備良好的投資報酬比。"
+    return "✅ 穩健級 (B)", "符合門檻，建議按倉位平穩操作。"
 
 def kelly(prob, odds):
     b = odds - 1
@@ -54,6 +60,7 @@ def analyze():
         spreads = next((m["outcomes"] for m in m_list if m["key"] == "spreads"), None)
         if not h2h: continue
 
+        # 勝率計算
         h_ml = next(o for o in h2h if o["name"] == home_en)["price"]
         a_ml = next(o for o in h2h if o["name"] == away_en)["price"]
         p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.03, 0.96)
@@ -89,24 +96,28 @@ def analyze():
             game_picks.sort(key=lambda x: x["edge"], reverse=True)
             all_picks.append(game_picks[0])
 
+    # ===== 全量排序輸出 =====
     all_picks.sort(key=lambda x: x["edge"], reverse=True)
-    final_picks = all_picks[:2]
 
-    msg = f"📊 NBA V15.3 Investor - {datetime.now().strftime('%m/%d %H:%M')}\n---"
+    msg = f"📡 NBA V15.4 Market Scanner - {datetime.now().strftime('%m/%d %H:%M')}\n---"
     
-    total_potential_profit = 0
-    if not final_picks:
-        msg += "\n今日無符合高價值投資區間之場次。"
+    total_roi = 0
+    if not all_picks:
+        msg += "\n今日掃描完成，目前市場價格精確，無達標優勢場次。"
     else:
-        for r in final_picks:
+        for r in all_picks:
+            rank, note = get_rank_info(r["edge"])
             potential = r["kelly"] * (r["odds"] - 1)
-            total_potential_profit += potential
-            icon = "🎯" if r["odds"] >= 2.0 else "✅"
-            msg += f"\n🏀 **{r['game']}**\n> {icon} {r['pick']}\n> 賠率：{r['odds']:.2f} | Edge：{r['edge']:.2%}\n> 建議倉位：{r['kelly']:.2%}\n"
+            total_roi += potential
+            
+            msg += f"\n🏀 **{r['game']}**"
+            msg += f"\n> {rank} | **{r['pick']}**"
+            msg += f"\n> 賠率：{r['odds']:.2f} | 預期優勢：{r['edge']:.2%}"
+            msg += f"\n> 建議倉位：{r['kelly']:.2%} (收益貢獻: +{potential:.2%})\n"
 
         msg += f"\n---"
-        msg += f"\n💰 **今日目標收益率：+{total_potential_profit:.2%}**"
-        msg += f"\n*(此數據為兩場皆過對總資金的預期貢獻)*"
+        msg += f"\n💰 **全組合總預期回報：+{total_roi:.2%}**"
+        msg += f"\n*(註：以上包含今日所有符合 {EDGE_THRESHOLD:.1%} 優勢門檻之選項)*"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
