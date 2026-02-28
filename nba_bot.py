@@ -1,11 +1,10 @@
 import requests
 import os
 from datetime import datetime, timedelta
-from collections import defaultdict
 
-# ===== V16.2 Optimist 參數 =====
-STRICT_EDGE = 0.020         # 獵人門檻降至 2.0%
-BUY_POINT_EDGE = 0.015      # 買分門檻降至 1.5%
+# ===== V16.4 Safe Bridge 參數 =====
+STRICT_EDGE_BASE = 0.020    # 深盤/小盤門檻
+BRIDGE_EDGE_MIN = 0.015     # 買分避險單門檻 (因賠率低，門檻微降)
 KELLY_CAP = 0.05
 SPREAD_COEF = 0.20
 ODDS_MIN, ODDS_MAX = 1.35, 3.50
@@ -31,18 +30,16 @@ def cn(t): return TEAM_CN.get(t, t)
 
 def get_penalty(point):
     abs_pt = abs(point)
-    # --- V16.2 懲罰減半邏輯 ---
-    if abs_pt > 15: return 0.025  # 原本 4.5%
-    if abs_pt >= 8.5: return 0.005 # 原本 1.5%
-    return 0
+    if abs_pt > 15: return 0.025  # 深盤維持樂觀
+    return 0.010                  # 基本防禦
 
-def kelly(prob, odds):
-    b = odds - 1
-    if prob <= 1/odds: return 0
-    return min(round(max(0, (prob * b - (1 - prob)) / b), 4), KELLY_CAP)
+def main():
+    try:
+        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"})
+        games = res.json()
+    except: return
 
-def run_analysis(games, mode="Strict"):
-    found_picks = []
+    picks = []
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
         tw_time = utc_time + timedelta(hours=8)
@@ -55,66 +52,51 @@ def run_analysis(games, mode="Strict"):
         spreads = next((m["outcomes"] for m in m_list if m["key"] == "spreads"), None)
         if not h2h: continue
 
-        h_ml = next(o for o in h2h if o["name"] == home_en)["price"]
-        a_ml = next(o for o in h2h if o["name"] == away_en)["price"]
+        h_ml, a_ml = next(o for o in h2h if o["name"] == home_en)["price"], next(o for o in h2h if o["name"] == away_en)["price"]
         p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.02, 0.95)
         p_away = 1 - p_home
 
-        candidates = []
-        if mode == "Strict":
-            if spreads:
-                for o in spreads:
-                    pt, odds = o["point"], o["price"]
-                    p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
-                    edge = p_spread - (1/odds) - get_penalty(pt)
-                    if edge >= STRICT_EDGE and ODDS_MIN <= odds <= ODDS_MAX:
-                        candidates.append({"pick": f"{'讓分' if pt<0 else '受讓'}({pt:+})：{cn(o['name'])}", "odds": odds, "edge": edge, "prob": p_spread})
-        else:
-            if spreads:
-                for o in spreads:
-                    pt, odds = o["point"], o["price"]
-                    adj_pt = pt + 1 if pt < 0 else pt - 1
-                    adj_odds = odds - 0.15
-                    p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
-                    edge = p_spread - (1/adj_odds) - get_penalty(adj_pt)
-                    if edge >= BUY_POINT_EDGE and ODDS_MIN <= adj_odds <= ODDS_MAX:
-                        candidates.append({"pick": f"🛡️ 買分({adj_pt:+})：{cn(o['name'])}", "odds": adj_odds, "edge": edge, "prob": p_spread})
+        if spreads:
+            for o in spreads:
+                pt, odds = o["point"], o["price"]
+                abs_pt = abs(pt)
+                
+                # --- V16.4 Safe Bridge 邏輯 ---
+                if 7.0 <= abs_pt <= 11.0:
+                    # 強制買 1.5 分避險
+                    final_pt = pt + 1.5 if pt < 0 else pt - 1.5
+                    final_odds = odds - 0.21  # 買 1.5 分賠率大幅下滑
+                    penalty = 0.005           # 買分後風險降低
+                    threshold = BRIDGE_EDGE_MIN
+                    label = "🛡️ 避險買分"
+                else:
+                    final_pt = pt
+                    final_odds = odds
+                    penalty = get_penalty(pt)
+                    threshold = STRICT_EDGE_BASE
+                    label = "🎯 原始盤口"
 
-        if candidates:
-            candidates.sort(key=lambda x: x["edge"], reverse=True)
-            best = candidates[0]
-            found_picks.append({
-                "game": f"{cn(away_en)} @ {cn(home_en)}",
-                "date": tw_time.strftime('%m/%d (週%w)'),
-                "pick": best["pick"], "odds": best["odds"], "edge": best["edge"], "prob": best["prob"]
-            })
-    return found_picks
+                p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
+                edge = p_spread - (1/final_odds) - penalty
+                
+                if edge >= threshold and ODDS_MIN <= final_odds <= ODDS_MAX:
+                    picks.append({
+                        "game": f"{cn(away_en)} @ {cn(home_en)}",
+                        "date": tw_time.strftime('%m/%d'),
+                        "pick": f"{label}({final_pt:+})：{cn(o['name'])}",
+                        "odds": final_odds, "edge": edge, "prob": p_spread
+                    })
 
-def main():
-    try:
-        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"})
-        games = res.json()
-    except Exception as e:
-        print(f"Error: {e}"); return
-
-    # 執行 V16.2 樂觀模式
-    picks = run_analysis(games, mode="Strict")
-    current_mode = "🏹 樂觀獵人 (低懲罰)"
+    msg = f"🛰️ NBA V16.4 Safe Bridge - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += f"*(策略：7-11分區間強制買1.5分避險)*\n"
 
     if not picks:
-        picks = run_analysis(games, mode="BuyPoint")
-        current_mode = "🛡️ 樂觀買分 (低懲罰)"
-
-    msg = f"🚀 NBA V16.2 Optimist - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += f"*(策略運作：{current_mode})*\n"
-
-    if not picks:
-        msg += "\n🚫 今日所有場次（含買分後）皆無投資價值，建議空倉觀察。"
+        msg += "\n🚫 今日所有場次（含買分避險）均無足夠優勢。"
     else:
         for r in sorted(picks, key=lambda x: x["edge"], reverse=True):
             msg += f"\n📅 {r['date']} | **{r['game']}**\n"
             msg += f"> 💰 {r['pick']} | 賠率：{r['odds']:.2f}\n"
-            msg += f"> 📈 優勢：{r['edge']:.2%} | 倉位：{kelly(r['prob'], r['odds']):.2%}\n"
+            msg += f"> 📈 修正優勢：{r['edge']:.2%} | 倉位：{max(0, (r['prob']*(r['odds']-1)-(1-r['prob']))/(r['odds']-1))*100:.2f}%\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
