@@ -2,11 +2,12 @@ import requests
 import os
 from datetime import datetime, timedelta
 
-# ===== NBA V17.3 Transparency 參數 =====
-STRICT_EDGE_BASE = 0.018
-BRIDGE_EDGE_MIN = 0.014
+# ===== NBA V17.5 Multi-Dimensional 參數 =====
+STRICT_EDGE_BASE = 0.018    # 讓分門檻
+TOTAL_EDGE_BASE = 0.022     # 大小分門檻 (需更高優勢才開火)
 KELLY_CAP = 0.045
-SPREAD_COEF = 0.19
+SPREAD_COEF = 0.19          # 讓分轉化率
+TOTAL_COEF = 0.15           # 大小分轉化率 (較保守)
 BUY_POINT_FACTOR = 0.91
 ODDS_MIN, ODDS_MAX = 1.35, 3.50
 
@@ -35,18 +36,18 @@ def kelly(prob, odds):
     raw = (prob * b - (1 - prob)) / b
     return min(max(0, raw), KELLY_CAP)
 
-def get_penalty(point):
-    return 0.015 if abs(point) > 12 else 0.008
-
 def main():
     try:
-        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"})
+        # 請求 H2H, Spreads, Totals 三個市場
+        res = requests.get(BASE_URL, params={
+            "apiKey": API_KEY, "regions": "us", 
+            "markets": "h2h,spreads,totals", "oddsFormat": "decimal"
+        })
         games = res.json()
     except: return
 
-    # 分類列表
-    qualified_picks = []  # 達標
-    potential_picks = []  # 觀察中 (Edge > 0)
+    qualified_picks = []
+    potential_picks = []
 
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
@@ -56,61 +57,65 @@ def main():
         bookmakers = g.get("bookmakers", [])
         if not bookmakers: continue
         markets = bookmakers[0].get("markets", [])
+        
         h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in markets if m["key"] == "spreads"), None)
-        if not h2h or not spreads: continue
+        totals = next((m["outcomes"] for m in markets if m["key"] == "totals"), None)
+        if not h2h: continue
 
+        # --- 1. 實力對接 (H2H) ---
         h_ml = next(o["price"] for o in h2h if o["name"] == home_en)
         a_ml = next(o["price"] for o in h2h if o["name"] == away_en)
         p_home_real = (1/h_ml) / ((1/h_ml) + (1/a_ml))
 
-        for o in spreads:
-            pt, odds = o["point"], o["price"]
-            abs_pt = abs(pt)
-            if not (ODDS_MIN <= odds <= ODDS_MAX): continue
+        # --- 2. 讓分分析 (Spreads) ---
+        if spreads:
+            for o in spreads:
+                pt, odds = o["point"], o["price"]
+                abs_pt = abs(pt)
+                base_p = p_home_real if o["name"] == home_en else (1 - p_home_real)
+                p_spread = 0.5 + ((base_p - 0.5) * (0.17 if abs_pt > 12 else SPREAD_COEF))
+                
+                # 判定買分
+                if 7 <= abs_pt <= 11 and (p_spread - (1/odds)) >= 0.005:
+                    f_pt, f_odds, f_p, label, pen = pt + 1.5 if pt < 0 else pt - 1.5, odds * BUY_POINT_FACTOR, p_spread + 0.045, "🛡️ 讓分買分", 0.005
+                else:
+                    f_pt, f_odds, f_p, label, pen = pt, odds, p_spread, "🎯 讓分原始", (0.015 if abs_pt > 12 else 0.008)
+                
+                edge = f_p - (1/f_odds) - pen
+                if edge > 0:
+                    pick = {"game": f"{cn(away_en)} @ {cn(home_en)}", "pick": f"{label}({f_pt:+})：{cn(o['name'])}", "odds": round(f_odds, 2), "edge": edge, "k": kelly(f_p, f_odds), "type": "SPREAD"}
+                    if edge >= STRICT_EDGE_BASE: qualified_picks.append(pick)
+                    else: potential_picks.append(pick)
 
-            base_p = p_home_real if o["name"] == home_en else (1 - p_home_real)
-            coef = 0.17 if abs_pt > 12 else SPREAD_COEF
-            p_spread = 0.5 + ((base_p - 0.5) * coef)
-            original_edge = p_spread - (1/odds)
+        # --- 3. 大小分分析 (Totals) ---
+        if totals:
+            for o in totals:
+                line, odds = o["point"], o["price"]
+                # 模型假設：高強隊對決(H2H接近)通常防守較強，勝負懸殊(H2H遠)通常大分機率微增
+                # 這裡引入一個簡單的大分修正：勝率越懸殊，大分機率 +1%
+                strength_gap = abs(p_home_real - 0.5)
+                p_over = 0.5 + (strength_gap * TOTAL_COEF) if o["name"] == "Over" else 0.5 - (strength_gap * TOTAL_COEF)
+                
+                # 大小分固定懲罰 1.2%
+                edge = p_over - (1/odds) - 0.012
+                if edge > 0:
+                    pick = {"game": f"{cn(away_en)} @ {cn(home_en)}", "pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "k": kelly(p_over, odds), "type": "TOTAL"}
+                    if edge >= TOTAL_EDGE_BASE: qualified_picks.append(pick)
+                    else: potential_picks.append(pick)
 
-            # 邏輯判斷
-            if 7 <= abs_pt <= 11 and original_edge >= 0.005:
-                final_pt, final_odds, final_p = pt + 1.5 if pt < 0 else pt - 1.5, odds * BUY_POINT_FACTOR, p_spread + 0.045
-                penalty, threshold, label = 0.005, BRIDGE_EDGE_MIN, "🛡️ 買分"
-            else:
-                final_pt, final_odds, final_p = pt, odds, p_spread
-                penalty, threshold, label = get_penalty(pt), STRICT_EDGE_BASE, "🎯 原始"
-
-            edge = final_p - (1/final_odds) - penalty
-            k = kelly(final_p, final_odds)
-
-            pick_data = {
-                "game": f"{cn(away_en)} @ {cn(home_en)}",
-                "pick": f"{label}({final_pt:+})：{cn(o['name'])}",
-                "odds": round(final_odds, 2), "edge": edge, "kelly": k
-            }
-
-            if edge >= threshold:
-                qualified_picks.append(pick_data)
-            elif edge > 0:
-                potential_picks.append(pick_data)
-
-    # --- 輸出訊息 ---
-    msg = f"🛰️ NBA V17.3 Transparency - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    
-    msg += "\n✅ **【重點獲利場次】**\n"
-    if not qualified_picks:
-        msg += "> 目前無場次達標\n"
+    # --- 輸出結果 ---
+    msg = f"🛰️ NBA V17.5 Multi-Dim - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += "✅ **【推薦單】**\n"
+    if not qualified_picks: msg += "> 無達標場次\n"
     else:
         for r in sorted(qualified_picks, key=lambda x: x['edge'], reverse=True):
-            msg += f"• {r['game']} | **{r['pick']}** | 賠率:{r['odds']} | Edge:{r['edge']:.2%}\n"
-
-    msg += "\n⚠️ **【觀察/小注場次】** (Edge > 0)\n"
-    if not potential_picks:
-        msg += "> 目前無潛在優勢場次\n"
+            msg += f"• {r['game']} | **{r['pick']}** | 賠率:{r['odds']} | Edge:{r['edge']:.2%} | 倉:{r['k']:.2%}\n"
+    
+    msg += "\n⚠️ **【潛在觀察】**\n"
+    if not potential_picks: msg += "> 無正向場次\n"
     else:
-        for r in sorted(potential_picks, key=lambda x: x['edge'], reverse=True)[:5]: # 只顯示前五場
+        for r in sorted(potential_picks, key=lambda x: x['edge'], reverse=True)[:5]:
             msg += f"• {r['game']} | {r['pick']} | Edge:{r['edge']:.2%}\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
