@@ -2,11 +2,12 @@ import requests
 import os
 from datetime import datetime, timedelta
 
-# ===== V16.4 Safe Bridge 參數 =====
-STRICT_EDGE_BASE = 0.020    # 深盤/小盤門檻
-BRIDGE_EDGE_MIN = 0.015     # 買分避險單門檻 (因賠率低，門檻微降)
-KELLY_CAP = 0.05
-SPREAD_COEF = 0.20
+# ===== V17.1 Stable Bridge Pro 參數 =====
+STRICT_EDGE_BASE = 0.022    # 原始盤口門檻
+BRIDGE_EDGE_MIN = 0.017     # 買分避險門檻
+KELLY_CAP = 0.045           # 凱利倉位上限 4.5%
+SPREAD_COEF = 0.19          # 中盤勝率系數
+BUY_POINT_FACTOR = 0.90     # 買 1.5 分的賠率衰減系數 (Odds * 0.9)
 ODDS_MIN, ODDS_MAX = 1.35, 3.50
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -28,75 +29,100 @@ TEAM_CN = {
 
 def cn(t): return TEAM_CN.get(t, t)
 
+def kelly(prob, odds):
+    if odds <= 1: return 0
+    b = odds - 1
+    raw = (prob * b - (1 - prob)) / b
+    return min(max(0, raw), KELLY_CAP)
+
 def get_penalty(point):
-    abs_pt = abs(point)
-    if abs_pt > 15: return 0.025  # 深盤維持樂觀
-    return 0.010                  # 基本防禦
+    # 深盤 (>12) 懲罰 2%，一般盤口懲罰 1%
+    return 0.02 if abs(point) > 12 else 0.01
 
 def main():
     try:
-        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"})
+        # 同時抓取獨贏(h2h)與讓分(spreads)
+        res = requests.get(BASE_URL, params={
+            "apiKey": API_KEY,
+            "regions": "us",
+            "markets": "h2h,spreads",
+            "oddsFormat": "decimal"
+        })
         games = res.json()
     except: return
 
     picks = []
+
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
         tw_time = utc_time + timedelta(hours=8)
-        
         home_en, away_en = g["home_team"], g["away_team"]
+        
         bookmakers = g.get("bookmakers", [])
         if not bookmakers: continue
-        m_list = bookmakers[0].get("markets", [])
-        h2h = next((m["outcomes"] for m in m_list if m["key"] == "h2h"), None)
-        spreads = next((m["outcomes"] for m in m_list if m["key"] == "spreads"), None)
-        if not h2h: continue
+        markets = bookmakers[0].get("markets", [])
+        
+        h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
+        spreads = next((m["outcomes"] for m in markets if m["key"] == "spreads"), None)
+        if not h2h or not spreads: continue
 
-        h_ml, a_ml = next(o for o in h2h if o["name"] == home_en)["price"], next(o for o in h2h if o["name"] == away_en)["price"]
-        p_home = min((1/h_ml) / ((1/h_ml) + (1/a_ml)) + 0.02, 0.95)
-        p_away = 1 - p_home
+        # --- 透過獨贏賠率計算基礎勝率 ---
+        h_ml = next(o["price"] for o in h2h if o["name"] == home_en)
+        a_ml = next(o["price"] for o in h2h if o["name"] == away_en)
+        # 移除抽水後的真實勝率
+        p_home_real = (1/h_ml) / ((1/h_ml) + (1/a_ml))
 
-        if spreads:
-            for o in spreads:
-                pt, odds = o["point"], o["price"]
-                abs_pt = abs(pt)
-                
-                # --- V16.4 Safe Bridge 邏輯 ---
-                if 7.0 <= abs_pt <= 11.0:
-                    # 強制買 1.5 分避險
-                    final_pt = pt + 1.5 if pt < 0 else pt - 1.5
-                    final_odds = odds - 0.21  # 買 1.5 分賠率大幅下滑
-                    penalty = 0.005           # 買分後風險降低
-                    threshold = BRIDGE_EDGE_MIN
-                    label = "🛡️ 避險買分"
-                else:
-                    final_pt = pt
-                    final_odds = odds
-                    penalty = get_penalty(pt)
-                    threshold = STRICT_EDGE_BASE
-                    label = "🎯 原始盤口"
+        for o in spreads:
+            pt, odds = o["point"], o["price"]
+            abs_pt = abs(pt)
+            if not (ODDS_MIN <= odds <= ODDS_MAX): continue
 
-                p_spread = 0.5 + ((p_home if o["name"] == home_en else p_away) - 0.5) * SPREAD_COEF
-                edge = p_spread - (1/final_odds) - penalty
-                
-                if edge >= threshold and ODDS_MIN <= final_odds <= ODDS_MAX:
-                    picks.append({
-                        "game": f"{cn(away_en)} @ {cn(home_en)}",
-                        "date": tw_time.strftime('%m/%d'),
-                        "pick": f"{label}({final_pt:+})：{cn(o['name'])}",
-                        "odds": final_odds, "edge": edge, "prob": p_spread
-                    })
+            # --- 計算該讓分下的預期勝率 ---
+            # 如果是主隊讓分，用主隊勝率推算；反之亦然
+            base_p = p_home_real if o["name"] == home_en else (1 - p_home_real)
+            coef = 0.17 if abs_pt > 12 else SPREAD_COEF
+            p_spread = 0.5 + ((base_p - 0.5) * coef)
+            
+            original_edge = p_spread - (1/odds)
 
-    msg = f"🛰️ NBA V16.4 Safe Bridge - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += f"*(策略：7-11分區間強制買1.5分避險)*\n"
+            # --- Safe Bridge 決策邏輯 ---
+            if 7 <= abs_pt <= 11 and original_edge >= 0.005:
+                # 買分模式
+                final_pt = pt + 1.5 if pt < 0 else pt - 1.5
+                final_odds = odds * BUY_POINT_FACTOR
+                # 買 1.5 分勝率提升補償 (約 4.5%)
+                final_p = p_spread + 0.045
+                penalty = 0.005 # 買分後安全性增加，降低懲罰
+                threshold = BRIDGE_EDGE_MIN
+                label = "🛡️ 避險買分"
+            else:
+                # 原始模式
+                final_pt, final_odds = pt, odds
+                final_p = p_spread
+                penalty = get_penalty(pt)
+                threshold = STRICT_EDGE_BASE
+                label = "🎯 原始盤口"
 
+            edge = final_p - (1/final_odds) - penalty
+            k = kelly(final_p, final_odds)
+
+            if edge >= threshold and k > 0:
+                picks.append({
+                    "game": f"{cn(away_en)} @ {cn(home_en)}",
+                    "date": tw_time.strftime('%m/%d'),
+                    "pick": f"{label}({final_pt:+})：{cn(o['name'])}",
+                    "odds": round(final_odds, 2),
+                    "edge": edge, "kelly": k
+                })
+
+    msg = f"🛰️ NBA V17.1 Stable Bridge Pro - {datetime.now().strftime('%m/%d %H:%M')}\n"
     if not picks:
-        msg += "\n🚫 今日所有場次（含買分避險）均無足夠優勢。"
+        msg += "\n🚫 市場價格精確，目前無符合穩定條件場次。"
     else:
         for r in sorted(picks, key=lambda x: x["edge"], reverse=True):
             msg += f"\n📅 {r['date']} | **{r['game']}**\n"
             msg += f"> 💰 {r['pick']} | 賠率：{r['odds']:.2f}\n"
-            msg += f"> 📈 修正優勢：{r['edge']:.2%} | 倉位：{max(0, (r['prob']*(r['odds']-1)-(1-r['prob']))/(r['odds']-1))*100:.2f}%\n"
+            msg += f"> 📈 Edge：{r['edge']:.2%} | 倉位：{r['kelly']:.2%}\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
