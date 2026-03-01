@@ -3,11 +3,10 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== NBA V18.8 Panoramic Vision 參數 =====
-STRICT_EDGE_BASE = 0.025
-TOTAL_EDGE_BASE = 0.030
-KELLY_CAP = 0.040
-# 移除 MAX_PLAYS，顯示所有具價值的場次
+# ===== NBA V18.9 Equilibrium Pivot (平衡修正) =====
+STRICT_EDGE_BASE = 0.015    # 平衡門檻：讓分 1.5%
+TOTAL_EDGE_BASE = 0.020     # 平衡門檻：大小分 2.0%
+KELLY_CAP = 0.025           # 低 Edge 環境下限制倉位為 2.5%
 
 SPREAD_COEF = 0.16
 DEEP_SPREAD_COEF = 0.14
@@ -40,13 +39,9 @@ def kelly(prob, odds):
     raw = (prob*b - (1-prob)) / b
     return min(max(0, raw), KELLY_CAP)
 
-def get_rating(edge):
-    if edge >= 0.035: return "⭐⭐⭐ [機構級別]"
-    if edge >= 0.028: return "⭐⭐ [高價值]"
-    return "⭐ [標準建議]"
-
 def main():
     try:
+        # 使用 2026 年當前時間進行 API 請求
         res = requests.get(BASE_URL, params={
             "apiKey": API_KEY, "regions": "us", 
             "markets": "h2h,spreads,totals", "oddsFormat": "decimal"
@@ -54,14 +49,12 @@ def main():
         games = res.json()
     except: return
 
-    # 使用字典按日期分類：{ "03/01": [picks...], "03/02": [picks...] }
     dated_picks = defaultdict(list)
 
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
         tw_time = utc_time + timedelta(hours=8)
         date_str = tw_time.strftime('%m/%d')
-
         home_en, away_en = g["home_team"], g["away_team"]
         bookmakers = g.get("bookmakers", [])
         if not bookmakers: continue
@@ -76,68 +69,48 @@ def main():
         a_ml = next(o["price"] for o in h2h if o["name"] == away_en)
         p_home = (1/h_ml) / ((1/h_ml) + (1/a_ml))
 
-        # ---- 讓分分析 (SPREAD) ----
+        # ---- SPREAD (讓分) ----
         if spreads:
             for o in spreads:
                 pt, odds = o["point"], o["price"]
                 if not (ODDS_MIN <= odds <= ODDS_MAX): continue
                 abs_pt = abs(pt)
                 base_p = p_home if o["name"] == home_en else (1 - p_home)
-                coef = DEEP_SPREAD_COEF if abs_pt > 12 else SPREAD_COEF
-                p_spread = 0.5 + ((base_p - 0.5) * coef)
+                p_spread = 0.5 + ((base_p - 0.5) * (DEEP_SPREAD_COEF if abs_pt > 12 else SPREAD_COEF))
+                
                 penalty = 0.012 if abs_pt > 10 else 0.008
-
                 if 7 <= abs_pt <= 11:
-                    f_p = p_spread + (0.015 if abs_pt < 9 else 0.02)
-                    f_odds = odds * BUY_POINT_FACTOR
-                    label = "🛡️ 買分"
+                    f_p, f_odds, label = p_spread + (0.015 if abs_pt < 9 else 0.02), odds * BUY_POINT_FACTOR, "🛡️ 買分"
                 else:
                     f_p, f_odds, label = p_spread, odds, "🎯 原始"
 
                 edge = f_p - (1/f_odds) - penalty
                 if edge >= STRICT_EDGE_BASE:
-                    dated_picks[date_str].append({
-                        "game": f"{cn(away_en)} @ {cn(home_en)}",
-                        "pick": f"{label}({pt:+})：{cn(o['name'])}",
-                        "odds": round(f_odds,2), "edge": edge, "k": kelly(f_p, f_odds)
-                    })
+                    dated_picks[date_str].append({"game": f"{cn(away_en)} @ {cn(home_en)}", "pick": f"{label}({pt:+})：{cn(o['name'])}", "odds": round(f_odds,2), "edge": edge, "k": kelly(f_p, f_odds)})
 
-        # ---- 大小分分析 (TOTAL) ----
+        # ---- TOTAL (大小分) ----
         if totals:
             for o in totals:
                 line, odds = o["point"], o["price"]
-                if not (ODDS_MIN <= odds <= ODDS_MAX): continue
                 gap = abs(p_home - 0.5)
                 p_total = 0.5 + (gap * TOTAL_COEF) if o["name"] == "Over" else 0.5 - (gap * TOTAL_COEF)
-                
-                penalty = 0.015
-                if line > 230: penalty += 0.015
-                if line > 235: penalty += 0.01
+                penalty = 0.015 + (0.015 if line > 230 else 0) + (0.01 if line > 235 else 0)
                 
                 edge = p_total - (1/odds) - penalty
                 if edge >= TOTAL_EDGE_BASE:
-                    dated_picks[date_str].append({
-                        "game": f"{cn(away_en)} @ {cn(home_en)}",
-                        "pick": f"🏀 {o['name']} {line}",
-                        "odds": odds, "edge": edge, "k": kelly(p_total, odds)
-                    })
+                    dated_picks[date_str].append({"game": f"{cn(away_en)} @ {cn(home_en)}", "pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "k": kelly(p_total, odds)})
 
-    # ---- 整理並輸出 ----
-    msg = f"🛰️ NBA V18.8 Panoramic Vision - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    # ---- 輸出訊息 ----
+    msg = f"🛰️ NBA V18.9 Equilibrium - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += "*(當前設定：平衡模式 - 讓分 1.5% / 大小 2.0%)*\n"
     
     if not dated_picks:
-        msg += "\n> 市場定價極度精確，目前無價值場次。"
+        msg += "\n> 市場效率極高，即使在平衡模式下仍無明顯漏洞。"
     else:
-        # 按日期排序
         for date in sorted(dated_picks.keys()):
             msg += f"\n📅 **日期：{date}**\n"
-            msg += "---"
-            # 日期內按 Edge 推薦度排序
-            day_picks = sorted(dated_picks[date], key=lambda x: x["edge"], reverse=True)
-            for r in day_picks:
-                rating = get_rating(r['edge'])
-                msg += f"\n• {r['game']} | **{r['pick']}**\n"
-                msg += f"  └ {rating} | 賠率:{r['odds']} | Edge:{r['edge']:.2%} | 倉:{r['k']:.2%}\n"
+            for r in sorted(dated_picks[date], key=lambda x: x["edge"], reverse=True):
+                msg += f"• {r['game']} | **{r['pick']}** | 賠率:{r['odds']} | Edge:{r['edge']:.2%} | 倉:{r['k']:.2%}\n"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
