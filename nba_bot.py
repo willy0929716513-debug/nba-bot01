@@ -3,14 +3,13 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== NBA V19.3 Markdown Formatted (格式化版) =====
-STRICT_EDGE_BASE = 0.015    
-TOTAL_EDGE_BASE = 0.020     
-KELLY_CAP = 0.025           
+# ===== NBA V19.6 Context-Aware =====
+STRICT_EDGE_BASE = 0.022     # 讓分門檻提高
+TOTAL_EDGE_BASE = 0.025      # 大小分門檻提高
+KELLY_CAP = 0.025
 
 SPREAD_COEF = 0.16
 DEEP_SPREAD_COEF = 0.14
-TOTAL_COEF = 0.12
 BUY_POINT_FACTOR = 0.90
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -32,118 +31,158 @@ TEAM_CN = {
 
 def cn(t): return TEAM_CN.get(t, t)
 
-def get_contextual_insight(game, pick_type, pt, edge, is_qualified):
-    home = game.split(' @ ')[1]
-    away = game.split(' @ ')[0]
-    
-    if "買分" in pick_type and edge > 0.02:
-        return f"🔥 {away}與{home}盤口緊密，買分至 {pt:+} 抓住了關鍵保護區。"
-    if "原始" in pick_type and abs(pt) > 10:
-        return f"🚀 {home}狀態火熱，且對手背靠背，深盤具備統治級潛力。"
-    if not is_qualified and edge > 0.005:
-        return f"⚠️ 盤口精準，{home}與{away}差距極小，屬於莊家高效率區域。"
-    if "🏀" in pick_type:
-        pace_context = "高" if "Over" in pick_type else "低"
-        return f"📊 {away}與{home} pace 指數傾向於{pace_context}分局。"
-
-    return f"✨ 基於大數據模擬，{home}主場對陣{away}具有數據指標上的微弱優勢。"
-
 def kelly(prob, odds):
     if odds <= 1: return 0
     b = odds - 1
     raw = (prob*b - (1-prob)) / b
     return min(max(0, raw), KELLY_CAP)
 
+def get_contextual_insight(pick_type, edge, is_unqualified=False):
+    if "🏀" in pick_type:
+        return "📊 極端盤口均值回歸模型觸發。"
+    if "買分" in pick_type and edge > 0.025:
+        return "🛡️ 關鍵區間買分，提高安全邊際。"
+    if is_unqualified:
+        return "⚠️ 盤口接近合理區間，僅供觀察。"
+    return "✨ 市場定價與模型存在偏差。"
+
 def main():
     try:
-        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "decimal"})
+        res = requests.get(BASE_URL, params={
+            "apiKey": API_KEY,
+            "regions": "us",
+            "markets": "h2h,spreads,totals",
+            "oddsFormat": "decimal"
+        })
         games = res.json()
-    except: return
+    except:
+        return
 
-    all_calculated_picks = []
+    game_analysis = defaultdict(dict)
 
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
         tw_time = utc_time + timedelta(hours=8)
-        
+
         home_en, away_en = g["home_team"], g["away_team"]
+        game_key = f"{cn(away_en)} @ {cn(home_en)}"
+
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
-        
         h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in markets if m["key"] == "spreads"), None)
         totals = next((m["outcomes"] for m in markets if m["key"] == "totals"), None)
         if not h2h: continue
 
+        # ===== 計算真實勝率 =====
         h_ml = next(o["price"] for o in h2h if o["name"] == home_en)
         a_ml = next(o["price"] for o in h2h if o["name"] == away_en)
         p_home = (1/h_ml) / ((1/h_ml) + (1/a_ml))
 
-        # --- 讓分 ---
+        # =====================
+        # ===== 讓分模型 ======
+        # =====================
+        best_spread = {"edge": -1}
+
         if spreads:
             for o in spreads:
                 pt, odds = o["point"], o["price"]
-                p_spread = 0.5 + ((p_home if o["name"] == home_en else (1-p_home)) - 0.5) * (DEEP_SPREAD_COEF if abs(pt) > 12 else SPREAD_COEF)
+                base_p = p_home if o["name"] == home_en else (1-p_home)
+                coef = DEEP_SPREAD_COEF if abs(pt) > 12 else SPREAD_COEF
+                p_spread = 0.5 + ((base_p - 0.5) * coef)
+
                 penalty = 0.012 if abs(pt) > 10 else 0.008
-                
+
                 if 7 <= abs(pt) <= 11:
-                    f_p, f_odds, label, f_pt = p_spread + 0.015, odds * BUY_POINT_FACTOR, "🛡️ 讓分買分", pt + 1.5 if pt < 0 else pt - 1.5
+                    f_p = p_spread + 0.015
+                    f_odds = odds * BUY_POINT_FACTOR
+                    f_pt = pt + 1.5 if pt < 0 else pt - 1.5
+                    label = "🛡️ 讓分買分"
                 else:
-                    f_p, f_odds, label, f_pt = p_spread, odds, "🎯 讓分原始", pt
+                    f_p = p_spread
+                    f_odds = odds
+                    f_pt = pt
+                    label = "🎯 讓分"
 
                 edge = f_p - (1/f_odds) - penalty
-                if edge > 0:
-                    is_q = edge >= STRICT_EDGE_BASE
-                    all_calculated_picks.append({
-                        "game": f"{cn(away_en)} @ {cn(home_en)}", 
-                        "pick": f"{label}({f_pt:+})：{cn(o['name'])}", 
-                        "odds": round(f_odds,2), "edge": edge, 
-                        "k": kelly(f_p, f_odds), 
-                        "is_q": is_q,
-                        "insight": get_contextual_insight(f"{cn(away_en)} @ {cn(home_en)}", label, f_pt, edge, is_q)
-                    })
 
-        # --- 大小 ---
+                if edge > best_spread["edge"]:
+                    best_spread = {
+                        "pick": f"{label}({f_pt:+})：{cn(o['name'])}",
+                        "odds": round(f_odds,2),
+                        "edge": edge,
+                        "k": kelly(f_p, f_odds)
+                    }
+
+        # =====================
+        # ===== Totals 模型 ====
+        # =====================
+        best_total = {"edge": -1}
+
         if totals:
             for o in totals:
                 line, odds = o["point"], o["price"]
-                p_total = 0.5 + (abs(p_home - 0.5) * TOTAL_COEF) if o["name"] == "Over" else 0.5 - (abs(p_home - 0.5) * TOTAL_COEF)
-                penalty = 0.015 + (0.015 if line > 230 else 0)
-                edge = p_total - (1/odds) - penalty
-                if edge > 0:
-                    is_q = edge >= TOTAL_EDGE_BASE
-                    all_calculated_picks.append({
-                        "game": f"{cn(away_en)} @ {cn(home_en)}", 
-                        "pick": f"🏀 {o['name']} {line}", 
-                        "odds": odds, "edge": edge, 
-                        "k": kelly(p_total, odds), 
-                        "is_q": is_q,
-                        "insight": get_contextual_insight(f"{cn(away_en)} @ {cn(home_en)}", o["name"], line, edge, is_q)
-                    })
 
-    # --- 格式化輸出 (Markdown 增強) ---
-    sorted_picks = sorted(all_calculated_picks, key=lambda x: x["edge"], reverse=True)
-    
-    msg = f"🛰️ **NBA V19.3 Adaptive** - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += "*(門檻：讓分 1.5% / 大小 2.0% - 強制顯示前 4 場)*\n"
-    
-    if not sorted_picks:
-        msg += "\n> _市場效率極高，目前無正值場次。_"
-    else:
-        for i, r in enumerate(sorted_picks[:4]):
-            is_qualified = r['is_q']
-            status = "✅" if is_qualified else "⚠️ [未達標]"
-            gap = (STRICT_EDGE_BASE if "讓分" in r['pick'] else TOTAL_EDGE_BASE) - r['edge']
-            
-            # 使用 Markdown 格式化訊息
-            msg += f"\n{status} __**推薦度#{i+1}**__ | {r['game']} | **{r['pick']}**\n"
-            msg += f"  └ Edge: `{r['edge']:.2%}` | 賠率: `{r['odds']}` | 倉: `{r['k']:.2%}`\n"
-            
-            if not is_qualified:
-                msg += f"  └ *差 {gap:.2%} 達標* | "
-            else:
-                msg += "  └ "
-            msg += f"*{r['insight']}*\n"
-            msg += "---" # 分隔線
+                if odds <= 1:
+                    continue
+
+                p_total = 0.5
+
+                # ---- 極端盤口均值回歸 ----
+                if o["name"] == "Under":
+                    if line >= 236:
+                        p_total += 0.02
+                    elif line >= 232:
+                        p_total += 0.01
+
+                elif o["name"] == "Over":
+                    if line <= 214:
+                        p_total += 0.02
+                    elif line <= 218:
+                        p_total += 0.01
+
+                penalty = 0.018
+                edge = p_total - (1/odds) - penalty
+
+                if edge > best_total["edge"]:
+                    best_total = {
+                        "pick": f"🏀 {o['name']} {line}",
+                        "odds": odds,
+                        "edge": edge,
+                        "k": kelly(p_total, odds)
+                    }
+
+        # =====================
+        # ===== 單場最佳選擇 ==
+        # =====================
+        final_pick = {"edge": -1}
+
+        if best_total["edge"] > best_spread["edge"] and best_total["edge"] >= TOTAL_EDGE_BASE:
+            final_pick = best_total
+        elif best_spread["edge"] >= STRICT_EDGE_BASE:
+            final_pick = best_spread
+        else:
+            final_pick = best_total if best_total["edge"] > best_spread["edge"] else best_spread
+            final_pick["is_unqualified"] = True
+
+        game_analysis[game_key] = final_pick
+
+    # ===== 輸出排序 =====
+    sorted_games = sorted(game_analysis.items(), key=lambda x: x[1]["edge"], reverse=True)
+
+    msg = f"🛰️ NBA V19.6 Context-Aware - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += "*(邏輯：極端盤口均值回歸 > 讓分模型 > 顯示最佳)*\n"
+
+    for game_key, pick in sorted_games[:4]:
+        if pick["edge"] < 0:
+            continue
+
+        status = "⚠️ [觀察]" if pick.get("is_unqualified") else "✅"
+        insight = get_contextual_insight(pick["pick"], pick["edge"], pick.get("is_unqualified", False))
+
+        msg += f"\n{status} __**{game_key}**__ | **{pick['pick']}**\n"
+        msg += f"  └ Edge: `{pick['edge']:.2%}` | 賠率: `{pick['odds']}` | 倉: `{pick['k']:.2%}`\n"
+        msg += f"  └ *{insight}*\n"
+        msg += "---"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
