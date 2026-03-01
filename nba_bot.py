@@ -3,11 +3,13 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== NBA V19.0 Insight Engine (帶分析功能) =====
+# ===== NBA V19.1 Adaptive Flexibility (自適應靈活版) =====
+# 門檻設定：讓分 1.5% / 大小分 2.0%
 STRICT_EDGE_BASE = 0.015    
 TOTAL_EDGE_BASE = 0.020     
 KELLY_CAP = 0.025           
 
+# 調整係數 (Real-World 修正)
 SPREAD_COEF = 0.16
 DEEP_SPREAD_COEF = 0.14
 TOTAL_COEF = 0.12
@@ -56,12 +58,12 @@ def main():
         games = res.json()
     except: return
 
-    dated_picks = defaultdict(list)
+    all_calculated_picks = []
 
     for g in games:
         utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
         tw_time = utc_time + timedelta(hours=8)
-        date_str = tw_time.strftime('%m/%d')
+        
         home_en, away_en = g["home_team"], g["away_team"]
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
 
@@ -87,8 +89,14 @@ def main():
                     f_p, f_odds, label, f_pt = p_spread, odds, "🎯 讓分原始", pt
 
                 edge = f_p - (1/f_odds) - penalty
-                if edge >= STRICT_EDGE_BASE:
-                    dated_picks[date_str].append({"game": f"{cn(away_en)} @ {cn(home_en)}", "pick": f"{label}({f_pt:+})：{cn(o['name'])}", "odds": round(f_odds,2), "edge": edge, "k": kelly(f_p, f_odds), "insight": generate_insight(f"{cn(away_en)} @ {cn(home_en)}", label, f_pt, edge)})
+                if edge > 0:
+                    all_calculated_picks.append({
+                        "game": f"{cn(away_en)} @ {cn(home_en)}", 
+                        "pick": f"{label}({f_pt:+})：{cn(o['name'])}", 
+                        "odds": round(f_odds,2), "edge": edge, 
+                        "k": kelly(f_p, f_odds), 
+                        "insight": generate_insight(f"{cn(away_en)} @ {cn(home_en)}", label, f_pt, edge)
+                    })
 
         # --- 大小 ---
         if totals:
@@ -97,20 +105,34 @@ def main():
                 p_total = 0.5 + (abs(p_home - 0.5) * TOTAL_COEF) if o["name"] == "Over" else 0.5 - (abs(p_home - 0.5) * TOTAL_COEF)
                 penalty = 0.015 + (0.015 if line > 230 else 0)
                 edge = p_total - (1/odds) - penalty
-                if edge >= TOTAL_EDGE_BASE:
-                    dated_picks[date_str].append({"game": f"{cn(away_en)} @ {cn(home_en)}", "pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "k": kelly(p_total, odds), "insight": generate_insight(f"{cn(away_en)} @ {cn(home_en)}", o["name"], line, edge)})
+                if edge > 0:
+                    all_calculated_picks.append({
+                        "game": f"{cn(away_en)} @ {cn(home_en)}", 
+                        "pick": f"🏀 {o['name']} {line}", 
+                        "odds": odds, "edge": edge, 
+                        "k": kelly(p_total, odds), 
+                        "insight": generate_insight(f"{cn(away_en)} @ {cn(home_en)}", o["name"], line, edge)
+                    })
 
     # --- 格式化輸出 ---
-    msg = f"🛰️ NBA V19.0 Equilibrium - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    if not dated_picks:
-        msg += "\n> 今日市場定價極度精確，無達標場次。"
+    # 按照推薦度排序
+    sorted_picks = sorted(all_calculated_picks, key=lambda x: x["edge"], reverse=True)
+    
+    msg = f"🛰️ NBA V19.1 Adaptive - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += "*(門檻：讓分 1.5% / 大小 2.0% - 強制顯示前 4 場)\n"
+    
+    if not sorted_picks:
+        msg += "\n> 市場效率極高，目前無正值場次。"
     else:
-        for date in sorted(dated_picks.keys()):
-            msg += f"\n📅 **日期：{date}**\n"
-            msg += "---"
-            for r in sorted(dated_picks[date], key=lambda x: x["edge"], reverse=True):
-                msg += f"\n• {r['game']} | **{r['pick']}** | 賠率:{r['odds']} | Edge:{r['edge']:.2%} | 倉:{r['k']:.2%}\n"
-                msg += f"> *{r['insight']}*\n"
+        # 強制顯示排序前 4 的場次
+        for i, r in enumerate(sorted_picks[:4]):
+            is_qualified = r['edge'] >= (STRICT_EDGE_BASE if "讓分" in r['pick'] else TOTAL_EDGE_BASE)
+            status = "✅" if is_qualified else "⚠️ [未達標]"
+            
+            msg += f"\n{status} **推薦度#{i+1}** | {r['game']} | **{r['pick']}**\n"
+            msg += f"  └ Edge:{r['edge']:.2%} | 賠率:{r['odds']} | 倉:{r['k']:.2%}\n"
+            msg += f"  └ *{r['insight']}*\n"
+            msg += "-" * 20
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
