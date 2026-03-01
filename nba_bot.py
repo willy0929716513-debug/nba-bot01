@@ -3,13 +3,11 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== NBA V19.1 Adaptive Flexibility (自適應靈活版) =====
-# 門檻設定：讓分 1.5% / 大小分 2.0%
+# ===== NBA V19.3 Markdown Formatted (格式化版) =====
 STRICT_EDGE_BASE = 0.015    
 TOTAL_EDGE_BASE = 0.020     
 KELLY_CAP = 0.025           
 
-# 調整係數 (Real-World 修正)
 SPREAD_COEF = 0.16
 DEEP_SPREAD_COEF = 0.14
 TOTAL_COEF = 0.12
@@ -34,17 +32,21 @@ TEAM_CN = {
 
 def cn(t): return TEAM_CN.get(t, t)
 
-def generate_insight(game, pick_type, pt, edge):
-    """根據數據自動生成分析文字"""
-    if "買分" in pick_type:
-        return f"分析：{game.split(' @ ')[1]}雖強，但買分至 {pt:+} 更有安全墊，能有效防範尾盤卡分風險。"
-    if "Over" in pick_type:
-        return f"分析：兩隊近期進攻效率回升，盤口線開得偏低，是模型眼中的數據窪地。"
-    if "Under" in pick_type:
-        return f"分析：高分盤觸發防禦懲罰，兩隊近期防守強度提升，預計將演變成一場防守拉鋸戰。"
-    if abs(pt) > 10:
-        return f"分析：對手近期體能處於劣勢，強隊即便開出深盤，依然具備統治級的贏球期望值。"
-    return f"分析：模型識別到盤口與球隊真實戰力存在微弱偏差，具備投機價值。"
+def get_contextual_insight(game, pick_type, pt, edge, is_qualified):
+    home = game.split(' @ ')[1]
+    away = game.split(' @ ')[0]
+    
+    if "買分" in pick_type and edge > 0.02:
+        return f"🔥 {away}與{home}盤口緊密，買分至 {pt:+} 抓住了關鍵保護區。"
+    if "原始" in pick_type and abs(pt) > 10:
+        return f"🚀 {home}狀態火熱，且對手背靠背，深盤具備統治級潛力。"
+    if not is_qualified and edge > 0.005:
+        return f"⚠️ 盤口精準，{home}與{away}差距極小，屬於莊家高效率區域。"
+    if "🏀" in pick_type:
+        pace_context = "高" if "Over" in pick_type else "低"
+        return f"📊 {away}與{home} pace 指數傾向於{pace_context}分局。"
+
+    return f"✨ 基於大數據模擬，{home}主場對陣{away}具有數據指標上的微弱優勢。"
 
 def kelly(prob, odds):
     if odds <= 1: return 0
@@ -66,7 +68,7 @@ def main():
         
         home_en, away_en = g["home_team"], g["away_team"]
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
-
+        
         h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in markets if m["key"] == "spreads"), None)
         totals = next((m["outcomes"] for m in markets if m["key"] == "totals"), None)
@@ -90,12 +92,14 @@ def main():
 
                 edge = f_p - (1/f_odds) - penalty
                 if edge > 0:
+                    is_q = edge >= STRICT_EDGE_BASE
                     all_calculated_picks.append({
                         "game": f"{cn(away_en)} @ {cn(home_en)}", 
                         "pick": f"{label}({f_pt:+})：{cn(o['name'])}", 
                         "odds": round(f_odds,2), "edge": edge, 
                         "k": kelly(f_p, f_odds), 
-                        "insight": generate_insight(f"{cn(away_en)} @ {cn(home_en)}", label, f_pt, edge)
+                        "is_q": is_q,
+                        "insight": get_contextual_insight(f"{cn(away_en)} @ {cn(home_en)}", label, f_pt, edge, is_q)
                     })
 
         # --- 大小 ---
@@ -106,33 +110,40 @@ def main():
                 penalty = 0.015 + (0.015 if line > 230 else 0)
                 edge = p_total - (1/odds) - penalty
                 if edge > 0:
+                    is_q = edge >= TOTAL_EDGE_BASE
                     all_calculated_picks.append({
                         "game": f"{cn(away_en)} @ {cn(home_en)}", 
                         "pick": f"🏀 {o['name']} {line}", 
                         "odds": odds, "edge": edge, 
                         "k": kelly(p_total, odds), 
-                        "insight": generate_insight(f"{cn(away_en)} @ {cn(home_en)}", o["name"], line, edge)
+                        "is_q": is_q,
+                        "insight": get_contextual_insight(f"{cn(away_en)} @ {cn(home_en)}", o["name"], line, edge, is_q)
                     })
 
-    # --- 格式化輸出 ---
-    # 按照推薦度排序
+    # --- 格式化輸出 (Markdown 增強) ---
     sorted_picks = sorted(all_calculated_picks, key=lambda x: x["edge"], reverse=True)
     
-    msg = f"🛰️ NBA V19.1 Adaptive - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += "*(門檻：讓分 1.5% / 大小 2.0% - 強制顯示前 4 場)\n"
+    msg = f"🛰️ **NBA V19.3 Adaptive** - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += "*(門檻：讓分 1.5% / 大小 2.0% - 強制顯示前 4 場)*\n"
     
     if not sorted_picks:
-        msg += "\n> 市場效率極高，目前無正值場次。"
+        msg += "\n> _市場效率極高，目前無正值場次。_"
     else:
-        # 強制顯示排序前 4 的場次
         for i, r in enumerate(sorted_picks[:4]):
-            is_qualified = r['edge'] >= (STRICT_EDGE_BASE if "讓分" in r['pick'] else TOTAL_EDGE_BASE)
+            is_qualified = r['is_q']
             status = "✅" if is_qualified else "⚠️ [未達標]"
+            gap = (STRICT_EDGE_BASE if "讓分" in r['pick'] else TOTAL_EDGE_BASE) - r['edge']
             
-            msg += f"\n{status} **推薦度#{i+1}** | {r['game']} | **{r['pick']}**\n"
-            msg += f"  └ Edge:{r['edge']:.2%} | 賠率:{r['odds']} | 倉:{r['k']:.2%}\n"
-            msg += f"  └ *{r['insight']}*\n"
-            msg += "-" * 20
+            # 使用 Markdown 格式化訊息
+            msg += f"\n{status} __**推薦度#{i+1}**__ | {r['game']} | **{r['pick']}**\n"
+            msg += f"  └ Edge: `{r['edge']:.2%}` | 賠率: `{r['odds']}` | 倉: `{r['k']:.2%}`\n"
+            
+            if not is_qualified:
+                msg += f"  └ *差 {gap:.2%} 達標* | "
+            else:
+                msg += "  └ "
+            msg += f"*{r['insight']}*\n"
+            msg += "---" # 分隔線
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
