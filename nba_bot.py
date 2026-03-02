@@ -3,13 +3,13 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== NBA V19.6 Context-Aware =====
-STRICT_EDGE_BASE = 0.022     # 讓分門檻提高
-TOTAL_EDGE_BASE = 0.025      # 大小分門檻提高
-KELLY_CAP = 0.025
+# ===== NBA V19.8 Momentum Analytics (動能分析版) =====
+STRICT_EDGE_BASE = 0.022    
+TOTAL_EDGE_BASE = 0.025     
+KELLY_CAP = 0.020
 
 SPREAD_COEF = 0.16
-DEEP_SPREAD_COEF = 0.14
+DEEP_SPREAD_COEF = 0.13
 BUY_POINT_FACTOR = 0.90
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -31,158 +31,106 @@ TEAM_CN = {
 
 def cn(t): return TEAM_CN.get(t, t)
 
+def get_contextual_insight(pick_type, pt, edge, is_unqualified):
+    if is_unqualified:
+        return "✨ 盤口精確度高，目前處於數據平衡點。"
+    if "🏀" in pick_type:
+        return "📊 偵測到強弱實力差距導致的進攻節奏偏移。"
+    if abs(pt) > 12:
+        return "🚀 動能增強模型顯示，強隊具備突破深盤的統計慣性。"
+    return "🔥 模型識別到賠率偏差，具備數學獲利期望值。"
+
 def kelly(prob, odds):
     if odds <= 1: return 0
     b = odds - 1
     raw = (prob*b - (1-prob)) / b
     return min(max(0, raw), KELLY_CAP)
 
-def get_contextual_insight(pick_type, edge, is_unqualified=False):
-    if "🏀" in pick_type:
-        return "📊 極端盤口均值回歸模型觸發。"
-    if "買分" in pick_type and edge > 0.025:
-        return "🛡️ 關鍵區間買分，提高安全邊際。"
-    if is_unqualified:
-        return "⚠️ 盤口接近合理區間，僅供觀察。"
-    return "✨ 市場定價與模型存在偏差。"
-
 def main():
     try:
-        res = requests.get(BASE_URL, params={
-            "apiKey": API_KEY,
-            "regions": "us",
-            "markets": "h2h,spreads,totals",
-            "oddsFormat": "decimal"
-        })
+        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "decimal"})
         games = res.json()
-    except:
-        return
+    except: return
 
     game_analysis = defaultdict(dict)
 
     for g in games:
-        utc_time = datetime.fromisoformat(g["commence_time"].replace("Z","+00:00"))
-        tw_time = utc_time + timedelta(hours=8)
-
         home_en, away_en = g["home_team"], g["away_team"]
         game_key = f"{cn(away_en)} @ {cn(home_en)}"
-
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
+        
         h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in markets if m["key"] == "spreads"), None)
         totals = next((m["outcomes"] for m in markets if m["key"] == "totals"), None)
         if not h2h: continue
 
-        # ===== 計算真實勝率 =====
+        # 真實勝率基礎
         h_ml = next(o["price"] for o in h2h if o["name"] == home_en)
         a_ml = next(o["price"] for o in h2h if o["name"] == away_en)
         p_home = (1/h_ml) / ((1/h_ml) + (1/a_ml))
+        strength_gap = abs(p_home - 0.5)
 
-        # =====================
-        # ===== 讓分模型 ======
-        # =====================
+        # --- 讓分分析 (升級方向 1 & 3) ---
         best_spread = {"edge": -1}
-
         if spreads:
             for o in spreads:
                 pt, odds = o["point"], o["price"]
-                base_p = p_home if o["name"] == home_en else (1-p_home)
+                is_home = o["name"] == home_en
+                base_p = p_home if is_home else (1-p_home)
+                
+                # 方向 1：Spread vs ML 偏差強度
+                momentum_boost = (base_p - 0.5) * 0.08
                 coef = DEEP_SPREAD_COEF if abs(pt) > 12 else SPREAD_COEF
-                p_spread = 0.5 + ((base_p - 0.5) * coef)
-
-                penalty = 0.012 if abs(pt) > 10 else 0.008
+                p_spread = 0.5 + ((base_p - 0.5) * coef) + momentum_boost
+                
+                # 方向 3：比例制深盤懲罰
+                penalty = abs(pt) * 0.0028 # 平滑懲罰係數
+                if not is_home: penalty += 0.005 # 客場額外風險
 
                 if 7 <= abs(pt) <= 11:
-                    f_p = p_spread + 0.015
-                    f_odds = odds * BUY_POINT_FACTOR
-                    f_pt = pt + 1.5 if pt < 0 else pt - 1.5
-                    label = "🛡️ 讓分買分"
+                    f_p, f_odds, label, f_pt = p_spread + 0.015, odds * BUY_POINT_FACTOR, "🛡️ 讓分買分", pt + 1.5 if pt < 0 else pt - 1.5
                 else:
-                    f_p = p_spread
-                    f_odds = odds
-                    f_pt = pt
-                    label = "🎯 讓分"
+                    f_p, f_odds, label, f_pt = p_spread, odds, "🎯 讓分原始", pt
 
                 edge = f_p - (1/f_odds) - penalty
+                if edge > best_spread.get("edge", -1):
+                    best_spread = {"pick": f"{label}({f_pt:+})：{cn(o['name'])}", "odds": round(f_odds,2), "edge": edge, "k": kelly(f_p, f_odds), "pt": f_pt}
 
-                if edge > best_spread["edge"]:
-                    best_spread = {
-                        "pick": f"{label}({f_pt:+})：{cn(o['name'])}",
-                        "odds": round(f_odds,2),
-                        "edge": edge,
-                        "k": kelly(f_p, f_odds)
-                    }
-
-        # =====================
-        # ===== Totals 模型 ====
-        # =====================
+        # --- 大小分分析 (升級方向 2) ---
         best_total = {"edge": -1}
-
         if totals:
             for o in totals:
                 line, odds = o["point"], o["price"]
+                # 方向 2：加入強弱對戰節奏
+                if o["name"] == "Over":
+                    p_total = 0.5 + (strength_gap * 0.06)
+                else:
+                    p_total = 0.5 + (0.5 - strength_gap) * 0.04
+                
+                edge = p_total - (1/odds) - 0.018 # 基礎水錢懲罰
+                if edge > best_total.get("edge", -1):
+                    best_total = {"pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "k": kelly(p_total, odds), "pt": line}
 
-                if odds <= 1:
-                    continue
-
-                p_total = 0.5
-
-                # ---- 極端盤口均值回歸 ----
-                if o["name"] == "Under":
-                    if line >= 236:
-                        p_total += 0.02
-                    elif line >= 232:
-                        p_total += 0.01
-
-                elif o["name"] == "Over":
-                    if line <= 214:
-                        p_total += 0.02
-                    elif line <= 218:
-                        p_total += 0.01
-
-                penalty = 0.018
-                edge = p_total - (1/odds) - penalty
-
-                if edge > best_total["edge"]:
-                    best_total = {
-                        "pick": f"🏀 {o['name']} {line}",
-                        "odds": odds,
-                        "edge": edge,
-                        "k": kelly(p_total, odds)
-                    }
-
-        # =====================
-        # ===== 單場最佳選擇 ==
-        # =====================
-        final_pick = {"edge": -1}
-
+        # --- 綜合決策 ---
         if best_total["edge"] > best_spread["edge"] and best_total["edge"] >= TOTAL_EDGE_BASE:
-            final_pick = best_total
+            res_pick = best_total
         elif best_spread["edge"] >= STRICT_EDGE_BASE:
-            final_pick = best_spread
+            res_pick = best_spread
         else:
-            final_pick = best_total if best_total["edge"] > best_spread["edge"] else best_spread
-            final_pick["is_unqualified"] = True
+            res_pick = best_total if best_total["edge"] > best_spread["edge"] else best_spread
+            res_pick["is_unqualified"] = True
 
-        game_analysis[game_key] = final_pick
+        game_analysis[game_key] = res_pick
 
-    # ===== 輸出排序 =====
-    sorted_games = sorted(game_analysis.items(), key=lambda x: x[1]["edge"], reverse=True)
+    # --- 輸出結果 ---
+    sorted_res = sorted(game_analysis.items(), key=lambda x: x[1]["edge"], reverse=True)
+    msg = f"🛰️ **NBA V19.8 Momentum** - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += "*(升級：動能偏差/實力差距節奏/比例懲罰)*\n"
 
-    msg = f"🛰️ NBA V19.6 Context-Aware - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += "*(邏輯：極端盤口均值回歸 > 讓分模型 > 顯示最佳)*\n"
-
-    for game_key, pick in sorted_games[:4]:
-        if pick["edge"] < 0:
-            continue
-
-        status = "⚠️ [觀察]" if pick.get("is_unqualified") else "✅"
-        insight = get_contextual_insight(pick["pick"], pick["edge"], pick.get("is_unqualified", False))
-
-        msg += f"\n{status} __**{game_key}**__ | **{pick['pick']}**\n"
-        msg += f"  └ Edge: `{pick['edge']:.2%}` | 賠率: `{pick['odds']}` | 倉: `{pick['k']:.2%}`\n"
-        msg += f"  └ *{insight}*\n"
-        msg += "---"
+    for g_key, p in sorted_res[:4]:
+        status = "⚠️ [觀察]" if p.get("is_unqualified") else "✅"
+        insight = get_contextual_insight(p["pick"], p["pt"], p["edge"], p.get("is_unqualified"))
+        msg += f"\n{status} __**{g_key}**__\n👉 **{p['pick']}**\n  └ Edge: `{p['edge']:.2%}` | 賠率: `{p['odds']}` | 倉: `{p['k']:.2%}`\n  └ {insight}\n---"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
