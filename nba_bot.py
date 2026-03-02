@@ -3,10 +3,10 @@ import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-# ===== NBA V19.8 Momentum Analytics (動能分析版) =====
-STRICT_EDGE_BASE = 0.022    
-TOTAL_EDGE_BASE = 0.025     
-KELLY_CAP = 0.020
+# ===== NBA V21.0 Elite Quant (菁英量化版) =====
+STRICT_EDGE_BASE = 0.020    
+TOTAL_EDGE_BASE = 0.022     
+KELLY_CAP = 0.025 # 隨著 Edge 拉開，微調上限以捕捉強場價值
 
 SPREAD_COEF = 0.16
 DEEP_SPREAD_COEF = 0.13
@@ -31,19 +31,11 @@ TEAM_CN = {
 
 def cn(t): return TEAM_CN.get(t, t)
 
-def get_contextual_insight(pick_type, pt, edge, is_unqualified):
-    if is_unqualified:
-        return "✨ 盤口精確度高，目前處於數據平衡點。"
-    if "🏀" in pick_type:
-        return "📊 偵測到強弱實力差距導致的進攻節奏偏移。"
-    if abs(pt) > 12:
-        return "🚀 動能增強模型顯示，強隊具備突破深盤的統計慣性。"
-    return "🔥 模型識別到賠率偏差，具備數學獲利期望值。"
-
 def kelly(prob, odds):
     if odds <= 1: return 0
     b = odds - 1
-    raw = (prob*b - (1-prob)) / b
+    # Kelly Formula: (bp - q) / b
+    raw = (prob * b - (1 - prob)) / b
     return min(max(0, raw), KELLY_CAP)
 
 def main():
@@ -64,13 +56,13 @@ def main():
         totals = next((m["outcomes"] for m in markets if m["key"] == "totals"), None)
         if not h2h: continue
 
-        # 真實勝率基礎
+        # --- 基礎勝率數據 ---
         h_ml = next(o["price"] for o in h2h if o["name"] == home_en)
         a_ml = next(o["price"] for o in h2h if o["name"] == away_en)
         p_home = (1/h_ml) / ((1/h_ml) + (1/a_ml))
         strength_gap = abs(p_home - 0.5)
 
-        # --- 讓分分析 (升級方向 1 & 3) ---
+        # --- 讓分分析 (修正 Bias & Edge Scaling) ---
         best_spread = {"edge": -1}
         if spreads:
             for o in spreads:
@@ -78,40 +70,52 @@ def main():
                 is_home = o["name"] == home_en
                 base_p = p_home if is_home else (1-p_home)
                 
-                # 方向 1：Spread vs ML 偏差強度
-                momentum_boost = (base_p - 0.5) * 0.08
+                # 修正 2：全向動能平衡加成
+                bias = (base_p - 0.5)
                 coef = DEEP_SPREAD_COEF if abs(pt) > 12 else SPREAD_COEF
-                p_spread = 0.5 + ((base_p - 0.5) * coef) + momentum_boost
+                p_spread = 0.5 + (bias * coef) + (bias * 0.06)
                 
-                # 方向 3：比例制深盤懲罰
-                penalty = abs(pt) * 0.0028 # 平滑懲罰係數
-                if not is_home: penalty += 0.005 # 客場額外風險
+                # 風險懲罰係數 (改為比例折扣)
+                penalty_ratio = abs(pt) * 0.0025
+                if not is_home and abs(pt) > 8:
+                    penalty_ratio += 0.003
 
+                # 買分邏輯
                 if 7 <= abs(pt) <= 11:
-                    f_p, f_odds, label, f_pt = p_spread + 0.015, odds * BUY_POINT_FACTOR, "🛡️ 讓分買分", pt + 1.5 if pt < 0 else pt - 1.5
+                    f_p = p_spread + (abs(pt) * 0.0015)
+                    f_odds = odds * BUY_POINT_FACTOR
+                    f_pt = pt + 1.5 if pt < 0 else pt - 1.5
+                    label = "🛡️ 讓分買分"
                 else:
-                    f_p, f_odds, label, f_pt = p_spread, odds, "🎯 讓分原始", pt
+                    f_p, f_odds, f_pt, label = p_spread, odds, pt, "🎯 讓分原始"
 
-                edge = f_p - (1/f_odds) - penalty
+                f_p = min(max(f_p, 0.05), 0.95)
+                
+                # 修正 1：Edge 比例折扣計算
+                raw_diff = f_p - (1/f_odds)
+                edge = raw_diff * (1 - penalty_ratio) if raw_diff > 0 else raw_diff
+
                 if edge > best_spread.get("edge", -1):
                     best_spread = {"pick": f"{label}({f_pt:+})：{cn(o['name'])}", "odds": round(f_odds,2), "edge": edge, "k": kelly(f_p, f_odds), "pt": f_pt}
 
-        # --- 大小分分析 (升級方向 2) ---
+        # --- 大小分分析 ---
         best_total = {"edge": -1}
         if totals:
             for o in totals:
                 line, odds = o["point"], o["price"]
-                # 方向 2：加入強弱對戰節奏
                 if o["name"] == "Over":
                     p_total = 0.5 + (strength_gap * 0.06)
                 else:
-                    p_total = 0.5 + (0.5 - strength_gap) * 0.04
+                    p_total = 0.5 - (strength_gap * 0.04)
                 
-                edge = p_total - (1/odds) - 0.018 # 基礎水錢懲罰
+                p_total = min(max(p_total, 0.05), 0.95)
+                raw_diff_t = p_total - (1/odds)
+                edge = raw_diff_t * (1 - 0.018) # 大小分固定折扣
+                
                 if edge > best_total.get("edge", -1):
                     best_total = {"pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "k": kelly(p_total, odds), "pt": line}
 
-        # --- 綜合決策 ---
+        # --- 綜合決策與過濾 ---
         if best_total["edge"] > best_spread["edge"] and best_total["edge"] >= TOTAL_EDGE_BASE:
             res_pick = best_total
         elif best_spread["edge"] >= STRICT_EDGE_BASE:
@@ -120,17 +124,18 @@ def main():
             res_pick = best_total if best_total["edge"] > best_spread["edge"] else best_spread
             res_pick["is_unqualified"] = True
 
-        game_analysis[game_key] = res_pick
+        # 修正 3：出手品質過濾 (Kelly 必須大於 0 才有意義)
+        if res_pick.get("k", 0) > 0:
+            game_analysis[game_key] = res_pick
 
     # --- 輸出結果 ---
     sorted_res = sorted(game_analysis.items(), key=lambda x: x[1]["edge"], reverse=True)
-    msg = f"🛰️ **NBA V19.8 Momentum** - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += "*(升級：動能偏差/實力差距節奏/比例懲罰)*\n"
+    msg = f"🛰️ **NBA V21.0 Elite Quant** - {datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg += "*(升級：比例折扣/平衡加成/零倉位過濾)*\n"
 
     for g_key, p in sorted_res[:4]:
         status = "⚠️ [觀察]" if p.get("is_unqualified") else "✅"
-        insight = get_contextual_insight(p["pick"], p["pt"], p["edge"], p.get("is_unqualified"))
-        msg += f"\n{status} __**{g_key}**__\n👉 **{p['pick']}**\n  └ Edge: `{p['edge']:.2%}` | 賠率: `{p['odds']}` | 倉: `{p['k']:.2%}`\n  └ {insight}\n---"
+        msg += f"\n{status} __**{g_key}**__\n👉 **{p['pick']}**\n  └ Edge: `{p['edge']:.2%}` | 賠率: `{p['odds']}` | 倉: `{p['k']:.2%}`\n---"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
