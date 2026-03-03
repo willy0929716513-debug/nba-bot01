@@ -2,7 +2,7 @@ import requests
 import os
 from datetime import datetime
 
-# ===== NBA V22.2 Elite Stability (中文隊名版) =====
+# ===== NBA V22.2 Elite Stability (EV 顯示強化版) =====
 
 STRICT_EDGE_BASE = 0.020
 TOTAL_EDGE_BASE = 0.022
@@ -204,6 +204,9 @@ def main():
         if k <= 0:
             continue
 
+        # ✨ 新增：僅在合格結果中計算 EV (Stake=1)
+        best_pick["ev"] = (best_pick["prob"] * (best_pick["odds"] - 1)) - (1 - best_pick["prob"])
+        
         best_pick["k"] = k
         results[game_key] = best_pick
 
@@ -224,9 +227,10 @@ def main():
 
     for g, p in sorted_res:
         msg += f"__{g}__\n"
+        # ✨ 新增：在輸出中加入 EV 顯示
         msg += f"{grade(p['edge'])} 👉 {p['pick']}\n"
-        msg += f"Edge: {p['edge']:.2%} | Odds: {p['odds']} | Kelly: {p['k']:.2%}\n"
-        msg += "-----\n"
+        msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | Kelly: {p['k']:.2%}\n"
+        msg += "---------"
 
     msg += f"\n{hedge_note}"
 
