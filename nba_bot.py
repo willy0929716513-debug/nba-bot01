@@ -2,7 +2,7 @@ import requests
 import os
 from datetime import datetime
 
-# ===== NBA V22.1 Elite Stability =====
+# ===== NBA V22.2 Elite Stability (中文隊名版) =====
 
 STRICT_EDGE_BASE = 0.020
 TOTAL_EDGE_BASE = 0.022
@@ -14,6 +14,42 @@ API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
+# ===== 中文隊名 =====
+TEAM_CN = {
+    "Los Angeles Lakers": "湖人",
+    "Golden State Warriors": "勇士",
+    "Boston Celtics": "塞爾提克",
+    "Milwaukee Bucks": "公鹿",
+    "Denver Nuggets": "金塊",
+    "Oklahoma City Thunder": "雷霆",
+    "Phoenix Suns": "太陽",
+    "LA Clippers": "快艇",
+    "Miami Heat": "熱火",
+    "Philadelphia 76ers": "七六人",
+    "Sacramento Kings": "國王",
+    "New Orleans Pelicans": "鵜鶘",
+    "Minnesota Timberwolves": "灰狼",
+    "Dallas Mavericks": "獨行俠",
+    "New York Knicks": "尼克",
+    "Orlando Magic": "魔術",
+    "Charlotte Hornets": "黃蜂",
+    "Detroit Pistons": "活塞",
+    "Toronto Raptors": "暴龍",
+    "Chicago Bulls": "公牛",
+    "San Antonio Spurs": "馬刺",
+    "Utah Jazz": "爵士",
+    "Brooklyn Nets": "籃網",
+    "Atlanta Hawks": "老鷹",
+    "Cleveland Cavaliers": "騎士",
+    "Indiana Pacers": "溜馬",
+    "Memphis Grizzlies": "灰熊",
+    "Portland Trail Blazers": "拓荒者",
+    "Washington Wizards": "巫師",
+    "Houston Rockets": "火箭"
+}
+
+def cn(name):
+    return TEAM_CN.get(name, name)
 
 # ===== 動態 Kelly =====
 def kelly(prob, odds, edge):
@@ -32,7 +68,6 @@ def kelly(prob, odds, edge):
 
     return min(max(0, raw), cap)
 
-
 # ===== 分級 =====
 def grade(edge):
     if edge >= 0.05:
@@ -42,8 +77,7 @@ def grade(edge):
     else:
         return "✅ 合格"
 
-
-# ===== 深盤非線性懲罰 =====
+# ===== 深盤懲罰 =====
 def spread_penalty(pt):
     abs_pt = abs(pt)
 
@@ -53,7 +87,6 @@ def spread_penalty(pt):
         return abs_pt * 0.0035
     else:
         return (abs_pt * 0.0035) ** 1.12
-
 
 # ===== 主程式 =====
 def main():
@@ -83,7 +116,11 @@ def main():
 
         home = g["home_team"]
         away = g["away_team"]
-        game_key = f"{away} @ {home}"
+
+        home_cn = cn(home)
+        away_cn = cn(away)
+
+        game_key = f"{away_cn} @ {home_cn}"
 
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
         h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
@@ -93,7 +130,6 @@ def main():
         if not h2h:
             continue
 
-        # ===== 基礎勝率 =====
         h_ml = next(o["price"] for o in h2h if o["name"] == home)
         a_ml = next(o["price"] for o in h2h if o["name"] == away)
 
@@ -109,6 +145,8 @@ def main():
                 odds = o["price"]
                 is_home = o["name"] == home
 
+                team_cn = home_cn if is_home else away_cn
+
                 base_p = p_home if is_home else (1 - p_home)
                 bias = base_p - 0.5
 
@@ -122,7 +160,7 @@ def main():
 
                 if edge > best_pick["edge"]:
                     best_pick = {
-                        "pick": f"🎯 Spread {pt:+} {o['name']}",
+                        "pick": f"🎯 {team_cn} {pt:+}",
                         "odds": odds,
                         "edge": edge,
                         "prob": p_spread,
@@ -140,7 +178,6 @@ def main():
                 else:
                     p_total = 0.5 - strength_gap * 0.04
 
-                # 方向分離盤口修正
                 line_shift = (line - 228)
 
                 if o["name"] == "Over":
@@ -160,7 +197,6 @@ def main():
                         "type": "total"
                     }
 
-        # ===== 嚴格過濾 =====
         if best_pick["edge"] < STRICT_EDGE_BASE:
             continue
 
@@ -171,10 +207,8 @@ def main():
         best_pick["k"] = k
         results[game_key] = best_pick
 
-    # ===== 排序只出 2 場 =====
     sorted_res = sorted(results.items(), key=lambda x: x[1]["edge"], reverse=True)[:2]
 
-    # ===== 風險集中提醒 =====
     market_types = [p["type"] for _, p in sorted_res]
 
     if len(market_types) == 2 and market_types[0] == market_types[1]:
@@ -185,8 +219,7 @@ def main():
     else:
         hedge_note = "🛡️ 市場分散良好"
 
-    # ===== 輸出 =====
-    msg = f"🛰️ NBA V22.1 Elite Stability\n"
+    msg = f"🛰️ NBA V22.2 Elite Stability\n"
     msg += f"{datetime.now().strftime('%m/%d %H:%M')}\n\n"
 
     for g, p in sorted_res:
