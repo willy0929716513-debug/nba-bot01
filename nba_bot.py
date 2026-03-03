@@ -1,141 +1,204 @@
 import requests
 import os
-from datetime import datetime, timedelta
-from collections import defaultdict
+from datetime import datetime
 
-# ===== NBA V22.0 The Sniper (狙擊手量化版) =====
-STRICT_EDGE_BASE = 0.020    
-TOTAL_EDGE_BASE = 0.022     
-KELLY_CAP = 0.025
+# ===== NBA V22.1 Elite Stability =====
+
+STRICT_EDGE_BASE = 0.020
+TOTAL_EDGE_BASE = 0.022
 
 SPREAD_COEF = 0.16
 DEEP_SPREAD_COEF = 0.13
-BUY_POINT_FACTOR = 0.90
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-TEAM_CN = {
-    "Los Angeles Lakers": "湖人","Golden State Warriors": "勇士","Boston Celtics": "塞爾提克",
-    "Milwaukee Bucks": "公鹿","Denver Nuggets": "金塊","Oklahoma City Thunder": "雷霆",
-    "Phoenix Suns": "太陽","LA Clippers": "快艇","Miami Heat": "熱火",
-    "Philadelphia 76ers": "七六人","Sacramento Kings": "國王","New Orleans Pelicans": "尼克",
-    "Orlando Magic": "魔術","Charlotte Hornets": "黃蜂","Detroit Pistons": "活塞",
-    "Toronto Raptors": "暴龍","Chicago Bulls": "公牛","San Antonio Spurs": "馬刺",
-    "Utah Jazz": "爵士","Brooklyn Nets": "籃網","Atlanta Hawks": "老鷹",
-    "Cleveland Cavaliers": "騎士","Indiana Pacers": "溜馬","Memphis Grizzlies": "灰熊",
-    "Portland Trail Blazers": "拓荒者","Washington Wizards": "巫師","Houston Rockets": "火箭"
-}
 
-def cn(t): return TEAM_CN.get(t, t)
+# ===== 動態 Kelly =====
+def kelly(prob, odds, edge):
+    if odds <= 1:
+        return 0
 
-def kelly(prob, odds):
-    if odds <= 1: return 0
     b = odds - 1
     raw = (prob * b - (1 - prob)) / b
-    return min(max(0, raw), KELLY_CAP)
 
+    if edge >= 0.05:
+        cap = 0.035
+    elif edge >= 0.035:
+        cap = 0.030
+    else:
+        cap = 0.025
+
+    return min(max(0, raw), cap)
+
+
+# ===== 分級 =====
+def grade(edge):
+    if edge >= 0.05:
+        return "🔥 S級"
+    elif edge >= 0.035:
+        return "⭐ A級"
+    else:
+        return "✅ 合格"
+
+
+# ===== 深盤非線性懲罰 =====
+def spread_penalty(pt):
+    abs_pt = abs(pt)
+
+    if abs_pt <= 10:
+        return abs_pt * 0.0028
+    elif abs_pt <= 14:
+        return abs_pt * 0.0035
+    else:
+        return (abs_pt * 0.0035) ** 1.12
+
+
+# ===== 主程式 =====
 def main():
     try:
-        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "decimal"})
-        games = res.json()
-    except: return
+        res = requests.get(
+            BASE_URL,
+            params={
+                "apiKey": API_KEY,
+                "regions": "us",
+                "markets": "h2h,spreads,totals",
+                "oddsFormat": "decimal"
+            },
+            timeout=10
+        )
 
-    game_analysis = defaultdict(dict)
+        if res.status_code != 200:
+            return
+
+        games = res.json()
+
+    except:
+        return
+
+    results = {}
 
     for g in games:
-        home_en, away_en = g["home_team"], g["away_team"]
-        game_key = f"{cn(away_en)} @ {cn(home_en)}"
+
+        home = g["home_team"]
+        away = g["away_team"]
+        game_key = f"{away} @ {home}"
+
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
-        
         h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in markets if m["key"] == "spreads"), None)
         totals = next((m["outcomes"] for m in markets if m["key"] == "totals"), None)
-        if not h2h: continue
 
-        # --- 基礎數據 ---
-        h_ml = next(o["price"] for o in h2h if o["name"] == home_en)
-        a_ml = next(o["price"] for o in h2h if o["name"] == away_en)
-        p_home = (1/h_ml) / ((1/h_ml) + (1/a_ml))
+        if not h2h:
+            continue
+
+        # ===== 基礎勝率 =====
+        h_ml = next(o["price"] for o in h2h if o["name"] == home)
+        a_ml = next(o["price"] for o in h2h if o["name"] == away)
+
+        p_home = (1 / h_ml) / ((1 / h_ml) + (1 / a_ml))
         strength_gap = abs(p_home - 0.5)
 
-        # --- 讓分分析 (Bias & Edge Scaling) ---
-        best_spread = {"edge": -1, "type": "spread"}
+        best_pick = {"edge": -1}
+
+        # ===== 讓分 =====
         if spreads:
             for o in spreads:
-                pt, odds = o["point"], o["price"]
-                is_home = o["name"] == home_en
-                base_p = p_home if is_home else (1-p_home)
-                
-                bias = (base_p - 0.5)
+                pt = o["point"]
+                odds = o["price"]
+                is_home = o["name"] == home
+
+                base_p = p_home if is_home else (1 - p_home)
+                bias = base_p - 0.5
+
                 coef = DEEP_SPREAD_COEF if abs(pt) > 12 else SPREAD_COEF
-                p_spread = 0.5 + (bias * coef) + (bias * 0.06)
-                
-                penalty_ratio = abs(pt) * 0.0025
-                if not is_home and abs(pt) > 8:
-                    penalty_ratio += 0.003
+                p_spread = 0.5 + bias * coef + bias * 0.06
 
-                if 7 <= abs(pt) <= 11:
-                    f_p = p_spread + (abs(pt) * 0.0015)
-                    f_odds = odds * BUY_POINT_FACTOR
-                    f_pt = pt + 1.5 if pt < 0 else pt - 1.5
-                    label = "🛡️ 讓分買分"
-                else:
-                    f_p, f_odds, f_pt, label = p_spread, odds, pt, "🎯 讓分原始"
+                penalty = spread_penalty(pt)
 
-                f_p = min(max(f_p, 0.05), 0.95)
-                raw_diff = f_p - (1/f_odds)
-                edge = raw_diff * (1 - penalty_ratio) if raw_diff > 0 else raw_diff
+                raw_diff = p_spread - (1 / odds)
+                edge = raw_diff * (1 - penalty) if raw_diff > 0 else raw_diff
 
-                if edge > best_spread["edge"]:
-                    best_spread.update({"pick": f"{label}({f_pt:+})：{cn(o['name'])}", "odds": round(f_odds,2), "edge": edge, "k": kelly(f_p, f_odds), "pt": f_pt})
+                if edge > best_pick["edge"]:
+                    best_pick = {
+                        "pick": f"🎯 Spread {pt:+} {o['name']}",
+                        "odds": odds,
+                        "edge": edge,
+                        "prob": p_spread,
+                        "type": "spread"
+                    }
 
-        # --- 大小分分析 (升級：盤口調節 Line Bias) ---
-        best_total = {"edge": -1, "type": "total"}
+        # ===== 大小分 =====
         if totals:
             for o in totals:
-                line, odds = o["point"], o["price"]
-                
-                # 基礎實力節奏
+                line = o["point"]
+                odds = o["price"]
+
                 if o["name"] == "Over":
-                    p_total = 0.5 + (strength_gap * 0.06)
+                    p_total = 0.5 + strength_gap * 0.06
                 else:
-                    p_total = 0.5 - (strength_gap * 0.04)
-                
-                # 升級 2：盤口調節 (Line Bias)
-                # 盤越高，減去越多 Over 機率；盤越低，加上越多 Over 機率
-                line_bias = (line - 228) * 0.0012
-                p_total -= line_bias
-                
-                p_total = min(max(p_total, 0.05), 0.95)
-                raw_diff_t = p_total - (1/odds)
-                edge = raw_diff_t * (1 - 0.018)
-                
-                if edge > best_total["edge"]:
-                    best_total.update({"pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "k": kelly(p_total, odds), "pt": line})
+                    p_total = 0.5 - strength_gap * 0.04
 
-        # --- 最終選取 ---
-        res_pick = best_total if best_total["edge"] > best_spread["edge"] else best_spread
+                # 方向分離盤口修正
+                line_shift = (line - 228)
 
-        # 升級 1：硬性門檻與品質過濾 (紀律執行)
-        threshold = TOTAL_EDGE_BASE if res_pick["type"] == "total" else STRICT_EDGE_BASE
-        
-        if res_pick["edge"] >= threshold and res_pick.get("k", 0) > 0:
-            game_analysis[game_key] = res_pick
+                if o["name"] == "Over":
+                    p_total -= line_shift * 0.0013
+                else:
+                    p_total += line_shift * 0.0010
 
-    # --- 輸出結果 ---
-    if not game_analysis:
-        return # 如果沒有達標場次，直接結束不發送訊息
+                raw_diff = p_total - (1 / odds)
+                edge = raw_diff * (1 - 0.018) if raw_diff > 0 else raw_diff
 
-    sorted_res = sorted(game_analysis.items(), key=lambda x: x[1]["edge"], reverse=True)
-    msg = f"🛰️ **NBA V22.0 The Sniper** - {datetime.now().strftime('%m/%d %H:%M')}\n"
-    msg += "*(核心：硬性門檻過濾/盤口重心調節)*\n"
+                if edge > best_pick["edge"]:
+                    best_pick = {
+                        "pick": f"🏀 {o['name']} {line}",
+                        "odds": odds,
+                        "edge": edge,
+                        "prob": p_total,
+                        "type": "total"
+                    }
 
-    for g_key, p in sorted_res[:4]:
-        msg += f"\n✅ __**{g_key}**__\n👉 **{p['pick']}**\n  └ Edge: `{p['edge']:.2%}` | 賠率: `{p['odds']}` | 倉: `{p['k']:.2%}`\n---"
+        # ===== 嚴格過濾 =====
+        if best_pick["edge"] < STRICT_EDGE_BASE:
+            continue
+
+        k = kelly(best_pick["prob"], best_pick["odds"], best_pick["edge"])
+        if k <= 0:
+            continue
+
+        best_pick["k"] = k
+        results[game_key] = best_pick
+
+    # ===== 排序只出 2 場 =====
+    sorted_res = sorted(results.items(), key=lambda x: x[1]["edge"], reverse=True)[:2]
+
+    # ===== 風險集中提醒 =====
+    market_types = [p["type"] for _, p in sorted_res]
+
+    if len(market_types) == 2 and market_types[0] == market_types[1]:
+        if market_types[0] == "total":
+            hedge_note = "⚠️ 兩場皆大小分，留意節奏波動"
+        else:
+            hedge_note = "⚠️ 兩場皆讓分，留意垃圾時間"
+    else:
+        hedge_note = "🛡️ 市場分散良好"
+
+    # ===== 輸出 =====
+    msg = f"🛰️ NBA V22.1 Elite Stability\n"
+    msg += f"{datetime.now().strftime('%m/%d %H:%M')}\n\n"
+
+    for g, p in sorted_res:
+        msg += f"__{g}__\n"
+        msg += f"{grade(p['edge'])} 👉 {p['pick']}\n"
+        msg += f"Edge: {p['edge']:.2%} | Odds: {p['odds']} | Kelly: {p['k']:.2%}\n"
+        msg += "-----\n"
+
+    msg += f"\n{hedge_note}"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
+
 
 if __name__ == "__main__":
     main()
