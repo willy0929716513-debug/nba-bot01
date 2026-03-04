@@ -2,7 +2,7 @@ import requests
 import os
 from datetime import datetime
 
-# ===== NBA V22.2 Elite Stability (EV 顯示強化版) =====
+# ===== NBA V22.2 Elite Stability (完整整合版) =====
 
 STRICT_EDGE_BASE = 0.020
 TOTAL_EDGE_BASE = 0.022
@@ -204,35 +204,39 @@ def main():
         if k <= 0:
             continue
 
-        # ✨ 新增：僅在合格結果中計算 EV (Stake=1)
+        # ✨ 新增：計算 EV (期望值)
         best_pick["ev"] = (best_pick["prob"] * (best_pick["odds"] - 1)) - (1 - best_pick["prob"])
         
         best_pick["k"] = k
         results[game_key] = best_pick
 
+    # ===== 排序與輸出判斷 =====
     sorted_res = sorted(results.items(), key=lambda x: x[1]["edge"], reverse=True)[:2]
-
-    market_types = [p["type"] for _, p in sorted_res]
-
-    if len(market_types) == 2 and market_types[0] == market_types[1]:
-        if market_types[0] == "total":
-            hedge_note = "⚠️ 兩場皆大小分，留意節奏波動"
-        else:
-            hedge_note = "⚠️ 兩場皆讓分，留意垃圾時間"
-    else:
-        hedge_note = "🛡️ 市場分散良好"
 
     msg = f"🛰️ NBA V22.2 Elite Stability\n"
     msg += f"{datetime.now().strftime('%m/%d %H:%M')}\n\n"
 
-    for g, p in sorted_res:
-        msg += f"__{g}__\n"
-        # ✨ 新增：在輸出中加入 EV 顯示
-        msg += f"{grade(p['edge'])} 👉 {p['pick']}\n"
-        msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | Kelly: {p['k']:.2%}\n"
-        msg += "---------"
+    # ✨ 修改點：若無推薦則顯示告知
+    if not sorted_res:
+        msg += "📭 **今日無符合門檻之推薦比賽**\n"
+        msg += "原因：數據偏差(Edge)未達標，建議空倉。"
+    else:
+        market_types = [p["type"] for _, p in sorted_res]
 
-    msg += f"\n{hedge_note}"
+        for g, p in sorted_res:
+            msg += f"__{g}__\n"
+            msg += f"{grade(p['edge'])} 👉 {p['pick']}\n"
+            # ✨ 新增：加入 EV 顯示
+            msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | Kelly: {p['k']:.2%}\n"
+            msg += "---------\n"
+
+        if len(market_types) == 2 and market_types[0] == market_types[1]:
+            if market_types[0] == "total":
+                msg += "\n⚠️ 兩場皆大小分，留意節奏波動"
+            else:
+                msg += "\n⚠️ 兩場皆讓分，留意垃圾時間"
+        else:
+            msg += "\n🛡️ 市場分散良好"
 
     requests.post(WEBHOOK_URL, json={"content": msg})
 
