@@ -4,20 +4,35 @@ import json
 import random
 from datetime import datetime
 
-# ===== NBA V25.0 Pro Betting Engine =====
+# ===== NBA V27.0 Dynamic-Intelligence (自動戰力修正版) =====
 STRICT_EDGE_BASE = 0.022
 A_GRADE_THRESHOLD = 0.038
-
-SPREAD_COEF = 0.16
-DEEP_SPREAD_COEF = 0.13
-MONTE_CARLO_RUNS = 1000
+MONTE_CARLO_RUNS = 2000
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 DB_PATH = "nba_market_data.json"
 
-# 中文隊名
+# 初始戰力 (如果 JSON 沒資料才會用這個)
+INITIAL_POWER = {
+    "Boston Celtics": {"Net": 10.5, "Def": True}, "Cleveland Cavaliers": {"Net": 8.2, "Def": True},
+    "New York Knicks": {"Net": 4.5, "Def": True}, "Milwaukee Bucks": {"Net": 2.8, "Def": False},
+    "Orlando Magic": {"Net": 3.8, "Def": True}, "Indiana Pacers": {"Net": -0.5, "Def": False},
+    "Philadelphia 76ers": {"Net": 1.2, "Def": False}, "Miami Heat": {"Net": 1.5, "Def": True},
+    "Atlanta Hawks": {"Net": -1.8, "Def": False}, "Brooklyn Nets": {"Net": -3.5, "Def": False},
+    "Toronto Raptors": {"Net": -5.2, "Def": False}, "Charlotte Hornets": {"Net": -6.8, "Def": False},
+    "Chicago Bulls": {"Net": -4.2, "Def": False}, "Washington Wizards": {"Net": -9.5, "Def": False},
+    "Detroit Pistons": {"Net": -3.0, "Def": True}, "Oklahoma City Thunder": {"Net": 9.2, "Def": True},
+    "Minnesota Timberwolves": {"Net": 5.8, "Def": True}, "Denver Nuggets": {"Net": 5.2, "Def": False},
+    "LA Clippers": {"Net": 3.5, "Def": True}, "Dallas Mavericks": {"Net": 4.8, "Def": False},
+    "Phoenix Suns": {"Net": 3.0, "Def": False}, "Golden State Warriors": {"Net": 6.5, "Def": True},
+    "Sacramento Kings": {"Net": 1.5, "Def": False}, "Los Angeles Lakers": {"Net": 0.8, "Def": False},
+    "Houston Rockets": {"Net": 5.5, "Def": True}, "Memphis Grizzlies": {"Net": 3.2, "Def": True},
+    "New Orleans Pelicans": {"Net": -2.5, "Def": False}, "San Antonio Spurs": {"Net": -1.5, "Def": True},
+    "Utah Jazz": {"Net": -7.5, "Def": False}, "Portland Trail Blazers": {"Net": -8.0, "Def": False}
+}
+
 TEAM_CN = {
     "Los Angeles Lakers": "湖人", "Golden State Warriors": "勇士", "Boston Celtics": "塞爾提克",
     "Milwaukee Bucks": "公鹿", "Denver Nuggets": "金塊", "Oklahoma City Thunder": "雷霆",
@@ -31,142 +46,90 @@ TEAM_CN = {
     "Portland Trail Blazers": "拓荒者", "Washington Wizards": "巫師", "Houston Rockets": "火箭"
 }
 
-# 球隊真實戰力示例（NetRating / Pace / Back-to-Back / Injury）
-TEAM_POWER = {
-    "Miami Heat": {"Net": 2.1, "Pace": 100.5, "B2B": False, "Injured": False, "Def": True},
-    "Orlando Magic": {"Net": 3.5, "Pace": 102.3, "B2B": False, "Injured": False, "Def": True},
-    "Philadelphia 76ers": {"Net": 4.0, "Pace": 98.7, "B2B": True, "Injured": False, "Def": False},
-    "LA Clippers": {"Net": 4.8, "Pace": 101.2, "B2B": False, "Injured": True, "Def": False},
-    "Boston Celtics": {"Net": 10.2, "Pace": 99.5, "B2B": False, "Injured": False, "Def": True},
-    "Denver Nuggets": {"Net": 5.5, "Pace": 103.1, "B2B": True, "Injured": False, "Def": False},
-    "Oklahoma City Thunder": {"Net": 7.8, "Pace": 104.0, "B2B": False, "Injured": True, "Def": True},
-    "Minnesota Timberwolves": {"Net": 6.2, "Pace": 102.5, "B2B": False, "Injured": False, "Def": True},
-    "Milwaukee Bucks": {"Net": 3.8, "Pace": 100.2, "B2B": True, "Injured": False, "Def": False},
-    "Phoenix Suns": {"Net": 3.2, "Pace": 101.0, "B2B": False, "Injured": False, "Def": False}
-}
-
-# ----------------- DB -----------------
 def load_db():
     if os.path.exists(DB_PATH):
         try:
             with open(DB_PATH, 'r') as f:
-                return json.load(f)
-        except: return {}
-    return {}
+                data = json.load(f)
+                # 確保包含戰力資料
+                if "team_power" not in data: data["team_power"] = INITIAL_POWER
+                return data
+        except: return {"history": {}, "team_power": INITIAL_POWER}
+    return {"history": {}, "team_power": INITIAL_POWER}
 
-def save_db(data):
-    with open(DB_PATH, 'w') as f:
-        json.dump(data, f, indent=4)
+def save_db(db):
+    with open(DB_PATH, 'w') as f: json.dump(db, f, indent=4)
 
-# ----------------- Spread 懲罰 -----------------
-def spread_penalty(pt, is_home, team_name):
-    abs_pt = abs(pt)
-    stats = TEAM_POWER.get(team_name, {"Net": 0, "Def": False})
-    if abs_pt <= 8: penalty = abs_pt * 0.0028
-    elif abs_pt <= 12: penalty = abs_pt * 0.0042
-    else: penalty = (abs_pt * 0.0035) ** 1.12
-    if not is_home: penalty *= 1.15
-    if stats["Def"]: penalty *= 0.85
-    return penalty
-
-# ----------------- Kelly 倉位 -----------------
-def kelly(prob, odds, edge):
-    b = odds - 1
-    raw = (prob * b - (1 - prob)) / b
-    if edge >= 0.05: cap = 0.035
-    elif edge >= 0.038: cap = 0.03
-    else: cap = 0.025
-    return min(max(0, raw), cap)
-
-# ----------------- 等級 -----------------
-def grade(edge):
-    if edge >= 0.05: return "🔥 S級"
-    elif edge >= A_GRADE_THRESHOLD: return "⭐ A級"
-    else: return "✅ 合格"
-
-# ----------------- Monte Carlo 模擬 -----------------
-def monte_carlo_sim(team1, team2, pt, is_over):
-    t1 = TEAM_POWER.get(team1, {"Net":0,"Pace":100})["Net"]
-    t2 = TEAM_POWER.get(team2, {"Net":0,"Pace":100})["Net"]
-    wins = 0
-    for _ in range(MONTE_CARLO_RUNS):
-        score_diff = random.gauss(t1 - t2, 12)  # 標準差假設12
-        if is_over and score_diff + pt > 0: wins +=1
-        elif not is_over and score_diff + pt < 0: wins +=1
+def mc_simulate_spread(home_team, away_team, pt, is_home_pick, team_power):
+    h_net = team_power.get(home_team, {"Net": 0})["Net"]
+    a_net = team_power.get(away_team, {"Net": 0})["Net"]
+    expected_diff = h_net - a_net + 3.0
+    wins = sum(1 for _ in range(MONTE_CARLO_RUNS) if (random.gauss(expected_diff, 12) + pt > 0 if is_home_pick else random.gauss(expected_diff, 12) + pt < 0))
     return wins / MONTE_CARLO_RUNS
 
-# ----------------- 主程式 -----------------
+def mc_simulate_totals(home_team, away_team, line, is_over, team_power):
+    h_net = team_power.get(home_team, {"Net": 0})["Net"]
+    a_net = team_power.get(away_team, {"Net": 0})["Net"]
+    base_total = 228 + (h_net + a_net) * 0.5
+    wins = sum(1 for _ in range(MONTE_CARLO_RUNS) if (random.gauss(base_total, 18) > line if is_over else random.gauss(base_total, 18) < line))
+    return wins / MONTE_CARLO_RUNS
+
 def main():
-    db = load_db()
+    db_data = load_db()
+    history = db_data["history"]
+    team_power = db_data["team_power"]
+
     try:
-        res = requests.get(BASE_URL, params={
-            "apiKey": API_KEY, "regions":"us","markets":"h2h,spreads,totals","oddsFormat":"decimal"
-        }, timeout=15)
+        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions":"us","markets":"h2h,spreads,totals","oddsFormat":"decimal"}, timeout=15)
         games = res.json()
-    except:
-        return
+    except: return
 
     results = {}
     for g in games:
         game_id = g["id"]
         home, away = g["home_team"], g["away_team"]
-        game_key = f"{TEAM_CN.get(away, away)} @ {TEAM_CN.get(home, home)}"
-
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
-        h2h = next((m["outcomes"] for m in markets if m["key"]=="h2h"), None)
         spreads = next((m["outcomes"] for m in markets if m["key"]=="spreads"), None)
         totals = next((m["outcomes"] for m in markets if m["key"]=="totals"), None)
-        if not h2h: continue
 
-        h_ml = next(o["price"] for o in h2h if o["name"]==home)
-        a_ml = next(o["price"] for o in h2h if o["name"]==away)
-        p_home = (1/h_ml)/((1/h_ml)+(1/a_ml))
-
-        best_pick = {"edge":-1}
-        # Spread
+        best_pick = {"edge": -1}
         if spreads:
             for o in spreads:
                 pt, odds = o["point"], o["price"]
-                is_home = o["name"]==home
-                base_p = p_home if is_home else (1-p_home)
-                p_spread = 0.5 + (base_p - 0.5)*(DEEP_SPREAD_COEF if abs(pt)>12 else SPREAD_COEF) + (base_p-0.5)*0.06
-                penalty = spread_penalty(pt,is_home,o["name"])
-                edge = (p_spread - (1/odds))*(1-penalty)
-                if edge>best_pick["edge"]:
-                    clv = (odds - db.get(game_id, {"open":odds})["open"])/db.get(game_id, {"open":odds})["open"]
-                    best_pick = {"pick":f"🎯 {TEAM_CN.get(o['name'],o['name'])} {pt:+}","odds":odds,"edge":edge,"prob":p_spread,"clv":clv}
-                    if game_id not in db: db[game_id] = {"open":odds}
-        # Totals
-        if totals:
-            for o in totals:
-                pt, odds = o["point"], o["price"]
-                is_over = o["name"]=="Over"
-                mc_prob = monte_carlo_sim(home, away, pt, is_over)
-                edge = (mc_prob - 1/odds)*(1-0.018)
-                if edge>best_pick["edge"]:
-                    clv = (odds - db.get(game_id, {"open":odds})["open"])/db.get(game_id, {"open":odds})["open"]
-                    best_pick = {"pick":f"🏀 {o['name']} {pt}","odds":odds,"edge":edge,"prob":mc_prob,"clv":clv}
+                is_home_pick = (o["name"] == home)
+                prob = mc_simulate_spread(home, away, pt, is_home_pick, team_power)
+                
+                # 動態調整 CLV 並反饋戰力
+                if game_id not in history: history[game_id] = {"open": odds, "team": o["name"]}
+                clv = (odds - history[game_id]["open"]) / history[game_id]["open"]
+                
+                # 自動修正 Net Rating (學習機制)
+                if abs(clv) > 0.01:
+                    adj = 0.05 if clv > 0 else -0.05
+                    team_power[o["name"]]["Net"] = round(team_power[o["name"]]["Net"] + adj, 3)
 
-        if best_pick["edge"]>=STRICT_EDGE_BASE:
-            ev = (best_pick["prob"]*(best_pick["odds"]-1))-(1-best_pick["prob"])
-            best_pick["ev"] = ev
-            results[game_key] = best_pick
+                edge = (prob - 1/odds) * (1 - (abs(pt)*0.0035))
+                if edge > best_pick["edge"]:
+                    best_pick = {"pick": f"🎯 {TEAM_CN.get(o['name'], o['name'])} {pt:+}", "odds": odds, "edge": edge, "prob": prob, "clv": clv}
 
-    save_db(db)
-    sorted_res = sorted(results.items(), key=lambda x:x[1]["edge"], reverse=True)[:2]
+        if best_pick["edge"] >= STRICT_EDGE_BASE:
+            best_pick["ev"] = (best_pick["prob"] * (best_pick["odds"] - 1)) - (1 - best_pick["prob"])
+            results[f"{TEAM_CN.get(away, away)} @ {TEAM_CN.get(home, home)}"] = best_pick
 
-    msg = f"🛰️ **NBA V25.0 Pro Betting Engine**\n{datetime.now().strftime('%m/%d %H:%M')}\n\n"
+    db_data["history"] = history
+    db_data["team_power"] = team_power
+    save_db(db_data)
+
+    sorted_res = sorted(results.items(), key=lambda x: x[1]["edge"], reverse=True)[:2]
+    msg = f"🛰️ **NBA V27.0 Dynamic-Intelligence**\n{datetime.now().strftime('%m/%d %H:%M')}\n\n"
     if not sorted_res:
-        msg += "📭 今日無符合門檻推薦。"
+        msg += "📭 今日無門檻推薦。"
     else:
-        for g,p in sorted_res:
-            g_grade = grade(p["edge"])
-            clv_icon = "📈" if p["clv"]>0 else "📉"
-            msg += f"__**{g}**__\n{g_grade} 👉 {p['pick']}\n"
-            msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | CLV: {clv_icon}{p['clv']:.2%}\n"
+        for g, p in sorted_res:
+            grade = "🔥 S級" if p["edge"] >= 0.05 else ("⭐ A級" if p["edge"] >= A_GRADE_THRESHOLD else "✅ 合格")
+            msg += f"__**{g}**__\n{grade} 👉 {p['pick']}\n"
+            msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | CLV: {'📈' if p['clv']>0 else '📉'}{p['clv']:.2%}\n"
             msg += "---------\n"
+    requests.post(WEBHOOK_URL, json={"content": msg})
 
-    requests.post(WEBHOOK_URL,json={"content":msg})
-
-if __name__=="__main__":
-    main()
+if __name__ == "__main__": main()
