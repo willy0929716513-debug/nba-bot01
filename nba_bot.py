@@ -4,7 +4,7 @@ import json
 import random
 from datetime import datetime
 
-# ===== NBA V30.1 Final Robust (穩定防災版) =====
+# ===== NBA V30.2 Final Display (穩定顯示版) =====
 STRICT_EDGE_BASE = 0.022
 A_GRADE_THRESHOLD = 0.038
 MONTE_CARLO_RUNS = 3000
@@ -14,7 +14,6 @@ WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 DB_PATH = "nba_market_data.json"
 
-# 修正後的戰力字典：統一使用 API 標準全稱
 INITIAL_POWER = {
     "Boston Celtics": {"Net": 10.5, "Def": True},
     "Cleveland Cavaliers": {"Net": 8.2, "Def": True},
@@ -84,7 +83,6 @@ def calculate_kelly(prob, odds):
     return min(max(0, kelly_f * 0.25), 0.03)
 
 def get_net_rating(team_name, team_power):
-    # 雙層安全檢查：先看資料庫，再看初始值，最後給 0
     team_data = team_power.get(team_name, INITIAL_POWER.get(team_name, {"Net": 0}))
     return team_data.get("Net", 0)
 
@@ -128,7 +126,6 @@ def main():
                 pt, odds = o["point"], o["price"]
                 prob = mc_simulate_spread(home, away, pt, o["name"]==home, team_power)
                 
-                # CLV & 動態更新
                 if game_id not in history: history[game_id] = {"open": odds, "team": o["name"]}
                 clv = (odds - history[game_id]["open"]) / history[game_id]["open"]
                 
@@ -148,7 +145,6 @@ def main():
                     clv = (odds - history.get(game_id, {"open": odds})["open"]) / history.get(game_id, {"open": odds})["open"]
                     best_pick = {"pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "prob": prob, "clv": clv}
 
-        # 斷路器防止數據暴走
         if best_pick["edge"] > 0.08:
             best_pick["edge"] = 0.06 + (best_pick["edge"] * 0.15) 
 
@@ -161,14 +157,15 @@ def main():
     save_db(db_data)
 
     sorted_res = sorted(results.items(), key=lambda x: x[1]["edge"], reverse=True)[:3]
-    msg = f"🛰️ **NBA V30.1 Final Robust**\n{datetime.now().strftime('%m/%d %H:%M')}\n\n"
+    msg = f"🛰️ **NBA V30.2 Final Display**\n{datetime.now().strftime('%m/%d %H:%M')}\n\n"
     if not sorted_res:
         msg += "📭 今日無符合門檻推薦。"
     else:
         for g, p in sorted_res:
             grade = "🔥 S級" if p["edge"] >= 0.05 else ("⭐ A級" if p["edge"] >= A_GRADE_THRESHOLD else "✅ 合格")
             msg += f"__**{g}**__\n{grade} 👉 {p['pick']}\n"
-            msg += f"EV: **+{p['ev']:.2%}** | Kelly: **{p['kelly']:.2%}**\n"
+            # 補回 Edge 並與 EV 合併顯示
+            msg += f"EV: **+{p['ev']:.2%}** | Edge: **{p['edge']:.2%}** | Kelly: **{p['kelly']:.2%}**\n"
             msg += f"CLV: {'📈' if p['clv']>0 else '📉'}{p['clv']:.2%} | Odds: {p['odds']}\n"
             msg += "---------\n"
     
