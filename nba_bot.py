@@ -4,7 +4,7 @@ import json
 import random
 from datetime import datetime
 
-# ===== NBA V27.0 Dynamic-Intelligence (自動戰力修正版) =====
+# ===== NBA V27.1 Dynamic-Intelligence (穩定修正版) =====
 STRICT_EDGE_BASE = 0.022
 A_GRADE_THRESHOLD = 0.038
 MONTE_CARLO_RUNS = 2000
@@ -14,7 +14,7 @@ WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 DB_PATH = "nba_market_data.json"
 
-# 初始戰力 (如果 JSON 沒資料才會用這個)
+# 內建戰力基準 (當資料庫缺失時使用)
 INITIAL_POWER = {
     "Boston Celtics": {"Net": 10.5, "Def": True}, "Cleveland Cavaliers": {"Net": 8.2, "Def": True},
     "New York Knicks": {"Net": 4.5, "Def": True}, "Milwaukee Bucks": {"Net": 2.8, "Def": False},
@@ -47,29 +47,32 @@ TEAM_CN = {
 }
 
 def load_db():
+    default_data = {"history": {}, "team_power": INITIAL_POWER}
     if os.path.exists(DB_PATH):
         try:
             with open(DB_PATH, 'r') as f:
                 data = json.load(f)
-                # 確保包含戰力資料
-                if "team_power" not in data: data["team_power"] = INITIAL_POWER
+                if "history" not in data: data["history"] = {}
+                if "team_power" not in data or not data["team_power"]: data["team_power"] = INITIAL_POWER
                 return data
-        except: return {"history": {}, "team_power": INITIAL_POWER}
-    return {"history": {}, "team_power": INITIAL_POWER}
+        except: return default_data
+    return default_data
 
 def save_db(db):
-    with open(DB_PATH, 'w') as f: json.dump(db, f, indent=4)
+    with open(DB_PATH, 'w') as f:
+        json.dump(db, f, indent=4)
 
 def mc_simulate_spread(home_team, away_team, pt, is_home_pick, team_power):
-    h_net = team_power.get(home_team, {"Net": 0})["Net"]
-    a_net = team_power.get(away_team, {"Net": 0})["Net"]
+    # 確保模擬時能抓到資料，抓不到則給 0
+    h_net = team_power.get(home_team, INITIAL_POWER.get(home_team, {"Net": 0}))["Net"]
+    a_net = team_power.get(away_team, INITIAL_POWER.get(away_team, {"Net": 0}))["Net"]
     expected_diff = h_net - a_net + 3.0
     wins = sum(1 for _ in range(MONTE_CARLO_RUNS) if (random.gauss(expected_diff, 12) + pt > 0 if is_home_pick else random.gauss(expected_diff, 12) + pt < 0))
     return wins / MONTE_CARLO_RUNS
 
 def mc_simulate_totals(home_team, away_team, line, is_over, team_power):
-    h_net = team_power.get(home_team, {"Net": 0})["Net"]
-    a_net = team_power.get(away_team, {"Net": 0})["Net"]
+    h_net = team_power.get(home_team, INITIAL_POWER.get(home_team, {"Net": 0}))["Net"]
+    a_net = team_power.get(away_team, INITIAL_POWER.get(away_team, {"Net": 0}))["Net"]
     base_total = 228 + (h_net + a_net) * 0.5
     wins = sum(1 for _ in range(MONTE_CARLO_RUNS) if (random.gauss(base_total, 18) > line if is_over else random.gauss(base_total, 18) < line))
     return wins / MONTE_CARLO_RUNS
@@ -93,24 +96,42 @@ def main():
         totals = next((m["outcomes"] for m in markets if m["key"]=="totals"), None)
 
         best_pick = {"edge": -1}
+
+        # 處理讓分盤
         if spreads:
             for o in spreads:
                 pt, odds = o["point"], o["price"]
                 is_home_pick = (o["name"] == home)
                 prob = mc_simulate_spread(home, away, pt, is_home_pick, team_power)
                 
-                # 動態調整 CLV 並反饋戰力
-                if game_id not in history: history[game_id] = {"open": odds, "team": o["name"]}
+                # 更新歷史與計算 CLV
+                if game_id not in history: 
+                    history[game_id] = {"open": odds, "team": o["name"]}
+                
                 clv = (odds - history[game_id]["open"]) / history[game_id]["open"]
                 
-                # 自動修正 Net Rating (學習機制)
+                # --- 自動修正 Net Rating (帶安全檢查) ---
                 if abs(clv) > 0.01:
+                    t_name = o["name"]
+                    if t_name not in team_power:
+                        team_power[t_name] = INITIAL_POWER.get(t_name, {"Net": 0.0, "Def": False})
                     adj = 0.05 if clv > 0 else -0.05
-                    team_power[o["name"]]["Net"] = round(team_power[o["name"]]["Net"] + adj, 3)
+                    team_power[t_name]["Net"] = round(team_power[t_name]["Net"] + adj, 3)
 
                 edge = (prob - 1/odds) * (1 - (abs(pt)*0.0035))
                 if edge > best_pick["edge"]:
                     best_pick = {"pick": f"🎯 {TEAM_CN.get(o['name'], o['name'])} {pt:+}", "odds": odds, "edge": edge, "prob": prob, "clv": clv}
+
+        # 處理大小分盤
+        if totals and (best_pick["edge"] < STRICT_EDGE_BASE):
+            for o in totals:
+                line, odds = o["point"], o["price"]
+                is_over = (o["name"] == "Over")
+                prob = mc_simulate_totals(home, away, line, is_over, team_power)
+                edge = (prob - 1/odds) * (1 - 0.018)
+                if edge > best_pick["edge"]:
+                    clv = (odds - history.get(game_id, {"open": odds})["open"]) / history.get(game_id, {"open": odds})["open"]
+                    best_pick = {"pick": f"🏀 {o['name']} {line}", "odds": odds, "edge": edge, "prob": prob, "clv": clv}
 
         if best_pick["edge"] >= STRICT_EDGE_BASE:
             best_pick["ev"] = (best_pick["prob"] * (best_pick["odds"] - 1)) - (1 - best_pick["prob"])
@@ -121,15 +142,18 @@ def main():
     save_db(db_data)
 
     sorted_res = sorted(results.items(), key=lambda x: x[1]["edge"], reverse=True)[:2]
-    msg = f"🛰️ **NBA V27.0 Dynamic-Intelligence**\n{datetime.now().strftime('%m/%d %H:%M')}\n\n"
+    msg = f"🛰️ **NBA V27.1 Dynamic-Intelligence**\n{datetime.now().strftime('%m/%d %H:%M')}\n\n"
     if not sorted_res:
-        msg += "📭 今日無門檻推薦。"
+        msg += "📭 今日無符合門檻推薦。"
     else:
         for g, p in sorted_res:
-            grade = "🔥 S級" if p["edge"] >= 0.05 else ("⭐ A級" if p["edge"] >= A_GRADE_THRESHOLD else "✅ 合格")
-            msg += f"__**{g}**__\n{grade} 👉 {p['pick']}\n"
-            msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | CLV: {'📈' if p['clv']>0 else '📉'}{p['clv']:.2%}\n"
+            grade_str = "🔥 S級" if p["edge"] >= 0.05 else ("⭐ A級" if p["edge"] >= A_GRADE_THRESHOLD else "✅ 合格")
+            clv_icon = "📈" if p['clv'] > 0 else "📉"
+            msg += f"__**{g}**__\n{grade_str} 👉 {p['pick']}\n"
+            msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | CLV: {clv_icon}{p['clv']:.2%}\n"
             msg += "---------\n"
+            
     requests.post(WEBHOOK_URL, json={"content": msg})
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()
