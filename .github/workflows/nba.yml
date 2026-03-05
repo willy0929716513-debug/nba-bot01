@@ -2,36 +2,48 @@ name: NBA Pro Engine Daily Run
 
 on:
   schedule:
-    - cron: '0 22 * * *' # 台灣時間早上 6 點
-  workflow_dispatch:      # 允許你在 App 上點按鈕手動執行
+    # GitHub 使用 UTC 時間，台灣時間 (UTC+8) 需減去 8 小時
+    # 22:00 UTC = 06:00 台北
+    # 23:00 UTC = 07:00 台北
+    # 00:00 UTC = 08:00 台北
+    - cron: '0 22 * * *'
+    - cron: '0 23 * * *'
+    - cron: '0 0 * * *'
+  workflow_dispatch:      # 允許你在 GitHub App 上手動點擊執行
 
 jobs:
-  build:
+  nba_task:
     runs-on: ubuntu-latest
     permissions:
-      contents: write    # 讓程式有權限把 nba_market_data.json 存回去
+      contents: write    # 必備：允許程式更新 nba_market_data.json
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: pip install requests
 
-      - name: Run Engine
+      - name: Run NBA Bot
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        # ✨ 這裡已經修正為你的檔名 nba_bot.py
+        # 這裡的 nba_bot.py 必須跟你的檔案名稱完全一致（包含大小寫）
         run: python nba_bot.py
 
-      - name: Commit and Push DB change
+      - name: Save and Sync Data
         run: |
-          git config --global user.name "GitHub Action"
+          git config --global user.name "GitHub Action Bot"
           git config --global user.email "action@github.com"
           git add nba_market_data.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Market DB [skip ci]" && git push)
+          # 檢查是否有變動，若無變動則跳過，避免 Commit 失敗
+          if git diff --staged --quiet; then
+            echo "No changes in data, skipping push."
+          else
+            git commit -m "Update NBA Market Data [skip ci]"
+            git push
+          fi
