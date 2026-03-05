@@ -1,11 +1,12 @@
 import requests
 import os
+import json
 from datetime import datetime
 
-# ===== NBA V22.2 Elite Stability (完整整合版) =====
+# ===== NBA V24.0 Auto-Intelligence Engine =====
 
-STRICT_EDGE_BASE = 0.020
-TOTAL_EDGE_BASE = 0.022
+STRICT_EDGE_BASE = 0.022  # 基礎 Edge 門檻
+A_GRADE_THRESHOLD = 0.038 # A 級門檻
 
 SPREAD_COEF = 0.16
 DEEP_SPREAD_COEF = 0.13
@@ -13,233 +14,127 @@ DEEP_SPREAD_COEF = 0.13
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
+DB_PATH = "nba_market_data.json"
 
-# ===== 中文隊名 =====
-TEAM_CN = {
-    "Los Angeles Lakers": "湖人",
-    "Golden State Warriors": "勇士",
-    "Boston Celtics": "塞爾提克",
-    "Milwaukee Bucks": "公鹿",
-    "Denver Nuggets": "金塊",
-    "Oklahoma City Thunder": "雷霆",
-    "Phoenix Suns": "太陽",
-    "LA Clippers": "快艇",
-    "Miami Heat": "熱火",
-    "Philadelphia 76ers": "七六人",
-    "Sacramento Kings": "國王",
-    "New Orleans Pelicans": "鵜鶘",
-    "Minnesota Timberwolves": "灰狼",
-    "Dallas Mavericks": "獨行俠",
-    "New York Knicks": "尼克",
-    "Orlando Magic": "魔術",
-    "Charlotte Hornets": "黃蜂",
-    "Detroit Pistons": "活塞",
-    "Toronto Raptors": "暴龍",
-    "Chicago Bulls": "公牛",
-    "San Antonio Spurs": "馬刺",
-    "Utah Jazz": "爵士",
-    "Brooklyn Nets": "籃網",
-    "Atlanta Hawks": "老鷹",
-    "Cleveland Cavaliers": "騎士",
-    "Indiana Pacers": "溜馬",
-    "Memphis Grizzlies": "灰熊",
-    "Portland Trail Blazers": "拓荒者",
-    "Washington Wizards": "巫師",
-    "Houston Rockets": "火箭"
+# 真實戰力字典 (NetRating 越高代表實力越強)
+# 建議每週手動更新一次數據，或串接 API
+TEAM_POWER = {
+    "Miami Heat": {"Net": 2.1, "Def": True},
+    "Orlando Magic": {"Net": 3.5, "Def": True},
+    "Philadelphia 76ers": {"Net": 4.0, "Def": False},
+    "LA Clippers": {"Net": 4.8, "Def": False},
+    "Boston Celtics": {"Net": 10.2, "Def": True},
+    "Denver Nuggets": {"Net": 5.5, "Def": False},
+    "Oklahoma City Thunder": {"Net": 7.8, "Def": True},
+    "Minnesota Timberwolves": {"Net": 6.2, "Def": True},
+    "Milwaukee Bucks": {"Net": 3.8, "Def": False},
+    "Phoenix Suns": {"Net": 3.2, "Def": False}
 }
 
-def cn(name):
-    return TEAM_CN.get(name, name)
+TEAM_CN = {
+    "Los Angeles Lakers": "湖人", "Golden State Warriors": "勇士", "Boston Celtics": "塞爾提克",
+    "Milwaukee Bucks": "公鹿", "Denver Nuggets": "金塊", "Oklahoma City Thunder": "雷霆",
+    "Phoenix Suns": "太陽", "LA Clippers": "快艇", "Miami Heat": "熱火",
+    "Philadelphia 76ers": "七六人", "Sacramento Kings": "國王", "New Orleans Pelicans": "鵜鶘",
+    "Minnesota Timberwolves": "灰狼", "Dallas Mavericks": "獨行俠", "New York Knicks": "尼克",
+    "Orlando Magic": "魔術", "Charlotte Hornets": "黃蜂", "Detroit Pistons": "活塞",
+    "Toronto Raptors": "暴龍", "Chicago Bulls": "公牛", "San Antonio Spurs": "馬刺",
+    "Utah Jazz": "爵士", "Brooklyn Nets": "籃網", "Atlanta Hawks": "老鷹",
+    "Cleveland Cavaliers": "騎士", "Indiana Pacers": "溜馬", "Memphis Grizzlies": "灰熊",
+    "Portland Trail Blazers": "拓荒者", "Washington Wizards": "巫師", "Houston Rockets": "火箭"
+}
 
-# ===== 動態 Kelly =====
-def kelly(prob, odds, edge):
-    if odds <= 1:
-        return 0
+def load_db():
+    if os.path.exists(DB_PATH):
+        try:
+            with open(DB_PATH, 'r') as f: return json.load(f)
+        except: return {}
+    return {}
 
-    b = odds - 1
-    raw = (prob * b - (1 - prob)) / b
+def save_db(data):
+    with open(DB_PATH, 'w') as f: json.dump(data, f, indent=4)
 
-    if edge >= 0.05:
-        cap = 0.035
-    elif edge >= 0.035:
-        cap = 0.030
-    else:
-        cap = 0.025
-
-    return min(max(0, raw), cap)
-
-# ===== 分級 =====
-def grade(edge):
-    if edge >= 0.05:
-        return "🔥 S級"
-    elif edge >= 0.035:
-        return "⭐ A級"
-    else:
-        return "✅ 合格"
-
-# ===== 深盤懲罰 =====
-def spread_penalty(pt):
+def spread_penalty_v24(pt, is_home, team_name):
     abs_pt = abs(pt)
+    stats = TEAM_POWER.get(team_name, {"Net": 0, "Def": False})
+    
+    # 1. 基礎懲罰 (針對 9-12 分強化)
+    if abs_pt <= 8: penalty = abs_pt * 0.0028
+    elif abs_pt <= 12: penalty = abs_pt * 0.0042
+    else: penalty = (abs_pt * 0.0035) ** 1.12
+    
+    # 2. 客場修正
+    if not is_home: penalty *= 1.15
+    # 3. 防守強隊修正 (魔術/熱火類型過盤穩定度高)
+    if stats["Def"]: penalty *= 0.85
+    
+    return penalty
 
-    if abs_pt <= 10:
-        return abs_pt * 0.0028
-    elif abs_pt <= 14:
-        return abs_pt * 0.0035
-    else:
-        return (abs_pt * 0.0035) ** 1.12
-
-# ===== 主程式 =====
 def main():
+    db = load_db()
     try:
-        res = requests.get(
-            BASE_URL,
-            params={
-                "apiKey": API_KEY,
-                "regions": "us",
-                "markets": "h2h,spreads,totals",
-                "oddsFormat": "decimal"
-            },
-            timeout=10
-        )
-
-        if res.status_code != 200:
-            return
-
+        res = requests.get(BASE_URL, params={
+            "apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "decimal"
+        }, timeout=15)
         games = res.json()
-
-    except:
-        return
+    except: return
 
     results = {}
-
     for g in games:
-
-        home = g["home_team"]
-        away = g["away_team"]
-
-        home_cn = cn(home)
-        away_cn = cn(away)
-
-        game_key = f"{away_cn} @ {home_cn}"
-
+        game_id = g["id"]
+        home, away = g["home_team"], g["away_team"]
+        game_key = f"{TEAM_CN.get(away, away)} @ {TEAM_CN.get(home, home)}"
+        
         markets = g.get("bookmakers", [{}])[0].get("markets", [])
         h2h = next((m["outcomes"] for m in markets if m["key"] == "h2h"), None)
         spreads = next((m["outcomes"] for m in markets if m["key"] == "spreads"), None)
-        totals = next((m["outcomes"] for m in markets if m["key"] == "totals"), None)
-
-        if not h2h:
-            continue
+        if not h2h: continue
 
         h_ml = next(o["price"] for o in h2h if o["name"] == home)
         a_ml = next(o["price"] for o in h2h if o["name"] == away)
-
-        p_home = (1 / h_ml) / ((1 / h_ml) + (1 / a_ml))
-        strength_gap = abs(p_home - 0.5)
+        p_home = (1/h_ml)/((1/h_ml)+(1/a_ml))
 
         best_pick = {"edge": -1}
-
-        # ===== 讓分 =====
         if spreads:
             for o in spreads:
-                pt = o["point"]
-                odds = o["price"]
-                is_home = o["name"] == home
-
-                team_cn = home_cn if is_home else away_cn
-
+                pt, odds = o["point"], o["price"]
+                is_home = (o["name"] == home)
                 base_p = p_home if is_home else (1 - p_home)
-                bias = base_p - 0.5
-
-                coef = DEEP_SPREAD_COEF if abs(pt) > 12 else SPREAD_COEF
-                p_spread = 0.5 + bias * coef + bias * 0.06
-
-                penalty = spread_penalty(pt)
-
-                raw_diff = p_spread - (1 / odds)
-                edge = raw_diff * (1 - penalty) if raw_diff > 0 else raw_diff
-
+                
+                p_spread = 0.5 + (base_p - 0.5) * (DEEP_SPREAD_COEF if abs(pt) > 12 else SPREAD_COEF) + (base_p - 0.5) * 0.06
+                penalty = spread_penalty_v24(pt, is_home, o["name"])
+                
+                edge = (p_spread - (1/odds)) * (1 - penalty)
                 if edge > best_pick["edge"]:
+                    # CLV 追蹤邏輯
+                    if game_id not in db: db[game_id] = {"open": odds}
+                    clv = (odds - db[game_id]["open"]) / db[game_id]["open"]
+                    
                     best_pick = {
-                        "pick": f"🎯 {team_cn} {pt:+}",
-                        "odds": odds,
-                        "edge": edge,
-                        "prob": p_spread,
-                        "type": "spread"
+                        "pick": f"🎯 {TEAM_CN.get(o['name'], o['name'])} {pt:+}",
+                        "odds": odds, "edge": edge, "prob": p_spread, "clv": clv
                     }
 
-        # ===== 大小分 =====
-        if totals:
-            for o in totals:
-                line = o["point"]
-                odds = o["price"]
+        if best_pick["edge"] >= STRICT_EDGE_BASE:
+            ev = (best_pick["prob"] * (best_pick["odds"] - 1)) - (1 - best_pick["prob"])
+            best_pick["ev"] = ev
+            results[game_key] = best_pick
 
-                if o["name"] == "Over":
-                    p_total = 0.5 + strength_gap * 0.06
-                else:
-                    p_total = 0.5 - strength_gap * 0.04
-
-                line_shift = (line - 228)
-
-                if o["name"] == "Over":
-                    p_total -= line_shift * 0.0013
-                else:
-                    p_total += line_shift * 0.0010
-
-                raw_diff = p_total - (1 / odds)
-                edge = raw_diff * (1 - 0.018) if raw_diff > 0 else raw_diff
-
-                if edge > best_pick["edge"]:
-                    best_pick = {
-                        "pick": f"🏀 {o['name']} {line}",
-                        "odds": odds,
-                        "edge": edge,
-                        "prob": p_total,
-                        "type": "total"
-                    }
-
-        if best_pick["edge"] < STRICT_EDGE_BASE:
-            continue
-
-        k = kelly(best_pick["prob"], best_pick["odds"], best_pick["edge"])
-        if k <= 0:
-            continue
-
-        # ✨ 新增：計算 EV (期望值)
-        best_pick["ev"] = (best_pick["prob"] * (best_pick["odds"] - 1)) - (1 - best_pick["prob"])
-        
-        best_pick["k"] = k
-        results[game_key] = best_pick
-
-    # ===== 排序與輸出判斷 =====
+    save_db(db)
     sorted_res = sorted(results.items(), key=lambda x: x[1]["edge"], reverse=True)[:2]
-
-    msg = f"🛰️ NBA V22.2 Elite Stability\n"
-    msg += f"{datetime.now().strftime('%m/%d %H:%M')}\n\n"
-
-    # ✨ 修改點：若無推薦則顯示告知
+    
+    msg = f"🛰️ **NBA V24.0 Auto-Intelligence**\n{datetime.now().strftime('%m/%d %H:%M')}\n\n"
     if not sorted_res:
-        msg += "📭 **今日無符合門檻之推薦比賽**\n"
-        msg += "原因：數據偏差(Edge)未達標，建議空倉。"
+        msg += "📭 今日無符合門檻之推薦。"
     else:
-        market_types = [p["type"] for _, p in sorted_res]
-
         for g, p in sorted_res:
-            msg += f"__{g}__\n"
-            msg += f"{grade(p['edge'])} 👉 {p['pick']}\n"
-            # ✨ 新增：加入 EV 顯示
-            msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | Kelly: {p['k']:.2%}\n"
+            grade = "🔥 S級" if p["edge"] >= 0.05 else ("⭐ A級" if p["edge"] >= A_GRADE_THRESHOLD else "✅ 合格")
+            clv_icon = "📈" if p["clv"] > 0 else "📉"
+            msg += f"__**{g}**__\n{grade} 👉 {p['pick']}\n"
+            msg += f"EV: **+{p['ev']:.2%}** | Edge: {p['edge']:.2%} | CLV: {clv_icon}{p['clv']:.2%}\n"
             msg += "---------\n"
 
-        if len(market_types) == 2 and market_types[0] == market_types[1]:
-            if market_types[0] == "total":
-                msg += "\n⚠️ 兩場皆大小分，留意節奏波動"
-            else:
-                msg += "\n⚠️ 兩場皆讓分，留意垃圾時間"
-        else:
-            msg += "\n🛡️ 市場分散良好"
-
     requests.post(WEBHOOK_URL, json={"content": msg})
-
 
 if __name__ == "__main__":
     main()
