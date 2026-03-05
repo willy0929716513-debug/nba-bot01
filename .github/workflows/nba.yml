@@ -1,29 +1,37 @@
-name: NBA Bot
+name: NBA Pro Engine Daily Run
 
 on:
   schedule:
-    # 台灣時間 06:00 (UTC 22:00)
-    - cron: '00 22 * * *'
+    - cron: '0 22 * * *' # 台灣時間早上 6 點執行
   workflow_dispatch:
 
 jobs:
-  run-bot:
+  build:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write # 確保有權限把資料庫存回去
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-    - name: Install packages
-      run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install requests
 
-    - name: Run NBA Bot
-      run: python nba_bot.py
-      env:
-        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      - name: Run Engine
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python nba_pro_engine.py
+
+      - name: Commit and Push DB change
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add nba_market_data.json
+          # 只有在檔案有變動時才 commit，避免報錯
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Market DB [skip ci]" && git push)
