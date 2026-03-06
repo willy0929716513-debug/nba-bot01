@@ -55,6 +55,10 @@
         "cba1963a5da2997abeeecb331594f3d1": {
             "open": 1.91,
             "team": "Los Angeles Clippers"
+        },
+        "54eca7bdce16aefb75a9905bac119cbc": {
+            "open": 1.89,
+            "team": "New Orleans Pelicans"
         }
     },
     "team_power": {
@@ -67,7 +71,7 @@
             "Def": true
         },
         "New York Knicks": {
-            "Net": 4.22,
+            "Net": 4.18,
             "Def": true
         },
         "Milwaukee Bucks": {
@@ -87,7 +91,7 @@
             "Def": false
         },
         "Miami Heat": {
-            "Net": 1.66,
+            "Net": 1.7,
             "Def": true
         },
         "Atlanta Hawks": {
@@ -107,7 +111,7 @@
             "Def": false
         },
         "Chicago Bulls": {
-            "Net": -4.24,
+            "Net": -4.2,
             "Def": false
         },
         "Washington Wizards": {
@@ -115,7 +119,7 @@
             "Def": false
         },
         "Detroit Pistons": {
-            "Net": -2.84,
+            "Net": -2.8,
             "Def": true
         },
         "Oklahoma City Thunder": {
@@ -127,7 +131,7 @@
             "Def": true
         },
         "Denver Nuggets": {
-            "Net": 5.2,
+            "Net": 5.24,
             "Def": false
         },
         "Los Angeles Clippers": {
@@ -147,15 +151,15 @@
             "Def": true
         },
         "Sacramento Kings": {
-            "Net": 1.78,
+            "Net": 1.74,
             "Def": false
         },
         "Los Angeles Lakers": {
-            "Net": 1.08,
+            "Net": 1.04,
             "Def": false
         },
         "Houston Rockets": {
-            "Net": 5.3,
+            "Net": 5.34,
             "Def": true
         },
         "Memphis Grizzlies": {
@@ -163,11 +167,11 @@
             "Def": true
         },
         "New Orleans Pelicans": {
-            "Net": -2.5,
+            "Net": -2.46,
             "Def": false
         },
         "San Antonio Spurs": {
-            "Net": -1.3,
+            "Net": -1.34,
             "Def": true
         },
         "Utah Jazz": {
@@ -175,7 +179,7 @@
             "Def": false
         },
         "Portland Trail Blazers": {
-            "Net": -7.72,
+            "Net": -7.68,
             "Def": false
         }
     }
