@@ -63,11 +63,27 @@
         "84b2ef875ad19e935b2b1dd513de5fb3": {
             "open": 1.91,
             "team": "Indiana Pacers"
+        },
+        "ad1dc68e34d3d8c8c69f10ea02d1b55a": {
+            "open": 1.91,
+            "team": "Minnesota Timberwolves"
+        },
+        "d2465617bbd58c113358fb2053afcd30": {
+            "open": 1.95,
+            "team": "Atlanta Hawks"
+        },
+        "d504db9034e7831de4702ce8e4a2ece6": {
+            "open": 1.91,
+            "team": "Brooklyn Nets"
+        },
+        "92a72f11c9b0e34500cf18430b89aabd": {
+            "open": 1.91,
+            "team": "Golden State Warriors"
         }
     },
     "team_power": {
         "Boston Celtics": {
-            "Net": 10.5,
+            "Net": 10.46,
             "Def": true
         },
         "Cleveland Cavaliers": {
@@ -75,7 +91,7 @@
             "Def": true
         },
         "New York Knicks": {
-            "Net": 4.14,
+            "Net": 4.18,
             "Def": true
         },
         "Milwaukee Bucks": {
@@ -87,15 +103,15 @@
             "Def": true
         },
         "Indiana Pacers": {
-            "Net": -0.5,
+            "Net": -0.46,
             "Def": false
         },
         "Philadelphia 76ers": {
-            "Net": 1.2,
+            "Net": 1.16,
             "Def": false
         },
         "Miami Heat": {
-            "Net": 1.82,
+            "Net": 1.86,
             "Def": true
         },
         "Atlanta Hawks": {
@@ -111,7 +127,7 @@
             "Def": false
         },
         "Charlotte Hornets": {
-            "Net": -6.64,
+            "Net": -6.6,
             "Def": false
         },
         "Chicago Bulls": {
@@ -135,19 +151,19 @@
             "Def": true
         },
         "Denver Nuggets": {
-            "Net": 5.08,
+            "Net": 5.04,
             "Def": false
         },
         "Los Angeles Clippers": {
-            "Net": 3.38,
+            "Net": 3.34,
             "Def": true
         },
         "Dallas Mavericks": {
-            "Net": 4.76,
+            "Net": 4.8,
             "Def": false
         },
         "Phoenix Suns": {
-            "Net": 2.92,
+            "Net": 2.96,
             "Def": false
         },
         "Golden State Warriors": {
@@ -159,11 +175,11 @@
             "Def": false
         },
         "Los Angeles Lakers": {
-            "Net": 1.04,
+            "Net": 1.0,
             "Def": false
         },
         "Houston Rockets": {
-            "Net": 5.5,
+            "Net": 5.54,
             "Def": true
         },
         "Memphis Grizzlies": {
@@ -175,7 +191,7 @@
             "Def": false
         },
         "San Antonio Spurs": {
-            "Net": -1.22,
+            "Net": -1.18,
             "Def": true
         },
         "Utah Jazz": {
@@ -183,7 +199,7 @@
             "Def": false
         },
         "Portland Trail Blazers": {
-            "Net": -7.52,
+            "Net": -7.48,
             "Def": false
         }
     }
