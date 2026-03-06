@@ -4,7 +4,7 @@ import json
 import random
 from datetime import datetime, timedelta
 
-# ===== NBA V32.0 Context-Aware (日期分組+場中標註版) =====
+# ===== NBA V32.1 Final Time-Synced (時區修正+場中標註版) =====
 STRICT_EDGE_BASE = 0.022
 A_GRADE_THRESHOLD = 0.038
 MONTE_CARLO_RUNS = 3000
@@ -15,7 +15,6 @@ WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 DB_PATH = "nba_market_data.json"
 
-# [戰力字典 INITIAL_POWER 與 隊名 TEAM_CN 維持不變，略過以節省篇幅]
 INITIAL_POWER = {
     "Boston Celtics": {"Net": 10.5}, "Cleveland Cavaliers": {"Net": 8.2},
     "New York Knicks": {"Net": 4.5}, "Milwaukee Bucks": {"Net": 2.8},
@@ -77,6 +76,10 @@ def mc_simulate_spread(home_team, away_team, pt, is_home_pick, team_power):
 def main():
     db_data = load_db()
     history, team_power = db_data["history"], db_data["team_power"]
+    
+    # 取得當前台灣時間
+    now_tw = datetime.utcnow() + timedelta(hours=8)
+    
     try:
         res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions":"us","markets":"h2h,spreads,totals","oddsFormat":"decimal"}, timeout=15)
         games = res.json()
@@ -84,12 +87,12 @@ def main():
 
     grouped_results = {}
     for g in games:
-        # 處理日期與狀態
-        commence_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
-        date_str = commence_time.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
+        # 開賽時間轉台灣時間
+        commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
+        date_str = commence_tw.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
         
-        # 判斷是否為場中 (API 根據時間判定)
-        is_live = datetime.now() > (commence_time - timedelta(minutes=5))
+        # 判斷是否為場中：現在時間大於開賽前 2 分鐘
+        is_live = now_tw > (commence_tw - timedelta(minutes=2))
         
         game_id, home, away = g["id"], g["home_team"], g["away_team"]
         bookmakers = g.get("bookmakers", [])
@@ -122,7 +125,7 @@ def main():
 
     save_db({"history": history, "team_power": team_power})
 
-    msg = f"🛰️ **NBA V32.0 Smart Grouping**\n偵測時間：{datetime.now().strftime('%m/%d %H:%M')}\n"
+    msg = f"🛰️ **NBA V32.1 Final Time-Synced**\n偵測時間：{now_tw.strftime('%m/%d %H:%M')}\n"
     if not grouped_results:
         msg += "\n📭 今日無符合門檻推薦。"
     else:
