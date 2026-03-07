@@ -5,7 +5,7 @@ import random
 from datetime import datetime, timedelta
 
 # ===============================
-# NBA V61.0 SENTINEL ENGINE (Pro Hedge Fund)
+# NBA V61.1 SENTINEL ENGINE (Odds Detail Update)
 # ===============================
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -16,10 +16,9 @@ DB_FILE = "nba_v61_db.json"
 SIMS = 15000
 EDGE_THRESHOLD = 0.025
 HOME_ADV = 2.5
-K_FACTOR = 22 # 稍微調高 ELO 反應速度
-CLV_ALERT_THRESHOLD = -0.05 # 賠率暴跌 5% 視為重大傷病訊號
+K_FACTOR = 22
+CLV_ALERT_THRESHOLD = -0.05
 
-# 預設 ELO
 INITIAL_ELO = {
     "Boston Celtics": 1680, "Denver Nuggets": 1655, "Oklahoma City Thunder": 1640,
     "Milwaukee Bucks": 1625, "Minnesota Timberwolves": 1610, "Los Angeles Clippers": 1590,
@@ -46,10 +45,6 @@ TEAM_CN = {
     "Portland Trail Blazers": "拓荒者", "Washington Wizards": "巫師", "Houston Rockets": "火箭"
 }
 
-# ===============================
-# DATABASE & DATA FETCH
-# ===============================
-
 def load_db():
     if os.path.exists(DB_FILE):
         try:
@@ -61,9 +56,6 @@ def save_db(db):
     with open(DB_FILE, "w") as f: json.dump(db, f, indent=2)
 
 def update_elo_with_garbage_filter(db):
-    """
-    抓取賽果，並加入『垃圾時間過濾』邏輯 (贏太多時權重衰減)
-    """
     try:
         res = requests.get(f"{BASE_URL}/scores/", params={"apiKey": API_KEY, "daysFrom": 2}, timeout=15)
         scores = res.json()
@@ -75,7 +67,6 @@ def update_elo_with_garbage_filter(db):
     for s in scores:
         gid = s["id"]
         if gid in processed or not s.get("completed"): continue
-        
         home_team, away_team = s["home_team"], s["away_team"]
         h_score = next((int(it["score"]) for it in s["scores"] if it["name"] == home_team), 0)
         a_score = next((int(it["score"]) for it in s["scores"] if it["name"] == away_team), 0)
@@ -84,26 +75,16 @@ def update_elo_with_garbage_filter(db):
         expected_h = 1 / (10 ** (-dr / 400) + 1)
         actual_h = 1 if h_score > a_score else 0
         
-        # 垃圾時間過濾：如果分差超過 20 分，對 ELO 的影響會邊際遞減
         mov = abs(h_score - a_score)
-        if mov > 20:
-            adj_mov = 20 + (mov - 20) ** 0.5 # 20分以後的分數只算開根號
-        else:
-            adj_mov = mov
-            
+        adj_mov = 20 + (mov - 20) ** 0.5 if mov > 20 else mov
         multiplier = ((adj_mov + 3) ** 0.8) / (7.5 + 0.006 * dr)
         shift = K_FACTOR * multiplier * (actual_h - expected_h)
         
         elo[home_team] = round(elo.get(home_team, 1500) + shift, 2)
         elo[away_team] = round(elo.get(away_team, 1500) - shift, 2)
         processed.append(gid)
-    
     db["elo"] = elo
     db["processed_games"] = processed[-100:]
-
-# ===============================
-#核心邏輯
-# ===============================
 
 def run():
     db = load_db()
@@ -116,7 +97,7 @@ def run():
         games = res.json()
     except: return
 
-    message = f"🛡️ **NBA V61.0 Sentinel Engine**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n\n"
+    message = f"🛡️ **NBA V61.1 Sentinel Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n\n"
     picks = 0
 
     for g in games:
@@ -129,22 +110,18 @@ def run():
         market = next((m["outcomes"] for m in books[0]["markets"] if m["key"] == "spreads"), None)
         if not market: continue
 
-        # --- 市場隱含傷病模型 (Injury Detection via CLV) ---
         best_pick = None
         for o in market:
             if gid not in history:
                 history[gid] = {"open": o["price"], "team": o["name"]}
             
             clv = (o["price"] - history[gid]["open"]) / history[gid]["open"]
-            
-            # 偵測背離：如果模型算出 Edge 很大，但 CLV 卻是大幅負數 -> 潛在重大傷病
             is_potential_injury = clv < CLV_ALERT_THRESHOLD
             
-            # 計算基礎 Model Line
             model_line = ((elo.get(home, 1500) - elo.get(away, 1500)) / 28) + HOME_ADV
             
-            # 如果偵測到市場暴跌，自動給予『傷病懲罰』調整勝率 (扣除 4.5 分戰力)
-            if is_potential_injury and o["name"] in [home, away]:
+            # 市場隱含傷病調整
+            if is_potential_injury:
                 model_line -= 4.5 if o["name"] == home else -4.5
             
             prob = sum(1 for _ in range(SIMS) if random.gauss(model_line, 13.5) + (o["point"] if o["name"] == home else -o["point"]) > 0) / SIMS
@@ -155,7 +132,8 @@ def run():
 
         if best_pick and best_pick["edge"] > EDGE_THRESHOLD:
             picks += 1
-            # 凱利準則校準：如果偵測到傷病風險，強制減碼 80%
+            # 市場隱含勝率
+            implied_prob = 1 / best_pick["odds"]
             k = ( (best_pick["odds"]-1)*best_pick["prob"] - (1-best_pick["prob"]) ) / (best_pick["odds"]-1)
             stake = min(max(0, k * (0.05 if best_pick["injury_warn"] else 0.25)), 0.03)
             
@@ -163,12 +141,13 @@ def run():
             live_tag = "🔴 [場中] " if is_live else ""
             
             message += f"{live_tag}{status} **{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}**\n"
-            message += f"🎯 {TEAM_CN.get(best_pick['team'],best_pick['team'])} {best_pick['point']:+}\n"
+            message += f"🎯 {TEAM_CN.get(best_pick['team'],best_pick['team'])} {best_pick['point']:+} @ **{best_pick['odds']}**\n"
+            message += f"勝率: 模型 **{best_pick['prob']:.1%}** vs 市場 {implied_prob:.1%}\n"
             message += f"Edge: **{best_pick['edge']:.2%}** | CLV: **{best_pick['clv']:.2%}**\n"
             message += f"建議注量: **{stake:.2%}**\n"
             message += "--------\n"
 
-    if picks == 0: message += "📭 市場數據平穩，無套利空間"
+    if picks == 0: message += "📭 目前市場賠率穩定，無明顯價值偏差。"
     
     requests.post(WEBHOOK, json={"content": message})
     save_db({"elo": elo, "processed_games": db["processed_games"], "history": history})
