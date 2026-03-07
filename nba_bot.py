@@ -4,33 +4,32 @@ import json
 import random
 from datetime import datetime, timedelta
 
-# ===== NBA V32.1 Final Time-Synced (時區修正+場中標註版) =====
-STRICT_EDGE_BASE = 0.022
-A_GRADE_THRESHOLD = 0.038
-MONTE_CARLO_RUNS = 3000
-CLV_DANGER_ZONE = -0.05
+# ==========================================
+# NBA V50.1 AI PRO ENGINE (Adaptive ELO)
+# ==========================================
 
 API_KEY = os.getenv("ODDS_API_KEY")
-WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK")
+WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
-DB_PATH = "nba_market_data.json"
+DB_FILE = "nba_v50_db.json"
 
-INITIAL_POWER = {
-    "Boston Celtics": {"Net": 10.5}, "Cleveland Cavaliers": {"Net": 8.2},
-    "New York Knicks": {"Net": 4.5}, "Milwaukee Bucks": {"Net": 2.8},
-    "Orlando Magic": {"Net": 3.8}, "Indiana Pacers": {"Net": -0.5},
-    "Philadelphia 76ers": {"Net": 1.2}, "Miami Heat": {"Net": 1.5},
-    "Atlanta Hawks": {"Net": -1.8}, "Brooklyn Nets": {"Net": -3.5},
-    "Toronto Raptors": {"Net": -5.2}, "Charlotte Hornets": {"Net": -6.8},
-    "Chicago Bulls": {"Net": -4.2}, "Washington Wizards": {"Net": -9.5},
-    "Detroit Pistons": {"Net": -3.0}, "Oklahoma City Thunder": {"Net": 9.2},
-    "Minnesota Timberwolves": {"Net": 5.8}, "Denver Nuggets": {"Net": 5.2},
-    "Los Angeles Clippers": {"Net": 3.5}, "Dallas Mavericks": {"Net": 4.8},
-    "Phoenix Suns": {"Net": 3.0}, "Golden State Warriors": {"Net": 6.5},
-    "Sacramento Kings": {"Net": 1.5}, "Los Angeles Lakers": {"Net": 0.8},
-    "Houston Rockets": {"Net": 5.5}, "Memphis Grizzlies": {"Net": 3.2},
-    "New Orleans Pelicans": {"Net": -2.5}, "San Antonio Spurs": {"Net": -1.5},
-    "Utah Jazz": {"Net": -7.5}, "Portland Trail Blazers": {"Net": -8.0}
+SIMULATIONS = 10000
+EDGE_THRESHOLD = 0.025
+HOME_ADV = 2.5
+CLV_DANGER_ZONE = -0.05
+
+# 初始 ELO 設定 (已對齊 API 名稱)
+INITIAL_ELO = {
+    "Boston Celtics": 1680, "Denver Nuggets": 1655, "Oklahoma City Thunder": 1640,
+    "Milwaukee Bucks": 1625, "Minnesota Timberwolves": 1610, "Los Angeles Clippers": 1590,
+    "Dallas Mavericks": 1585, "Phoenix Suns": 1580, "Golden State Warriors": 1575,
+    "Los Angeles Lakers": 1565, "New York Knicks": 1560, "Cleveland Cavaliers": 1555,
+    "Philadelphia 76ers": 1545, "Sacramento Kings": 1535, "Miami Heat": 1520,
+    "Indiana Pacers": 1510, "Houston Rockets": 1505, "New Orleans Pelicans": 1500,
+    "Atlanta Hawks": 1495, "Chicago Bulls": 1490, "Toronto Raptors": 1480,
+    "Brooklyn Nets": 1470, "Charlotte Hornets": 1460, "Detroit Pistons": 1450,
+    "Utah Jazz": 1445, "Portland Trail Blazers": 1440, "San Antonio Spurs": 1435,
+    "Washington Wizards": 1425, "Memphis Grizzlies": 1500, "Orlando Magic": 1515
 }
 
 TEAM_CN = {
@@ -46,100 +45,109 @@ TEAM_CN = {
     "Portland Trail Blazers": "拓荒者", "Washington Wizards": "巫師", "Houston Rockets": "火箭"
 }
 
+# ==========================================
+# 核心函數
+# ==========================================
+
 def load_db():
-    if os.path.exists(DB_PATH):
+    if os.path.exists(DB_FILE):
         try:
-            with open(DB_PATH, 'r') as f: return json.load(f)
+            with open(DB_FILE, "r") as f: return json.load(f)
         except: pass
-    return {"history": {}, "team_power": INITIAL_POWER}
+    return {"elo": INITIAL_ELO, "history": {}}
 
 def save_db(db):
-    with open(DB_PATH, 'w') as f: json.dump(db, f, indent=4)
+    with open(DB_FILE, "w") as f: json.dump(db, f, indent=2)
+
+def elo_spread(home, away, elo):
+    h = elo.get(home, 1500)
+    a = elo.get(away, 1500)
+    return ((h - a) / 28) + HOME_ADV
+
+def simulate(model_spread, market_point):
+    wins = sum(1 for _ in range(SIMULATIONS) if random.gauss(model_spread, 13.5) + market_point > 0)
+    return wins / SIMULATIONS
 
 def calculate_kelly(prob, odds, is_danger=False):
-    b = odds - 1
-    q = 1 - prob
-    kelly_f = (b * prob - q) / b if b != 0 else 0
+    b, q = odds - 1, 1 - prob
+    k = (b * prob - q) / b if b != 0 else 0
+    # 危險區減碼 50 倍 (0.5%)，正常區最高 3%
     mult = 0.005 if is_danger else 0.25
     limit = 0.005 if is_danger else 0.03
-    return min(max(0, kelly_f * mult), limit)
+    return min(max(0, k * mult), limit)
 
-def get_net_rating(team_name, team_power):
-    return team_power.get(team_name, INITIAL_POWER.get(team_name, {"Net": 0})).get("Net", 0)
+# ==========================================
+# 引擎執行
+# ==========================================
 
-def mc_simulate_spread(home_team, away_team, pt, is_home_pick, team_power):
-    h_net, a_net = get_net_rating(home_team, team_power), get_net_rating(away_team, team_power)
-    expected_diff = h_net - a_net + 2.5
-    wins = sum(1 for _ in range(MONTE_CARLO_RUNS) if (random.gauss(expected_diff, 13.5) + pt > 0 if is_home_pick else random.gauss(expected_diff, 13.5) + pt < 0))
-    return wins / MONTE_CARLO_RUNS
-
-def main():
-    db_data = load_db()
-    history, team_power = db_data["history"], db_data["team_power"]
-    
-    # 取得當前台灣時間
+def run():
+    db = load_db()
+    elo, history = db["elo"], db["history"]
     now_tw = datetime.utcnow() + timedelta(hours=8)
-    
+
     try:
-        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions":"us","markets":"h2h,spreads,totals","oddsFormat":"decimal"}, timeout=15)
+        res = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions": "us", "markets": "spreads", "oddsFormat": "decimal"}, timeout=15)
         games = res.json()
     except: return
 
-    grouped_results = {}
+    message = f"🧠 **NBA V50.1 AI Pro Engine**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    picks = 0
+
     for g in games:
-        # 開賽時間轉台灣時間
+        home, away, gid = g["home_team"], g["away_team"], g["id"]
         commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
-        date_str = commence_tw.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
-        
-        # 判斷是否為場中：現在時間大於開賽前 2 分鐘
         is_live = now_tw > (commence_tw - timedelta(minutes=2))
         
-        game_id, home, away = g["id"], g["home_team"], g["away_team"]
-        bookmakers = g.get("bookmakers", [])
-        if not bookmakers: continue
-        markets = bookmakers[0].get("markets", [])
-        spreads = next((m["outcomes"] for m in markets if m["key"]=="spreads"), None)
-        
-        best_pick = {"edge": -1}
-        if spreads:
-            for o in spreads:
-                pt, odds = o["point"], o["price"]
-                prob = mc_simulate_spread(home, away, pt, o["name"]==home, team_power)
-                if game_id not in history: history[game_id] = {"open": odds, "team": o["name"]}
-                clv = (odds - history[game_id]["open"]) / history[game_id]["open"]
-                if abs(clv) > 0.01 and o["name"] in team_power:
-                    team_power[o["name"]]["Net"] = round(team_power[o["name"]]["Net"] + (0.04 if clv > 0 else -0.04), 3)
-                
-                edge = (prob - 1/odds) * (1 - (abs(pt) * 0.0032))
-                if edge > best_pick["edge"]:
-                    best_pick = {"pick": f"🎯 {TEAM_CN.get(o['name'], o['name'])} {pt:+}", "odds": odds, "edge": edge, "prob": prob, "clv": clv, "live": is_live}
+        books = g.get("bookmakers", [])
+        if not books: continue
+        market = next((m["outcomes"] for m in books[0]["markets"] if m["key"] == "spreads"), None)
+        if not market: continue
 
-        if best_pick["edge"] >= STRICT_EDGE_BASE:
-            best_pick["ev"] = (best_pick["prob"] * (best_pick["odds"] - 1)) - (1 - best_pick["prob"])
-            is_danger = best_pick["clv"] <= CLV_DANGER_ZONE
-            best_pick["kelly"] = calculate_kelly(best_pick["prob"], best_pick["odds"], is_danger)
-            best_pick["danger"] = is_danger
+        model_line = elo_spread(home, away, elo)
+        best = None
+
+        for o in market:
+            team, point, odds = o["name"], o["point"], o["price"]
             
-            if date_str not in grouped_results: grouped_results[date_str] = []
-            grouped_results[date_str].append((f"{TEAM_CN.get(away, away)} @ {TEAM_CN.get(home, home)}", best_pick))
+            # --- ELO 動態學習邏輯 ---
+            if gid not in history:
+                history[gid] = {"open": odds, "team": team}
+            
+            clv = (odds - history[gid]["open"]) / history[gid]["open"]
+            if abs(clv) > 0.01:
+                # 根據 CLV 大小決定 ELO 調整強度
+                step = 5 if abs(clv) < 0.04 else (12 if abs(clv) < 0.08 else 25)
+                elo[team] = elo.get(team, 1500) + (step if clv > 0 else -step)
 
-    save_db({"history": history, "team_power": team_power})
+            # 蒙地卡羅模擬 (針對當前選項計算勝率)
+            # 如果選項名稱是主隊，則 market_point 就是盤分；若為客隊，盤分要取反
+            is_home = (team == home)
+            prob = simulate(model_line, point if is_home else -point)
+            edge = prob - (1/odds)
 
-    msg = f"🛰️ **NBA V32.1 Final Time-Synced**\n偵測時間：{now_tw.strftime('%m/%d %H:%M')}\n"
-    if not grouped_results:
-        msg += "\n📭 今日無符合門檻推薦。"
-    else:
-        for date, matches in grouped_results.items():
-            msg += f"\n📅 **{date}**\n"
-            for g_name, p in matches:
-                live_tag = "🔴 [場中] " if p["live"] else ""
-                grade = "⚠️ 數據異常" if p["danger"] else ("🔥 S級" if p["edge"] >= 0.05 else "⭐ A級")
-                msg += f"{live_tag}__**{g_name}**__\n{grade} 👉 {p['pick']}\n"
-                msg += f"EV: **+{p['ev']:.2%}** | Edge: **{p['edge']:.2%}** | Kelly: **{p['kelly']:.2%}**\n"
-                msg += f"CLV: {'📈' if p['clv']>0 else '📉'}{p['clv']:.2%} | Odds: {p['odds']}\n"
-                msg += "---------\n"
-    
-    requests.post(WEBHOOK_URL, json={"content": msg})
+            if best is None or edge > best["edge"]:
+                best = {"team": team, "point": point, "odds": odds, "prob": prob, "edge": edge, "clv": clv}
+
+        if best and best["edge"] > EDGE_THRESHOLD:
+            picks += 1
+            is_danger = best["clv"] <= CLV_DANGER_ZONE
+            ev = (best["prob"] * (best["odds"] - 1)) - (1 - best["prob"])
+            stake = calculate_kelly(best["prob"], best["odds"], is_danger)
+            
+            grade = "⚠️ 數據異常" if is_danger else ("🔥 S級" if best["edge"] > 0.05 else "⭐ A級")
+            live_tag = "🔴 [場中] " if is_live else ""
+            
+            message += f"\n{live_tag}{grade} **{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}**\n"
+            message += f"🎯 {TEAM_CN.get(best['team'],best['team'])} {best['point']:+}\n"
+            message += f"Edge: **{best['edge']:.2%}** | EV: **{ev:.2%}**\n"
+            message += f"CLV: {'📈' if best['clv']>0 else '📉'}{best['clv']:.2%} | Kelly: **{stake:.2%}**\n"
+            message += "---------\n"
+
+    if picks == 0:
+        message += "\n📭 今日無符合條件推薦"
+
+    requests.post(WEBHOOK, json={"content": message})
+    save_db({"elo": elo, "history": history})
 
 if __name__ == "__main__":
-    main()
+    run()
