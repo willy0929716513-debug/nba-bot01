@@ -83,6 +83,10 @@
         "c9d52de279acc38e1e943eadce685110": {
             "open": 1.91,
             "team": "Milwaukee Bucks"
+        },
+        "6ca48b4df9d476b04ce89d5f8f0c3806": {
+            "open": 1.94,
+            "team": "Los Angeles Clippers"
         }
     },
     "team_power": {
@@ -103,15 +107,15 @@
             "Def": false
         },
         "Orlando Magic": {
-            "Net": 3.68,
+            "Net": 3.64,
             "Def": true
         },
         "Indiana Pacers": {
-            "Net": -0.38,
+            "Net": -0.34,
             "Def": false
         },
         "Philadelphia 76ers": {
-            "Net": 1.08,
+            "Net": 1.04,
             "Def": false
         },
         "Miami Heat": {
@@ -147,11 +151,11 @@
             "Def": true
         },
         "Oklahoma City Thunder": {
-            "Net": 9.28,
+            "Net": 9.32,
             "Def": true
         },
         "Minnesota Timberwolves": {
-            "Net": 5.84,
+            "Net": 5.88,
             "Def": true
         },
         "Denver Nuggets": {
@@ -171,7 +175,7 @@
             "Def": false
         },
         "Golden State Warriors": {
-            "Net": 6.46,
+            "Net": 6.42,
             "Def": true
         },
         "Sacramento Kings": {
@@ -179,7 +183,7 @@
             "Def": false
         },
         "Los Angeles Lakers": {
-            "Net": 0.92,
+            "Net": 0.88,
             "Def": false
         },
         "Houston Rockets": {
@@ -187,7 +191,7 @@
             "Def": true
         },
         "Memphis Grizzlies": {
-            "Net": 3.2,
+            "Net": 3.16,
             "Def": true
         },
         "New Orleans Pelicans": {
