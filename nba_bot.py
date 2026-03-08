@@ -5,7 +5,7 @@ import random
 from datetime import datetime, timedelta
 
 # ===============================
-# NBA V61.2 SENTINEL PRO (Date Grouping & UX Update)
+# NBA V61.3 SENTINEL PRO (Smart Sorting & Risk Filter)
 # ===============================
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -19,7 +19,6 @@ HOME_ADV = 2.5
 K_FACTOR = 22
 CLV_ALERT_THRESHOLD = -0.05
 
-# 初始戰力 (維持對齊 API 名稱)
 INITIAL_ELO = {
     "Boston Celtics": 1680, "Denver Nuggets": 1655, "Oklahoma City Thunder": 1640,
     "Milwaukee Bucks": 1625, "Minnesota Timberwolves": 1610, "Los Angeles Clippers": 1590,
@@ -93,12 +92,10 @@ def run():
         games = res.json()
     except: return
 
-    # 日期分組字典
     grouped_results = {}
 
     for g in games:
         home, away, gid = g["home_team"], g["away_team"], g["id"]
-        # 轉換為台灣時間日期
         commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
         date_key = commence_tw.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
         is_live = now_tw > (commence_tw - timedelta(minutes=2))
@@ -112,6 +109,7 @@ def run():
         for o in market:
             if gid not in history:
                 history[gid] = {"open": o["price"], "team": o["name"]}
+            
             clv = (o["price"] - history[gid]["open"]) / history[gid]["open"]
             is_injury = clv < CLV_ALERT_THRESHOLD
             model_line = ((elo.get(home, 1500) - elo.get(away, 1500)) / 28) + HOME_ADV
@@ -119,6 +117,7 @@ def run():
             
             prob = sum(1 for _ in range(SIMS) if random.gauss(model_line, 13.5) + (o["point"] if o["name"] == home else -o["point"]) > 0) / SIMS
             edge = prob - (1/o["price"])
+            
             if best_pick is None or edge > best_pick["edge"]:
                 best_pick = {"team": o["name"], "point": o["point"], "odds": o["price"], "prob": prob, "edge": edge, "clv": clv, "injury": is_injury, "is_live": is_live, "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}"}
 
@@ -126,27 +125,34 @@ def run():
             if date_key not in grouped_results: grouped_results[date_key] = []
             grouped_results[date_key].append(best_pick)
 
-    # 輸出 Discord 訊息
-    message = f"🛡️ **NBA V61.2 Sentinel Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    message = f"🛡️ **NBA V61.3 Sentinel Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     
     if not grouped_results:
         message += "\n📭 目前無價值偏差場次。"
     else:
         for date, picks in grouped_results.items():
             message += f"\n📅 **{date}**\n"
-            # 依據 Edge 排序，最高優勢排在最前面
-            picks.sort(key=lambda x: x["edge"], reverse=True)
+            
+            # --- 智能排序邏輯 ---
+            # 優先級 1: CLV > 0 (正向移動) 排前面
+            # 優先級 2: Edge 高的排前面
+            picks.sort(key=lambda x: (x["clv"] > 0, x["edge"]), reverse=True)
+            
             for p in picks:
                 implied = 1 / p["odds"]
                 k = ( (p["odds"]-1)*p["prob"] - (1-p["prob"]) ) / (p["odds"]-1)
                 stake = min(max(0, k * (0.05 if p["injury"] else 0.25)), 0.03)
+                
+                # 視覺化趨勢
+                clv_icon = "📈" if p["clv"] > 0 else ("📉" if p["clv"] < 0 else "↔️")
                 status = "⚠️ 傷病" if p["injury"] else ("🔥 S級" if p["edge"] > 0.05 else "⭐ A級")
                 live_tag = "🔴 [場中] " if p["is_live"] else ""
                 
                 message += f"{live_tag}{status} **{p['match']}**\n"
                 message += f"🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
+                message += f"Edge: **{p['edge']:.2%}** | CLV: {clv_icon} **{p['clv']:.2%}**\n"
                 message += f"勝率: 模型 **{p['prob']:.1%}** (市場 {implied:.1%})\n"
-                message += f"Edge: **{p['edge']:.2%}** | CLV: **{p['clv']:.2%}** | Kelly: **{stake:.2%}**\n"
+                message += f"建議注量: **{stake:.2%}**\n"
                 message += "--------\n"
 
     requests.post(WEBHOOK, json={"content": message})
