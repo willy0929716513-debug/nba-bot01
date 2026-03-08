@@ -5,7 +5,7 @@ import random
 from datetime import datetime, timedelta
 
 # ===============================
-# NBA V61.3 SENTINEL PRO (Smart Sorting & Risk Filter)
+# NBA V61.4 SENTINEL PRO (Kickoff Time Update)
 # ===============================
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -98,7 +98,9 @@ def run():
         home, away, gid = g["home_team"], g["away_team"], g["id"]
         commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
         date_key = commence_tw.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
+        kickoff_time = commence_tw.strftime("%H:%M")
         is_live = now_tw > (commence_tw - timedelta(minutes=2))
+        is_soon = (commence_tw - timedelta(minutes=30)) < now_tw < commence_tw
         
         books = g.get("bookmakers", [])
         if not books: continue
@@ -109,7 +111,6 @@ def run():
         for o in market:
             if gid not in history:
                 history[gid] = {"open": o["price"], "team": o["name"]}
-            
             clv = (o["price"] - history[gid]["open"]) / history[gid]["open"]
             is_injury = clv < CLV_ALERT_THRESHOLD
             model_line = ((elo.get(home, 1500) - elo.get(away, 1500)) / 28) + HOME_ADV
@@ -119,23 +120,24 @@ def run():
             edge = prob - (1/o["price"])
             
             if best_pick is None or edge > best_pick["edge"]:
-                best_pick = {"team": o["name"], "point": o["point"], "odds": o["price"], "prob": prob, "edge": edge, "clv": clv, "injury": is_injury, "is_live": is_live, "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}"}
+                best_pick = {
+                    "team": o["name"], "point": o["point"], "odds": o["price"], "prob": prob, 
+                    "edge": edge, "clv": clv, "injury": is_injury, "is_live": is_live, "is_soon": is_soon,
+                    "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
+                    "kickoff": kickoff_time
+                }
 
         if best_pick and best_pick["edge"] > EDGE_THRESHOLD:
             if date_key not in grouped_results: grouped_results[date_key] = []
             grouped_results[date_key].append(best_pick)
 
-    message = f"🛡️ **NBA V61.3 Sentinel Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    message = f"🛡️ **NBA V61.4 Sentinel Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     
     if not grouped_results:
         message += "\n📭 目前無價值偏差場次。"
     else:
         for date, picks in grouped_results.items():
             message += f"\n📅 **{date}**\n"
-            
-            # --- 智能排序邏輯 ---
-            # 優先級 1: CLV > 0 (正向移動) 排前面
-            # 優先級 2: Edge 高的排前面
             picks.sort(key=lambda x: (x["clv"] > 0, x["edge"]), reverse=True)
             
             for p in picks:
@@ -143,15 +145,15 @@ def run():
                 k = ( (p["odds"]-1)*p["prob"] - (1-p["prob"]) ) / (p["odds"]-1)
                 stake = min(max(0, k * (0.05 if p["injury"] else 0.25)), 0.03)
                 
-                # 視覺化趨勢
                 clv_icon = "📈" if p["clv"] > 0 else ("📉" if p["clv"] < 0 else "↔️")
+                soon_tag = "⏳" if p["is_soon"] else ""
                 status = "⚠️ 傷病" if p["injury"] else ("🔥 S級" if p["edge"] > 0.05 else "⭐ A級")
                 live_tag = "🔴 [場中] " if p["is_live"] else ""
                 
                 message += f"{live_tag}{status} **{p['match']}**\n"
+                message += f"⏰ 開賽時間: {p['kickoff']} {soon_tag}\n"
                 message += f"🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
                 message += f"Edge: **{p['edge']:.2%}** | CLV: {clv_icon} **{p['clv']:.2%}**\n"
-                message += f"勝率: 模型 **{p['prob']:.1%}** (市場 {implied:.1%})\n"
                 message += f"建議注量: **{stake:.2%}**\n"
                 message += "--------\n"
 
