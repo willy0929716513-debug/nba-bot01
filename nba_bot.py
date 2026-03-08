@@ -5,7 +5,7 @@ import random
 from datetime import datetime, timedelta
 
 # ===============================
-# NBA V61.4 SENTINEL PRO (Kickoff Time Update)
+# NBA V61.5 SENTINEL PRO (Full Version)
 # ===============================
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -131,13 +131,14 @@ def run():
             if date_key not in grouped_results: grouped_results[date_key] = []
             grouped_results[date_key].append(best_pick)
 
-    message = f"🛡️ **NBA V61.4 Sentinel Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    message = f"🛡️ **NBA V61.5 Sentinel Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     
     if not grouped_results:
         message += "\n📭 目前無價值偏差場次。"
     else:
         for date, picks in grouped_results.items():
             message += f"\n📅 **{date}**\n"
+            # 排序：優先放 CLV 正值的場次，再看 Edge 大小
             picks.sort(key=lambda x: (x["clv"] > 0, x["edge"]), reverse=True)
             
             for p in picks:
@@ -151,9 +152,10 @@ def run():
                 live_tag = "🔴 [場中] " if p["is_live"] else ""
                 
                 message += f"{live_tag}{status} **{p['match']}**\n"
-                message += f"⏰ 開賽時間: {p['kickoff']} {soon_tag}\n"
+                message += f"⏰ 時間: {p['kickoff']} {soon_tag}\n"
                 message += f"🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
                 message += f"Edge: **{p['edge']:.2%}** | CLV: {clv_icon} **{p['clv']:.2%}**\n"
+                message += f"勝率: 模型 **{p['prob']:.1%}** (市場 {implied:.1%})\n"
                 message += f"建議注量: **{stake:.2%}**\n"
                 message += "--------\n"
 
