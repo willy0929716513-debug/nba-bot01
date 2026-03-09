@@ -5,13 +5,13 @@ import random
 from datetime import datetime, timedelta
 
 # ==========================================
-# NBA V74 Quantum Shield (End-of-Game Filter)
+# NBA V75 Quantum Pro EV (Expected Value Logic)
 # ==========================================
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba"
-DB_FILE = "nba_v74_db.json"
+DB_FILE = "nba_v75_db.json"
 
 SIMS = 20000
 EDGE_THRESHOLD = 0.03
@@ -33,7 +33,7 @@ TEAM_CN = {
     "Utah Jazz":"爵士", "Sacramento Kings":"國王", "Portland Trail Blazers":"拓荒者"
 }
 
-# 延用你的 V70 TEAM_STATS... (略，請確保部署時包含完整清單)
+# TEAM_STATS 保持不變... (請在部署時放入完整的字典)
 TEAM_STATS = {
     "Boston Celtics": {"off":121,"def":110,"pace":99}, "Denver Nuggets": {"off":118,"def":112,"pace":97},
     "Oklahoma City Thunder": {"off":120,"def":111,"pace":101}, "Milwaukee Bucks": {"off":119,"def":113,"pace":100},
@@ -76,7 +76,6 @@ def run():
     history, locks = db.get("history", {}), db.get("locks", {})
     now_tw = datetime.utcnow() + timedelta(hours=8)
     
-    # 獲取賠率的同時，增加過濾條件防止顯示過期比賽
     r = requests.get(f"{BASE_URL}/odds/", params={"apiKey":API_KEY, "regions":"us", "markets":"spreads", "oddsFormat":"decimal"})
     games = r.json()
     
@@ -85,14 +84,11 @@ def run():
         gid, home, away = g["id"], g["home_team"], g["away_team"]
         commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
         
-        # --- 核心修復：過濾邏輯 ---
-        # 如果比賽已經開始超過 2.5 小時，通常比賽已經結束或接近結束，直接跳過不推薦
-        if now_tw > (commence_tw + timedelta(minutes=150)):
-            continue
+        # 過濾已結束或開始太久的比賽 (2.5小時)
+        if now_tw > (commence_tw + timedelta(minutes=150)): continue
             
         date_key = commence_tw.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
         is_live = now_tw >= (commence_tw - timedelta(minutes=5))
-        is_soon = (commence_tw - timedelta(minutes=30)) <= now_tw < commence_tw
 
         books = g.get("bookmakers", [])
         if not books: continue
@@ -106,6 +102,11 @@ def run():
             if gid not in history: history[gid] = {"open": o["price"], "team": o["name"]}
             clv = (o["price"] - history[gid]["open"]) / history[gid]["open"]
             prob = simulate_spread(model_val if o["name"]==home else -model_val, o["point"])
+            
+            # --- 期望值 (EV) 計算 ---
+            # EV = (Win Prob * Net Profit) - (Loss Prob * Stake)
+            # 在下注 1 單位的基準下：EV = (prob * (o["price"] - 1)) - (1 - prob)
+            ev = (prob * (o["price"] - 1)) - (1 - prob)
             edge = prob - (1/o["price"])
             
             is_prev_locked = (gid in locks and locks[gid]["team"] == o["name"])
@@ -115,10 +116,10 @@ def run():
                 if best_pick is None or edge > best_pick["edge"]:
                     best_pick = {
                         "team": o["name"], "point": o["point"], "odds": o["price"],
-                        "prob": prob, "edge": edge, "clv": clv, "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
+                        "prob": prob, "edge": edge, "ev": ev, "clv": clv, 
+                        "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
                         "time": commence_tw.strftime("%H:%M"), "locked": is_prev_locked,
-                        "implied": 1/o["price"], "injury": clv < CLV_ALERT_THRESHOLD,
-                        "is_live": is_live, "is_soon": is_soon
+                        "implied": 1/o["price"], "is_live": is_live
                     }
 
         if best_pick:
@@ -126,28 +127,26 @@ def run():
             grouped[date_key].append(best_pick)
             locks[gid] = {"team": best_pick["team"], "point": best_pick["point"]}
 
-    message = f"🛡️ **NBA V74 Quantum Shield**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    message = f"🛡️ **NBA V75 Quantum Pro EV**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     if not grouped:
-        message += "\n📭 目前無穩定偏差場次 (或比賽皆已結束)。"
+        message += "\n📭 目前無優勢投注。"
     else:
         for date, picks in grouped.items():
             message += f"\n📅 **{date}**\n"
-            picks.sort(key=lambda x: (x["clv"] > 0, x["edge"]), reverse=True)
+            picks.sort(key=lambda x: x["ev"], reverse=True)
             for p in picks:
                 clv_icon = "📈" if p["clv"] > 0 else ("📉" if p["clv"] < 0 else "↔️")
-                live_tag = "🔴 [場中]" if p["is_live"] else ("⏳" if p["is_soon"] else "")
-                lock_icon = "🔒" if p["locked"] else "✨"
-                status = "⚠️ 警示" if p["injury"] else "🔥 S級"
+                live_tag = "🔴 [場中] " if p["is_live"] else ""
+                lock_tag = "🔒" if p["locked"] else "✨"
                 
-                message += f"{live_tag}{status} **{p['match']}**\n"
-                message += f"{lock_icon} ⏰ 時間: {p['time']}\n"
-                message += f"🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
+                message += f"{live_tag}**{p['match']}**\n"
+                message += f"{lock_tag} ⏰ {p['time']} | 🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
+                message += f"💰 **期望值 (EV): +{p['ev']:.2f}**\n"
                 message += f"勝率: 模型 **{p['prob']:.1%}** (市場 {p['implied']:.1%})\n"
-                message += f"Edge: **{p['edge']:.2%}** | CLV: {clv_icon} **{p['clv']:.2%}**\n"
+                message += f"Edge: **{p['edge']:.2%}** | CLV: {clv_icon}\n"
                 message += "--------\n"
 
     requests.post(WEBHOOK, json={"content": message})
     save_db({"history": history, "locks": locks})
 
-if __name__=="__main__":
-    run()
+if __name__=="__main__": run()
