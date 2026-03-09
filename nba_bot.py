@@ -1,28 +1,27 @@
 import requests
 import os
 import json
+import math
 import random
 from datetime import datetime, timedelta
 
 # ==========================================
-# NBA V80.1 Quantum Sync (Final Integrated)
+# NBA V86.1 Quantum Alpha - Pure Value Picker
 # ==========================================
 
-# 環境變數設定
+# 環境變數與路徑
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba"
-DB_FILE = "nba_v80_db.json"
+DB_FILE = "nba_v86_db.json"
 
-# --- 核心參數 ---
-TIME_OFFSET_MINUTES = -10  # 比賽顯示時間提前 10 分鐘 (對齊轉播時間)
-SIMS = 20000               # 蒙地卡羅模擬次數
-EDGE_THRESHOLD = 0.03      # 領先市場 3% 以上才推薦
-PARLAY_EV_THRESHOLD = 0.05 # EV > 0.05 且 CLV 為正才建議串關
-HOME_ADV = 2.4             # 主場優勢加權
-SPREAD_STD = 13.5          # 讓分盤標準差 (波動率)
+# --- 核心量化參數 (量化交易級設定) ---
+MIN_EDGE = 0.04          # 領先門檻 4% (過濾雜訊)
+TIME_OFFSET = -10        # 提前 10 分鐘對齊轉播
+SPREAD_STD = 12.8        # 讓分盤標準差
+TOTAL_STD = 13.5         # 大小分標準差
+# ----------------------------------
 
-# 隊名翻譯表
 TEAM_CN = {
     "Boston Celtics":"塞爾提克", "Milwaukee Bucks":"公鹿", "Denver Nuggets":"金塊",
     "Golden State Warriors":"勇士", "Los Angeles Lakers":"湖人", "Phoenix Suns":"太陽",
@@ -36,137 +35,115 @@ TEAM_CN = {
     "Utah Jazz":"爵士", "Sacramento Kings":"國王", "Portland Trail Blazers":"拓荒者"
 }
 
-# 30 隊攻防數據庫 (基礎模型)
+# 動態攻防數據 (建議每日根據傷病調整)
 TEAM_STATS = {
     "Boston Celtics": {"off":121,"def":110,"pace":99}, "Denver Nuggets": {"off":118,"def":112,"pace":97},
     "Oklahoma City Thunder": {"off":120,"def":111,"pace":101}, "Milwaukee Bucks": {"off":119,"def":113,"pace":100},
-    "Minnesota Timberwolves": {"off":115,"def":108,"pace":97}, "Los Angeles Clippers": {"off":117,"def":112,"pace":98},
-    "Dallas Mavericks": {"off":119,"def":114,"pace":100}, "Phoenix Suns": {"off":117,"def":113,"pace":99},
-    "Golden State Warriors": {"off":118,"def":114,"pace":101}, "Los Angeles Lakers": {"off":116,"def":114,"pace":101},
-    "New York Knicks": {"off":116,"def":111,"pace":95}, "Cleveland Cavaliers": {"off":115,"def":110,"pace":96},
-    "Philadelphia 76ers": {"off":118,"def":113,"pace":97}, "Sacramento Kings": {"off":119,"def":115,"pace":101},
-    "Miami Heat": {"off":112,"def":111,"pace":95}, "Indiana Pacers": {"off":122,"def":118,"pace":103},
-    "Houston Rockets": {"off":114,"def":111,"pace":98}, "New Orleans Pelicans": {"off":116,"def":111,"pace":98},
-    "Atlanta Hawks": {"off":118,"def":118,"pace":102}, "Chicago Bulls": {"off":111,"def":113,"pace":97},
-    "Toronto Raptors": {"off":110,"def":115,"pace":100}, "Brooklyn Nets": {"off":111,"def":114,"pace":98},
-    "Charlotte Hornets": {"off":108,"def":118,"pace":101}, "Detroit Pistons": {"off":109,"def":119,"pace":100},
-    "Utah Jazz": {"off":112,"def":118,"pace":101}, "Portland Trail Blazers": {"off":108,"def":118,"pace":99},
-    "San Antonio Spurs": {"off":112,"def":119,"pace":101}, "Washington Wizards": {"off":109,"def":120,"pace":102},
-    "Memphis Grizzlies": {"off":113,"def":113,"pace":100}, "Orlando Magic": {"off":113,"def":110,"pace":97}
+    "Minnesota Timberwolves": {"off":115,"def":108,"pace":97}, "Dallas Mavericks": {"off":119,"def":114,"pace":100},
+    "Phoenix Suns": {"off":117,"def":113,"pace":99}, "Golden State Warriors": {"off":118,"def":114,"pace":101},
+    "Los Angeles Lakers": {"off":116,"def":114,"pace":101}, "New York Knicks": {"off":116,"def":111,"pace":95},
+    "Cleveland Cavaliers": {"off":115,"def":110,"pace":96}, "Philadelphia 76ers": {"off":118,"def":113,"pace":97}
 }
 
 def load_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE,"r") as f: return json.load(f)
-    return {"history":{}, "locks": {}}
+    return {"history":{}}
 
 def save_db(db):
     with open(DB_FILE,"w") as f: json.dump(db, f, indent=2)
 
-def predict_spread(home, away):
-    h = TEAM_STATS.get(home, {"off":115,"def":115})
-    a = TEAM_STATS.get(away, {"off":115,"def":115})
-    return ((h["off"]-h["def"]) - (a["off"]-a["def"])) / 2 + HOME_ADV
+def get_prob(model_val, line, std):
+    """ 使用誤差函數計算正態分佈累積機率 (代替蒙地卡羅) """
+    z = (-line - model_val) / std
+    return 1 - 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+def kelly(prob, odds):
+    """ 凱利公式控管倉位：(bp - q) / b """
+    b = odds - 1
+    k = (b * prob - (1 - prob)) / b
+    return max(0, min(k * 0.25, 0.035)) # 四分之一凱利，單場上限 3.5%
 
 def run():
     db = load_db()
-    history, locks = db.get("history", {}), db.get("locks", {})
+    history = db.get("history", {})
     now_tw = datetime.utcnow() + timedelta(hours=8)
     
-    # 抓取賠率 (讓分 + 大小分)
     r = requests.get(f"{BASE_URL}/odds/", params={"apiKey":API_KEY, "regions":"us", "markets":"spreads,totals", "oddsFormat":"decimal"})
     if r.status_code != 200: return
     games = r.json()
-    
-    grouped = {}
-    parlay_candidates = []
+
+    all_opportunities = []
 
     for g in games:
         gid, home, away = g["id"], g["home_team"], g["away_team"]
-        
-        # 時間修正邏輯
         raw_commence = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
-        sync_commence = raw_commence + timedelta(minutes=TIME_OFFSET_MINUTES)
+        sync_time = raw_commence + timedelta(minutes=TIME_OFFSET)
         
-        # 過濾結束場次 (開賽 2.5 小時後不顯示)
-        if now_tw > (sync_commence + timedelta(minutes=150)): continue
-        
-        date_key = sync_commence.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
-        is_live = now_tw >= (sync_commence - timedelta(minutes=5))
+        # 過濾已開賽過久的場次
+        if now_tw > (sync_time + timedelta(minutes=150)): continue
 
-        books = g.get("bookmakers", [])
-        if not books: continue
-        
-        best_pick = None
-        for m_obj in books[0]["markets"]:
-            market_key = m_obj["key"]
-            for o in m_obj["outcomes"]:
-                # CLV 計算
-                hist_id = f"{gid}_{market_key}_{o.get('name', 'total')}"
-                if hist_id not in history: history[hist_id] = o["price"]
-                clv_val = (o["price"] - history[hist_id]) / history[hist_id]
-                
-                # 模型勝率模擬
-                model_val = predict_spread(home, away)
-                prob = sum(1 for _ in range(SIMS) if random.gauss(model_val if o["name"]==home else -model_val, SPREAD_STD) + o["point"] > 0) / SIMS if market_key == "spreads" else 0.5
-                
-                ev = (prob * (o["price"] - 1)) - (1 - prob)
-                edge = prob - (1/o["price"])
-                
-                # 玩法自動打標
-                label = "[受讓]" if o["point"] > 0 and market_key == "spreads" else ("[讓分]" if market_key == "spreads" else "[總分]")
-                
-                # 鎖定與篩選
-                is_locked = (gid in locks and locks[gid].get("name") == o.get("name"))
-                if edge > (0.015 if is_locked else EDGE_THRESHOLD):
-                    pick = {
-                        "team": o.get("name", "Total"), "point": o["point"], "odds": o["price"],
-                        "prob": prob, "implied": 1/o["price"], "ev": ev, "clv": clv_val, 
-                        "label": label, "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
-                        "time": sync_commence.strftime("%H:%M"), "locked": is_locked, 
-                        "is_live": is_live, "edge": edge
-                    }
-                    if best_pick is None or ev > best_pick["ev"]: best_pick = pick
+        h_s = TEAM_STATS.get(home, {"off":113, "def":113, "pace":99})
+        a_s = TEAM_STATS.get(away, {"off":113, "def":113, "pace":99})
 
-        if best_pick:
-            if date_key not in grouped: grouped[date_key] = []
-            grouped[date_key].append(best_pick)
-            locks[gid] = {"name": best_pick["team"], "point": best_pick["point"]}
-            
-            # 串關條件：高 EV 且市場走勢 📈 或持平
-            if best_pick["ev"] > PARLAY_EV_THRESHOLD and best_pick["clv"] >= 0 and not best_pick["is_live"]:
-                parlay_candidates.append(best_pick)
+        # --- 模型核心計算 ---
+        spread_model = ((h_s["off"]-h_s["def"]) - (a_s["off"]-a_s["def"])) / 2 + 2.4
+        total_model = ((h_s["pace"] + a_s["pace"]) / 2) * (h_s["off"] + a_s["off"]) / 100
 
-    # Discord 訊息組裝
-    message = f"🛡️ **NBA V80.1 Quantum Sync**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
-    if not grouped:
-        message += "\n📭 目前無穩定偏差場次 (比賽皆已結束或盤口過硬)。"
+        for book in g.get("bookmakers", []):
+            for market in book["markets"]:
+                for o in market["outcomes"]:
+                    price, line = o["price"], o["point"]
+                    hist_id = f"{gid}_{market['key']}_{o.get('name', 'total')}"
+                    
+                    # CLV 追蹤邏輯
+                    if hist_id not in history: history[hist_id] = price
+                    clv = (price - history[hist_id]) / history[hist_id]
+                    
+                    if market["key"] == "spreads":
+                        target = spread_model if o["name"] == home else -spread_model
+                        prob = get_prob(target, line, SPREAD_STD)
+                        m_type = "讓分盤"
+                    else: # totals
+                        prob_over = get_prob(total_model, -line, TOTAL_STD)
+                        prob = prob_over if o["name"] == "Over" else (1 - prob_over)
+                        m_type = "大小分"
+
+                    edge = prob - (1/price)
+
+                    # 背離偵測 (Sentinel 邏輯)
+                    if edge > 0.15 and clv < -0.015:
+                        continue # 異常波動，跳過此標的
+
+                    if edge > MIN_EDGE:
+                        all_opportunities.append({
+                            "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
+                            "pick": f"{TEAM_CN.get(o['name'], o['name'])} {line:+}",
+                            "type": m_type, "prob": prob, "edge": edge, "odds": price,
+                            "stake": kelly(prob, price), "time": sync_time.strftime("%H:%M"),
+                            "date": sync_time.strftime("%m/%d"), "clv": clv
+                        })
+
+    # --- 全市場價值排序 ---
+    all_opportunities.sort(key=lambda x: x["edge"], reverse=True)
+
+    message = f"🛡️ **NBA V86.1 Quantum Alpha**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    
+    if not all_opportunities:
+        message += "\n📭 目前市場賠率與模型預期高度一致，無投資價值。"
     else:
-        for date, picks in grouped.items():
-            message += f"\n📅 **{date}**\n"
-            picks.sort(key=lambda x: x["ev"], reverse=True)
-            for p in picks:
-                clv_str = f"{p['clv']:+.2%}" if p['clv'] != 0 else "↔️ 0.00%"
-                clv_icon = "📈" if p["clv"] > 0 else ("📉" if p["clv"] < 0 else "")
-                live_tag = "🔴 [場中] " if p["is_live"] else ""
-                parlay_tag = "🔗 " if (p["ev"] > PARLAY_EV_THRESHOLD and p["clv"] >= 0) else ""
-                
-                message += f"{live_tag}{parlay_tag}**{p['match']}** {p['label']}\n"
-                message += f"{'🔒' if p['locked'] else '✨'} ⏰ {p['time']} | 🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
-                message += f"💰 EV: **+{p['ev']:.2f}** | CLV: {clv_icon} **{clv_str}**\n"
-                message += f"📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n"
-                message += f"📈 領先 (Edge): **{p['edge']:+.2%}**\n"
-                message += "--------\n"
-
-    # AI 串關組合建議
-    if len(parlay_candidates) >= 2:
-        parlay_candidates.sort(key=lambda x: x["prob"], reverse=True)
-        top = parlay_candidates[:2]
-        message += f"\n💎 **AI 推薦串關 (組合賠率 {(top[0]['odds']*top[1]['odds']):.2f})**\n"
-        message += f"✅ {top[0]['match']} {top[0]['label']}\n✅ {top[1]['match']} {top[1]['label']}\n"
+        # 只輸出前 5 名最優價值場次
+        for opp in all_opportunities[:5]:
+            clv_icon = "📈" if opp['clv'] > 0 else ("📉" if opp['clv'] < 0 else "↔️")
+            message += f"\n💎 **{opp['match']}** ({opp['type']})\n"
+            message += f"🎯 {opp['pick']} @ **{opp['odds']}** | {opp['time']}\n"
+            message += f"📊 預估勝率: **{opp['prob']:.1%}** | CLV: {clv_icon}\n"
+            message += f"📈 獲利優勢 (Edge): **{opp['edge']:+.2%}**\n"
+            message += f"💰 建議投入: **{opp['stake']:.2%}** 本金\n"
+            message += "--------"
 
     requests.post(WEBHOOK, json={"content": message})
-    save_db({"history": history, "locks": locks})
+    save_db({"history": history})
 
-if __name__=="__main__":
+if __name__ == "__main__":
     run()
