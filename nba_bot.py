@@ -5,13 +5,13 @@ import random
 from datetime import datetime, timedelta
 
 # ==========================================
-# NBA V78.1 Quantum Final Pro (Bug Fixed)
+# NBA V79 Quantum Clarity (Model vs Market)
 # ==========================================
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba"
-DB_FILE = "nba_v78_db.json"
+DB_FILE = "nba_v79_db.json"
 
 SIMS = 20000
 EDGE_THRESHOLD = 0.03
@@ -104,8 +104,10 @@ def run():
                 if edge > (0.015 if is_locked else EDGE_THRESHOLD):
                     pick = {
                         "team": o.get("name", "Total"), "point": o["point"], "odds": o["price"],
-                        "prob": prob, "ev": ev, "clv": clv_val, "label": label, "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
-                        "time": commence_tw.strftime("%H:%M"), "locked": is_locked, "is_live": is_live, "edge": edge
+                        "prob": prob, "implied": 1/o["price"], "ev": ev, "clv": clv_val, 
+                        "label": label, "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
+                        "time": commence_tw.strftime("%H:%M"), "locked": is_locked, 
+                        "is_live": is_live, "edge": edge
                     }
                     if best_pick is None or ev > best_pick["ev"]: best_pick = pick
 
@@ -116,7 +118,7 @@ def run():
             if best_pick["ev"] > PARLAY_EV_THRESHOLD and best_pick["clv"] >= 0 and not best_pick["is_live"]:
                 parlay_candidates.append(best_pick)
 
-    message = f"🛡️ **NBA V78.1 Quantum Final Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    message = f"🛡️ **NBA V79 Quantum Clarity**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     if not grouped:
         message += "\n📭 目前無穩定偏差場次。"
     else:
@@ -132,7 +134,8 @@ def run():
                 message += f"{live_tag}{parlay_tag}**{p['match']}** {p['label']}\n"
                 message += f"{'🔒' if p['locked'] else '✨'} ⏰ {p['time']} | 🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
                 message += f"💰 EV: **+{p['ev']:.2f}** | CLV: {clv_icon} **{clv_str}**\n"
-                message += f"📊 勝率: **{p['prob']:.1%}** | Edge: **{p['edge']:.2%}**\n"
+                message += f"📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n"
+                message += f"📈 領先 (Edge): **{p['edge']:+.2%}**\n"
                 message += "--------\n"
 
     if len(parlay_candidates) >= 2:
