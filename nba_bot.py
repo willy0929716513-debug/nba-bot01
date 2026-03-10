@@ -1,23 +1,24 @@
 import requests
 import os
-import random
 import json
+import random
 from datetime import datetime, timedelta
 
 # ==========================================
-# NBA V91.1 Quantum Pro - Spread & H2H Focus
+# NBA V80.2 Quantum Sync - Stable Edition
 # ==========================================
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba"
 
+# --- 核心量化參數 ---
 SIMS = 20000
 EDGE_THRESHOLD = 0.045
 PARLAY_THRESHOLD = 0.065
-TIME_OFFSET_MINS = -10  # 開賽時間修正
 HOME_ADV = 2.4
 MARKET_BIAS = -1.2
+TIME_OFFSET_MINS = -10  # 顯示時間自動減 10 分鐘
 
 TEAM_CN = {
     "Boston Celtics":"塞爾提克", "Milwaukee Bucks":"公鹿", "Denver Nuggets":"金塊",
@@ -32,7 +33,6 @@ TEAM_CN = {
     "Utah Jazz":"爵士", "Sacramento Kings":"國王", "Portland Trail Blazers":"拓荒者"
 }
 
-# (TEAM_STATS 使用你提供的最新數據)
 TEAM_STATS = {
     "Boston Celtics":{"off":121,"def":110}, "Denver Nuggets":{"off":118,"def":112},
     "Oklahoma City Thunder":{"off":120,"def":111}, "Milwaukee Bucks":{"off":119,"def":113},
@@ -53,39 +53,44 @@ TEAM_STATS = {
 
 def predict_spread(home, away):
     h, a = TEAM_STATS[home], TEAM_STATS[away]
-    rating = (h["off"]-h["def"]) - (a["off"]-a["def"])
+    rating = (h["off"] - h["def"]) - (a["off"] - a["def"])
     return rating/2 + HOME_ADV + MARKET_BIAS
 
 def monte_spread(model, line):
-    std = 12 + abs(model)*0.15 # 動態標準差優化
+    # 使用動態標準差優化，降低極端值出現機率
+    std = 12.5 + abs(model) * 0.12 
     diff = model - line
     win = sum(1 for _ in range(SIMS) if random.gauss(diff, std) > 0)
     return win / SIMS
 
 def run():
     now_tw = datetime.utcnow() + timedelta(hours=8)
-    r = requests.get(f"{BASE_URL}/odds/", params={"apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"}, timeout=10)
+    r = requests.get(f"{BASE_URL}/odds/", params={
+        "apiKey": API_KEY, "regions": "us", "markets": "h2h,spreads", "oddsFormat": "decimal"
+    }, timeout=10)
+    
+    if r.status_code != 200: return
     games = r.json()
-
     grouped_data = {}
 
     for g in games:
         home, away = g["home_team"], g["away_team"]
         raw_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
-        # 修正開賽時間 (-10 min)
+        
+        # 修正開賽時間並分組
         display_time = raw_time + timedelta(minutes=TIME_OFFSET_MINS)
         date_key = display_time.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
-
+        
         if now_tw > (raw_time + timedelta(minutes=150)): continue
 
         model = predict_spread(home, away)
-        best_pick = None
+        best_pick_for_game = None
 
         for book in g.get("bookmakers", []):
             for market in book["markets"]:
                 for o in market["outcomes"]:
                     if market["key"] == "spreads":
-                        if abs(o["point"]) > 13: continue # 過濾極端大分差
+                        if abs(o["point"]) > 13: continue # 避開極端分差
                         target = model if o["name"] == home else -model
                         prob = monte_spread(target, o["point"])
                         label = "[受讓]" if o["point"] > 0 else "[讓分]"
@@ -97,8 +102,7 @@ def run():
                         pt_str = ""
                     else: continue
 
-                    implied = 1 / o["price"]
-                    edge = prob - implied
+                    edge = prob - (1 / o["price"])
                     ev = (prob * o["price"]) - 1
 
                     if edge > EDGE_THRESHOLD:
@@ -106,20 +110,21 @@ def run():
                             "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
                             "team": TEAM_CN.get(o["name"], o["name"]),
                             "label": label, "point": pt_str, "odds": o["price"],
-                            "prob": prob, "implied": implied, "edge": edge, "ev": ev,
+                            "prob": prob, "implied": 1 / o["price"], "edge": edge, "ev": ev,
                             "time": display_time.strftime("%H:%M")
                         }
-                        if not best_pick or ev > best_pick["ev"]:
-                            best_pick = pick
+                        # 同一場比賽只選 EV 最高的玩法
+                        if not best_pick_for_game or ev > best_pick_for_game["ev"]:
+                            best_pick_for_game = pick
 
-        if best_pick:
-            grouped_data.setdefault(date_key, []).append(best_pick)
+        if best_pick_for_game:
+            grouped_data.setdefault(date_key, []).append(best_pick_for_game)
 
-    # 訊息構建
-    message = f"🛡️ **NBA V91.1 Quantum Pro**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    # 構建 Discord 訊息
+    message = f"🛡️ **NBA V80.2 Quantum Sync**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     
     if not grouped_data:
-        message += "\n📭 目前無明顯獲利偏差標的。"
+        message += "\n📭 目前無明顯偏差標的。"
     else:
         for date, picks in grouped_data.items():
             message += f"\n📅 **{date}**\n"
@@ -127,15 +132,18 @@ def run():
             
             daily_parlay = []
             for p in picks:
-                parlay_icon = "🔗 " if p["edge"] > PARLAY_THRESHOLD else ""
-                if p["edge"] > PARLAY_THRESHOLD: daily_parlay.append(p)
+                # 只有 Edge 足夠高的非即時場次才進串關
+                is_parlay = p["edge"] > PARLAY_THRESHOLD
+                parlay_tag = "🔗 " if is_parlay else ""
+                if is_parlay: daily_parlay.append(p)
 
-                message += f"{parlay_icon}**{p['match']}** {p['label']}\n"
+                message += f"{parlay_tag}**{p['match']}** {p['label']}\n"
                 message += f"✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n"
                 message += f"💰 EV: **{p['ev']:+.2f}** | 📈 Edge: **{p['edge']:+.2%}**\n"
                 message += f"📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n"
                 message += "--------\n"
 
+            # 該日專屬串關
             if len(daily_parlay) >= 2:
                 daily_parlay.sort(key=lambda x: x["edge"], reverse=True)
                 c1, c2 = daily_parlay[0], daily_parlay[1]
@@ -145,4 +153,5 @@ def run():
 
     requests.post(WEBHOOK, json={"content": message})
 
-if __name__ == "__main__": run()
+if __name__ == "__main__":
+    run()
