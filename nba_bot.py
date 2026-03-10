@@ -1,23 +1,24 @@
 import requests
 import os
-import random
 import json
+import random
 from datetime import datetime, timedelta
 
 # ==========================================
-# NBA V100.1 Quantum ELO - Pure Same Day
+# NBA V82.0 Quantum Uniform (Daily & Type Match)
 # ==========================================
 
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
-BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
+BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba"
+DB_FILE = "nba_v82_db.json"
 
+TIME_OFFSET_MINUTES = -10
 SIMS = 20000
-EDGE_THRESHOLD = 0.04
-PARLAY_THRESHOLD = 0.06
-HOME_ADV = 2.3
-STD = 11.8
-TIME_OFFSET = -10  # 開賽時間顯示修正
+EDGE_THRESHOLD = 0.03
+PARLAY_EV_THRESHOLD = 0.05
+HOME_ADV = 2.4
+SPREAD_STD = 13.5
 
 TEAM_CN = {
     "Boston Celtics":"塞爾提克", "Milwaukee Bucks":"公鹿", "Denver Nuggets":"金塊",
@@ -32,105 +33,139 @@ TEAM_CN = {
     "Utah Jazz":"爵士", "Sacramento Kings":"國王", "Portland Trail Blazers":"拓荒者"
 }
 
-TEAM_RATING = {
-    "Boston Celtics":1790, "Denver Nuggets":1760, "Oklahoma City Thunder":1750,
-    "Milwaukee Bucks":1740, "Minnesota Timberwolves":1730, "Los Angeles Clippers":1720,
-    "Dallas Mavericks":1710, "Phoenix Suns":1700, "Golden State Warriors":1690,
-    "Los Angeles Lakers":1680, "New York Knicks":1670, "Cleveland Cavaliers":1660,
-    "Philadelphia 76ers":1660, "Sacramento Kings":1650, "Miami Heat":1640,
-    "Indiana Pacers":1630, "Houston Rockets":1620, "New Orleans Pelicans":1620,
-    "Atlanta Hawks":1600, "Chicago Bulls":1580, "Toronto Raptors":1560,
-    "Brooklyn Nets":1550, "Charlotte Hornets":1520, "Detroit Pistons":1510,
-    "Utah Jazz":1500, "Portland Trail Blazers":1490, "San Antonio Spurs":1480,
-    "Washington Wizards":1470, "Memphis Grizzlies":1600, "Orlando Magic":1650
+# 數據庫保持更新 (省略重複部分以維持可讀性)
+TEAM_STATS = {
+    "Boston Celtics": {"off":121,"def":110,"pace":99}, "Denver Nuggets": {"off":118,"def":112,"pace":97},
+    "Oklahoma City Thunder": {"off":120,"def":111,"pace":101}, "Milwaukee Bucks": {"off":119,"def":113,"pace":100},
+    "Minnesota Timberwolves": {"off":115,"def":108,"pace":97}, "Los Angeles Clippers": {"off":117,"def":112,"pace":98},
+    "Dallas Mavericks": {"off":119,"def":114,"pace":100}, "Phoenix Suns": {"off":117,"def":113,"pace":99},
+    "Golden State Warriors": {"off":118,"def":114,"pace":101}, "Los Angeles Lakers": {"off":116,"def":114,"pace":101},
+    "New York Knicks": {"off":116,"def":111,"pace":95}, "Cleveland Cavaliers": {"off":115,"def":110,"pace":96},
+    "Philadelphia 76ers": {"off":118,"def":113,"pace":97}, "Sacramento Kings": {"off":119,"def":115,"pace":101},
+    "Miami Heat": {"off":112,"def":111,"pace":95}, "Indiana Pacers": {"off":122,"def":118,"pace":103},
+    "Houston Rockets": {"off":114,"def":111,"pace":98}, "New Orleans Pelicans": {"off":116,"def":111,"pace":98},
+    "Atlanta Hawks": {"off":118,"def":118,"pace":102}, "Chicago Bulls": {"off":111,"def":113,"pace":97},
+    "Toronto Raptors": {"off":110,"def":115,"pace":100}, "Brooklyn Nets": {"off":111,"def":114,"pace":98},
+    "Charlotte Hornets": {"off":108,"def":118,"pace":101}, "Detroit Pistons": {"off":109,"def":119,"pace":100},
+    "Utah Jazz": {"off":112,"def":118,"pace":101}, "Portland Trail Blazers": {"off":108,"def":118,"pace":99},
+    "San Antonio Spurs": {"off":112,"def":119,"pace":101}, "Washington Wizards": {"off":109,"def":120,"pace":102},
+    "Memphis Grizzlies": {"off":113,"def":113,"pace":100}, "Orlando Magic": {"off":113,"def":110,"pace":97}
 }
 
-def predict_spread(home, away):
-    rating_diff = TEAM_RATING[home] - TEAM_RATING[away]
-    return (rating_diff / 25) + HOME_ADV
+def load_db():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE,"r") as f: return json.load(f)
+    return {"history":{}, "locks": {}}
 
-def monte_carlo(model_spread, line):
-    win = sum(1 for _ in range(SIMS) if random.gauss(model_spread, STD) > line)
-    return win / SIMS
+def save_db(db):
+    with open(DB_FILE,"w") as f: json.dump(db, f, indent=2)
+
+def predict_spread(home, away):
+    h = TEAM_STATS.get(home, {"off":115,"def":115})
+    a = TEAM_STATS.get(away, {"off":115,"def":115})
+    return ((h["off"]-h["def"]) - (a["off"]-a["def"])) / 2 + HOME_ADV
 
 def run():
-    now_utc = datetime.utcnow()
-    r = requests.get(BASE_URL, params={"apiKey":API_KEY, "regions":"us", "markets":"h2h,spreads", "oddsFormat":"decimal"})
+    db = load_db()
+    history, locks = db.get("history", {}), db.get("locks", {})
+    now_tw = datetime.utcnow() + timedelta(hours=8)
+    
+    r = requests.get(f"{BASE_URL}/odds/", params={"apiKey":API_KEY, "regions":"us", "markets":"spreads,totals", "oddsFormat":"decimal"})
     if r.status_code != 200: return
     games = r.json()
-
-    grouped_data = {}
+    
+    grouped = {}
+    parlay_candidates = []
 
     for g in games:
-        home, away = g["home_team"], g["away_team"]
-        raw_start = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
-        if raw_start < now_utc: continue
-
-        # 時間修正與日期分組
-        display_time = raw_start + timedelta(hours=8, minutes=TIME_OFFSET)
-        date_key = display_time.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
-
-        model_spread = predict_spread(home, away)
-        best_pick_for_game = None
-
-        for book in g.get("bookmakers", []):
-            for market in book["markets"]:
-                for o in market["outcomes"]:
-                    if market["key"] == "spreads":
-                        target = model_spread if o["name"] == home else -model_spread
-                        prob = monte_carlo(target, o["point"])
-                        label = "[受讓]" if o["point"] > 0 else "[讓分]"
-                        pt_str = f"{o['point']:+}"
-                    elif market["key"] == "h2h":
-                        target = model_spread if o["name"] == home else -model_spread
-                        prob = monte_carlo(target, 0)
-                        label = "[獨贏]"
-                        pt_str = ""
-                    else: continue
-
-                    edge = prob - (1/o["price"])
-                    ev = (prob * o["price"]) - 1
-
-                    if edge > EDGE_THRESHOLD:
-                        pick = {
-                            "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
-                            "team": TEAM_CN.get(o["name"], o["name"]),
-                            "label": label, "point": pt_str, "odds": o["price"],
-                            "prob": prob, "implied": 1/o["price"], "edge": edge, "ev": ev,
-                            "time": display_time.strftime("%H:%M")
-                        }
-                        if not best_pick_for_game or ev > best_pick_for_game["ev"]:
-                            best_pick_for_game = pick
-
-        if best_pick_for_game:
-            grouped_data.setdefault(date_key, []).append(best_pick_for_game)
-
-    # 訊息組裝
-    message = "🛡️ **NBA V100.1 Quantum ELO**\n"
-    message += f"⏱ {(now_utc + timedelta(hours=8)).strftime('%m/%d %H:%M')}\n"
-
-    for date, picks in grouped_data.items():
-        message += f"\n📅 **{date}**\n"
-        picks.sort(key=lambda x: x["edge"], reverse=True)
+        gid, home, away = g["id"], g["home_team"], g["away_team"]
+        raw_commence = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
+        sync_commence = raw_commence + timedelta(minutes=TIME_OFFSET_MINUTES)
+        if now_tw > (sync_commence + timedelta(minutes=150)): continue
         
-        daily_parlay = []
+        date_key = sync_commence.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
+        is_live = now_tw >= (sync_commence - timedelta(minutes=5))
+
+        books = g.get("bookmakers", [])
+        if not books: continue
+        
+        best_pick = None
+        for m_obj in books[0]["markets"]:
+            market_key = m_obj["key"]
+            for o in m_obj["outcomes"]:
+                hist_id = f"{gid}_{market_key}_{o.get('name', 'total')}"
+                if hist_id not in history: history[hist_id] = o["price"]
+                clv_val = (o["price"] - history[hist_id]) / history[hist_id]
+                
+                model_val = predict_spread(home, away)
+                # 簡單化的大小分預測邏輯 (可根據需求進一步優化)
+                prob = sum(1 for _ in range(SIMS) if random.gauss(model_val if o["name"]==home else -model_val, SPREAD_STD) + o["point"] > 0) / SIMS if market_key == "spreads" else 0.53
+                
+                ev = (prob * (o["price"] - 1)) - (1 - prob)
+                edge = prob - (1/o["price"])
+                label = "[受讓]" if o["point"] > 0 and market_key == "spreads" else ("[讓分]" if market_key == "spreads" else "[總分]")
+                
+                is_locked = (gid in locks and locks[gid].get("name") == o.get("name"))
+                if edge > (0.015 if is_locked else EDGE_THRESHOLD):
+                    pick = {
+                        "team": o.get("name", "Total"), "point": o["point"], "odds": o["price"],
+                        "prob": prob, "implied": 1/o["price"], "ev": ev, "clv": clv_val, 
+                        "label": label, "market": market_key, "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
+                        "time": sync_commence.strftime("%H:%M"), "locked": is_locked, 
+                        "is_live": is_live, "edge": edge, "date_key": date_key
+                    }
+                    if best_pick is None or ev > best_pick["ev"]: best_pick = pick
+
+        if best_pick:
+            if date_key not in grouped: grouped[date_key] = []
+            grouped[date_key].append(best_pick)
+            locks[gid] = {"name": best_pick["team"], "point": best_pick["point"]}
+            if best_pick["ev"] > PARLAY_EV_THRESHOLD and best_pick["clv"] >= 0 and not best_pick["is_live"]:
+                parlay_candidates.append(best_pick)
+
+    message = f"🛡️ **NBA V82.0 Quantum Uniform**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    for date, picks in grouped.items():
+        message += f"\n📅 **{date}**\n"
+        picks.sort(key=lambda x: x["ev"], reverse=True)
         for p in picks:
-            parlay_tag = "🔗 " if p["edge"] > PARLAY_THRESHOLD else ""
-            if p["edge"] > PARLAY_THRESHOLD: daily_parlay.append(p)
-
-            message += f"{parlay_tag}**{p['match']}** {p['label']}\n"
-            message += f"✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n"
-            message += f"💰 EV: **{p['ev']:+.2f}** | 📈 Edge: **{p['edge']:+.2%}**\n"
+            clv_str = f"{p['clv']:+.2%}" if p['clv'] != 0 else "↔️ 0.00%"
+            clv_icon = "📈" if p["clv"] > 0 else ("📉" if p["clv"] < 0 else "")
+            live_tag = "🔴 [場中] " if p["is_live"] else ""
+            parlay_tag = "🔗 " if (p["ev"] > PARLAY_EV_THRESHOLD and p["clv"] >= 0) else ""
+            message += f"{live_tag}{parlay_tag}**{p['match']}** {p['label']}\n"
+            message += f"{'🔒' if p['locked'] else '✨'} ⏰ {p['time']} | 🎯 {TEAM_CN.get(p['team'],p['team'])} {p['point']:+} @ **{p['odds']}**\n"
+            message += f"💰 EV: **+{p['ev']:.2f}** | CLV: {clv_icon} **{clv_str}**\n"
             message += f"📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n"
-            message += "--------\n"
+            message += f"📈 領先 (Edge): **{p['edge']:+.2%}**\n--------\n"
 
-        if len(daily_parlay) >= 2:
-            daily_parlay.sort(key=lambda x: x["edge"], reverse=True)
-            c1, c2 = daily_parlay[0], daily_parlay[1]
-            message += f"💎 **AI 推薦同日串關 (組合賠率 {c1['odds']*c2['odds']:.2f})**\n"
-            message += f"✅ {c1['match']} {c1['label']}\n✅ {c2['match']} {c2['label']}\n"
-            message += "================\n"
+    # --- 同日同類串關推薦 ---
+    if len(parlay_candidates) >= 2:
+        # 按日期分組
+        parlay_dict = {}
+        for c in parlay_candidates:
+            if c['date_key'] not in parlay_dict: parlay_dict[c['date_key']] = []
+            parlay_dict[c['date_key']].append(c)
+        
+        found_parlay = False
+        for date, d_picks in parlay_dict.items():
+            # 優先找同玩法
+            spreads = [x for x in d_picks if x['market'] == 'spreads']
+            if len(spreads) >= 2:
+                spreads.sort(key=lambda x: x['prob'], reverse=True)
+                top = spreads[:2]
+                message += f"\n💎 **AI 今日同日組合 (讓分/受讓)**\n"
+                message += f"✅ {top[0]['match']} ({top[0]['label']})\n✅ {top[1]['match']} ({top[1]['label']})\n"
+                message += f"📊 組合賠率: **{top[0]['odds']*top[1]['odds']:.2f}**\n"
+                found_parlay = True
+                break
+        
+        if not found_parlay:
+            parlay_candidates.sort(key=lambda x: x['prob'], reverse=True)
+            top = parlay_candidates[:2]
+            message += f"\n💎 **AI 跨日組合推薦 (最高勝率)**\n"
+            message += f"✅ {top[0]['match']} ({top[0]['label']})\n✅ {top[1]['match']} ({top[1]['label']})\n"
 
     requests.post(WEBHOOK, json={"content": message})
+    save_db({"history": history, "locks": locks})
 
-if __name__ == "__main__": run()
+if __name__=="__main__": run()
