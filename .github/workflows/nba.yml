@@ -3,7 +3,7 @@ name: NBA Odds Bot
 on:
   schedule:
     - cron: '0 22 * * *' # 每天早上 6:00 執行
-  workflow_dispatch:      # 允許手動執行按鈕
+  workflow_dispatch:      # 讓你可以手動點擊按鈕執行
 
 jobs:
   run-bot:
@@ -26,5 +26,5 @@ jobs:
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        # 【這裡要改】確保檔名跟你的 Python 檔案一模一樣
-        run: python main.py 
+        # 這裡已經根據你的截圖改為 nba_bot.py
+        run: python nba_bot.py
