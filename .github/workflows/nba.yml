@@ -2,17 +2,17 @@ name: NBA Odds Bot
 
 on:
   schedule:
-    - cron: '0 22 * * *' # 每天早上 6:00 執行 (UTC 22:00)
-  workflow_dispatch:      # 手動按鈕啟動
+    - cron: '0 22 * * *' # 每天早上 6:00 執行
+  workflow_dispatch:      # 允許手動執行按鈕
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: read     # 【必改】解決你截圖中的讀取權限問題
+      contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4 # 【必改】升級到 v4 更穩定
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -26,4 +26,5 @@ jobs:
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: nba_bot.py
+        # 【這裡要改】確保檔名跟你的 Python 檔案一模一樣
+        run: python main.py 
