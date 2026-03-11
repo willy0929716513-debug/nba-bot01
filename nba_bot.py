@@ -2,9 +2,10 @@ import requests
 import os
 import math
 from datetime import datetime, timedelta
+from itertools import combinations
 
 # ==========================================
-# NBA V150 AI Syndicate - Live Detection
+# NBA V155 AI Syndicate - Final Hybrid
 # ==========================================
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -32,7 +33,7 @@ TEAM_CN = {
     "Orlando Magic":"魔術","Charlotte Hornets":"黃蜂","Washington Wizards":"巫師",
     "Houston Rockets":"火箭","San Antonio Spurs":"馬刺","Memphis Grizzlies":"灰熊",
     "New Orleans Pelicans":"鵜鶘","Minnesota Timberwolves":"灰狼","Oklahoma City Thunder":"雷霆",
-    "Utah Jazz":"爵士","Sacramento Kings":"國王","Portland Trail Blazers":"拓荒者"
+    "Utah Jazz":"爵士","San Antonio Spurs":"馬刺","Washington Wizards":"巫師"
 }
 
 TEAM_STATS = {
@@ -59,8 +60,7 @@ def normal_cdf(x, mean, std):
 def predict_spread(home, away):
     h = TEAM_STATS.get(home, {"off":115, "def":115})
     a = TEAM_STATS.get(away, {"off":115, "def":115})
-    rating = ((h["off"] - h["def"]) - (a["off"] - a["def"])) / 2
-    return rating + HOME_ADV
+    return ((h["off"] - h["def"]) - (a["off"] - a["def"])) / 2 + HOME_ADV
 
 def pace_factor(home, away):
     p1, p2 = PACE.get(home, 99), PACE.get(away, 99)
@@ -68,117 +68,93 @@ def pace_factor(home, away):
 
 def calc_prob(model, line, pace):
     diff = model - line
-    std = SPREAD_STD_BASE + pace + abs(model) * 0.4
+    std = SPREAD_STD_BASE + pace + abs(model)*0.4
     prob = 1 - normal_cdf(0, diff, std)
-    if abs(line) > 10:
-        prob *= 0.95
+    if abs(line) > 10: prob *= 0.95
     return max(1 - MAX_PROB_CAP, min(prob, MAX_PROB_CAP))
 
 def run():
     now_tw = datetime.utcnow() + timedelta(hours=8)
-    r = requests.get(BASE_URL, params={
-        "apiKey": API_KEY, "regions": "us", "markets": "spreads", "oddsFormat": "decimal"
-    })
-    
+    r = requests.get(BASE_URL, params={"apiKey": API_KEY, "regions":"us","markets":"spreads","oddsFormat":"decimal"})
     if r.status_code != 200: return
-    games = r.json()
     
-    # 分成「場中」與「賽前」兩個容器
+    games = r.json()
     live_picks = []
     pregame_grouped = {}
 
     for g in games:
         home, away = g["home_team"], g["away_team"]
-        commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
+        commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")+timedelta(hours=8)
+        if now_tw > (commence_tw+timedelta(minutes=150)): continue
         
-        # 判斷是否為場中
         is_live = now_tw > commence_tw
-        
-        if now_tw > (commence_tw + timedelta(minutes=150)): continue
-
         display_tw = commence_tw + timedelta(minutes=DISPLAY_TIME_OFFSET)
         date_key = commence_tw.strftime("%m/%d (週%w)").replace("週0","週日").replace("週1","週一").replace("週2","週二").replace("週3","週三").replace("週4","週四").replace("週5","週五").replace("週6","週六")
 
         model_spread = predict_spread(home, away)
         pace = pace_factor(home, away)
 
-        market_lines = []
-        for book in g.get("bookmakers", []):
-            for m in book["markets"]:
-                if m["key"] == "spreads":
-                    for o in m["outcomes"]:
-                        if o["name"] == home: market_lines.append(o["point"])
-        
+        market_lines = [o["point"] for book in g.get("bookmakers", []) for m in book["markets"] if m["key"]=="spreads" for o in m["outcomes"] if o["name"]==home]
         if not market_lines: continue
-        avg_market_line = sum(market_lines) / len(market_lines)
-
-        if abs(model_spread - avg_market_line) < 1.5: continue
-        if abs(avg_market_line) > 14: continue
+        avg_market_line = sum(market_lines)/len(market_lines)
+        if abs(model_spread-avg_market_line)<1.5 or abs(avg_market_line)>14: continue
 
         best_pick = None
         for book in g.get("bookmakers", []):
             for m in book["markets"]:
-                if m["key"] != "spreads": continue
+                if m["key"]!="spreads": continue
                 for o in m["outcomes"]:
-                    target = model_spread if o["name"] == home else -model_spread
+                    target = model_spread if o["name"]==home else -model_spread
                     prob = calc_prob(target, o["point"], pace)
-                    odds = o["price"]
-                    ev = prob * (odds - 1) - (1 - prob)
-                    
-                    if ev >= MIN_EV_THRESHOLD:
+                    ev = prob*(o["price"]-1)-(1-prob)
+                    if ev>=MIN_EV_THRESHOLD:
                         pick = {
                             "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
                             "team": TEAM_CN.get(o["name"], o["name"]),
-                            "label": "[受讓]" if o["point"] > 0 else "[讓分]",
-                            "point": f"{o['point']:+}", "odds": odds,
-                            "ev": ev, "prob": prob, "implied": 1/odds, "edge": prob - (1/odds),
-                            "time": display_tw.strftime("%H:%M"),
-                            "is_live": is_live
+                            "label": "[受讓]" if o["point"]>0 else "[讓分]",
+                            "point": f"{o['point']:+}", "odds": o["price"],
+                            "ev": ev, "prob": prob, "implied":1/o["price"], "edge":prob-1/o["price"],
+                            "time": display_tw.strftime("%H:%M"), "is_live": is_live
                         }
-                        if not best_pick or ev > best_pick["ev"]:
-                            best_pick = pick
-
+                        if not best_pick or ev>best_pick["ev"]: best_pick=pick
+        
         if best_pick:
-            if is_live:
-                live_picks.append(best_pick)
-            else:
-                pregame_grouped.setdefault(date_key, []).append(best_pick)
+            if is_live: live_picks.append(best_pick)
+            else: pregame_grouped.setdefault(date_key, []).append(best_pick)
 
-    # 組裝輸出
-    message = f"🛡️ **NBA V150 AI Syndicate**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    # 輸出
+    message = f"🛡️ **NBA V155 AI Syndicate**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     message += f"🚫 過濾: EV < {MIN_EV_THRESHOLD} | 深盤 > 14 | 線差 < 1.5\n"
 
-    # 1. 輸出場中比賽 (Live)
     if live_picks:
         message += "\n🔥 **[場中比賽 LIVE]**\n"
         for p in live_picks:
-            message += f"**{p['match']}** {p['label']}\n"
-            message += f"✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n"
-            message += f"💰 EV: **+{p['ev']:.2f}** | 📊 勝率: **{p['prob']:.1%}**\n"
-            message += "--------\n"
+            message += f"**{p['match']}** {p['label']}\n✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n💰 EV: **+{p['ev']:.2f}** | 📊 勝率: **{p['prob']:.1%}**\n--------\n"
 
-    # 2. 輸出賽前預測 (Pregame)
-    if not pregame_grouped:
-        if not live_picks: message += "\n📭 目前無符合條件場次"
-    else:
-        for date, picks in pregame_grouped.items():
-            message += f"\n📅 **{date}**\n"
-            picks.sort(key=lambda x: x["ev"], reverse=True)
-            for p in picks:
-                message += f"**{p['match']}** {p['label']}\n"
-                message += f"✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n"
-                message += f"💰 EV: **+{p['ev']:.2f}** | 📈 Edge: **{p['edge']:+.2%}**\n"
-                message += f"📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n"
-                message += "--------\n"
+    for date, picks in pregame_grouped.items():
+        message += f"\n📅 **{date}**\n"
+        picks.sort(key=lambda x:x["ev"], reverse=True)
+        for p in picks:
+            message += f"**{p['match']}** {p['label']}\n✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n💰 EV: **+{p['ev']:.2f}** | 📈 Edge: **{p['edge']:+.2%}**\n📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n--------\n"
 
-            # 3. 賽前串關推薦 (排除場中)
-            if len(picks) >= 2:
-                top = picks[:2]
-                message += f"💎 **{date} AI 推薦串關 (賠率 {(top[0]['odds']*top[1]['odds']):.2f})**\n"
-                message += f"✅ {top[0]['match']} {top[0]['label']}\n✅ {top[1]['match']} {top[1]['label']}\n"
+        if len(picks)>=2:
+            best_combo = None
+            for n in [2, 3]:
+                if len(picks) < n: continue
+                for combo in combinations(picks, n):
+                    c_odds, c_ev, c_prob = 1, 0, 1
+                    for t in combo:
+                        c_odds *= t["odds"]
+                        c_ev += t["ev"]
+                        c_prob *= t["prob"]
+                    score = c_ev*0.6 + c_prob*0.4
+                    if not best_combo or score > best_combo[0]: best_combo = (score, combo, c_odds)
+            
+            if best_combo:
+                message += f"💎 **{date} AI 推薦串關 (賠率 {best_combo[2]:.2f})**\n"
+                for t in best_combo[1]: message += f"✅ {t['match']} {t['label']}\n"
                 message += "================\n"
 
     requests.post(WEBHOOK, json={"content": message})
 
-if __name__ == "__main__":
-    run()
+if __name__=="__main__": run()
