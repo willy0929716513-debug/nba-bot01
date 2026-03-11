@@ -4,21 +4,19 @@ import math
 from datetime import datetime, timedelta
 
 # ==========================================
-# NBA V150 AI Syndicate - Master Engine (Fixed)
+# NBA V150 AI Syndicate - Live Detection
 # ==========================================
 
-# 1. 基礎設定與環境變數
 API_KEY = os.getenv("ODDS_API_KEY")
 WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba/odds"
 
-MIN_EV_THRESHOLD = 0.30   
-MAX_PROB_CAP = 0.82       
-HOME_ADV = 2.4            
-DISPLAY_TIME_OFFSET = -10 
-SPREAD_STD_BASE = 12.5    
+MIN_EV_THRESHOLD = 0.30
+MAX_PROB_CAP = 0.82
+HOME_ADV = 2.4
+DISPLAY_TIME_OFFSET = -10
+SPREAD_STD_BASE = 12.5
 
-# 2. 全域數據字典 (必須定義在函式之前)
 PACE = {
     "Indiana Pacers":103, "Atlanta Hawks":101, "Golden State Warriors":101,
     "Oklahoma City Thunder":102, "Boston Celtics":100, "Denver Nuggets":97, "Miami Heat":96
@@ -55,20 +53,17 @@ TEAM_STATS = {
     "Memphis Grizzlies": {"off":113,"def":113}, "Orlando Magic": {"off":113,"def":110}
 }
 
-# 3. 核心數學函式
 def normal_cdf(x, mean, std):
     return 0.5 * (1 + math.erf((x - mean) / (std * math.sqrt(2))))
 
 def predict_spread(home, away):
-    # 這裡現在可以讀取到全域變數 TEAM_STATS
     h = TEAM_STATS.get(home, {"off":115, "def":115})
     a = TEAM_STATS.get(away, {"off":115, "def":115})
     rating = ((h["off"] - h["def"]) - (a["off"] - a["def"])) / 2
     return rating + HOME_ADV
 
 def pace_factor(home, away):
-    p1 = PACE.get(home, 99)
-    p2 = PACE.get(away, 99)
+    p1, p2 = PACE.get(home, 99), PACE.get(away, 99)
     return abs(p1 - p2) * 0.1
 
 def calc_prob(model, line, pace):
@@ -79,23 +74,26 @@ def calc_prob(model, line, pace):
         prob *= 0.95
     return max(1 - MAX_PROB_CAP, min(prob, MAX_PROB_CAP))
 
-# 4. 主程式邏輯
 def run():
     now_tw = datetime.utcnow() + timedelta(hours=8)
     r = requests.get(BASE_URL, params={
         "apiKey": API_KEY, "regions": "us", "markets": "spreads", "oddsFormat": "decimal"
     })
     
-    if r.status_code != 200:
-        print(f"API Error: {r.status_code}")
-        return
-
+    if r.status_code != 200: return
     games = r.json()
-    grouped = {}
+    
+    # 分成「場中」與「賽前」兩個容器
+    live_picks = []
+    pregame_grouped = {}
 
     for g in games:
         home, away = g["home_team"], g["away_team"]
         commence_tw = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
+        
+        # 判斷是否為場中
+        is_live = now_tw > commence_tw
+        
         if now_tw > (commence_tw + timedelta(minutes=150)): continue
 
         display_tw = commence_tw + timedelta(minutes=DISPLAY_TIME_OFFSET)
@@ -104,7 +102,6 @@ def run():
         model_spread = predict_spread(home, away)
         pace = pace_factor(home, away)
 
-        # 取得市場平均盤口進行過濾
         market_lines = []
         for book in g.get("bookmakers", []):
             for m in book["markets"]:
@@ -115,7 +112,6 @@ def run():
         if not market_lines: continue
         avg_market_line = sum(market_lines) / len(market_lines)
 
-        # 過濾邏輯：線差 > 1.5 且 盤口 <= 14
         if abs(model_spread - avg_market_line) < 1.5: continue
         if abs(avg_market_line) > 14: continue
 
@@ -128,44 +124,56 @@ def run():
                     prob = calc_prob(target, o["point"], pace)
                     odds = o["price"]
                     ev = prob * (odds - 1) - (1 - prob)
-                    edge = prob - (1/odds)
-
+                    
                     if ev >= MIN_EV_THRESHOLD:
-                        label = "[受讓]" if o["point"] > 0 else "[讓分]"
                         pick = {
                             "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
                             "team": TEAM_CN.get(o["name"], o["name"]),
-                            "label": label, "point": f"{o['point']:+}", "odds": odds,
-                            "ev": ev, "prob": prob, "implied": 1/odds, "edge": edge,
-                            "time": display_tw.strftime("%H:%M")
+                            "label": "[受讓]" if o["point"] > 0 else "[讓分]",
+                            "point": f"{o['point']:+}", "odds": odds,
+                            "ev": ev, "prob": prob, "implied": 1/odds, "edge": prob - (1/odds),
+                            "time": display_tw.strftime("%H:%M"),
+                            "is_live": is_live
                         }
                         if not best_pick or ev > best_pick["ev"]:
                             best_pick = pick
 
         if best_pick:
-            grouped.setdefault(date_key, []).append(best_pick)
+            if is_live:
+                live_picks.append(best_pick)
+            else:
+                pregame_grouped.setdefault(date_key, []).append(best_pick)
 
-    # 組裝訊息發送到 Discord
+    # 組裝輸出
     message = f"🛡️ **NBA V150 AI Syndicate**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
     message += f"🚫 過濾: EV < {MIN_EV_THRESHOLD} | 深盤 > 14 | 線差 < 1.5\n"
 
-    if not grouped:
-        message += "\n📭 目前無符合條件場次"
+    # 1. 輸出場中比賽 (Live)
+    if live_picks:
+        message += "\n🔥 **[場中比賽 LIVE]**\n"
+        for p in live_picks:
+            message += f"**{p['match']}** {p['label']}\n"
+            message += f"✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n"
+            message += f"💰 EV: **+{p['ev']:.2f}** | 📊 勝率: **{p['prob']:.1%}**\n"
+            message += "--------\n"
+
+    # 2. 輸出賽前預測 (Pregame)
+    if not pregame_grouped:
+        if not live_picks: message += "\n📭 目前無符合條件場次"
     else:
-        for date, picks in grouped.items():
+        for date, picks in pregame_grouped.items():
             message += f"\n📅 **{date}**\n"
             picks.sort(key=lambda x: x["ev"], reverse=True)
-            day_parlay = []
             for p in picks:
-                day_parlay.append(p)
                 message += f"**{p['match']}** {p['label']}\n"
                 message += f"✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n"
                 message += f"💰 EV: **+{p['ev']:.2f}** | 📈 Edge: **{p['edge']:+.2%}**\n"
                 message += f"📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n"
                 message += "--------\n"
 
-            if len(day_parlay) >= 2:
-                top = day_parlay[:2]
+            # 3. 賽前串關推薦 (排除場中)
+            if len(picks) >= 2:
+                top = picks[:2]
                 message += f"💎 **{date} AI 推薦串關 (賠率 {(top[0]['odds']*top[1]['odds']):.2f})**\n"
                 message += f"✅ {top[0]['match']} {top[0]['label']}\n✅ {top[1]['match']} {top[1]['label']}\n"
                 message += "================\n"
