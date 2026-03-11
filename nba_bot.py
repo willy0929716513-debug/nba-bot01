@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from itertools import combinations
 
 # ==========================================
-# NBA V155 AI Syndicate - Final Hybrid
+# NBA V170 Sharp Syndicate Engine - Final
 # ==========================================
 
 API_KEY = os.getenv("ODDS_API_KEY")
@@ -17,6 +17,7 @@ MAX_PROB_CAP = 0.82
 HOME_ADV = 2.4
 DISPLAY_TIME_OFFSET = -10
 SPREAD_STD_BASE = 12.5
+MIN_CLV = 0.5  # 至少領先市場 0.5 分才投
 
 PACE = {
     "Indiana Pacers":103, "Atlanta Hawks":101, "Golden State Warriors":101,
@@ -33,7 +34,7 @@ TEAM_CN = {
     "Orlando Magic":"魔術","Charlotte Hornets":"黃蜂","Washington Wizards":"巫師",
     "Houston Rockets":"火箭","San Antonio Spurs":"馬刺","Memphis Grizzlies":"灰熊",
     "New Orleans Pelicans":"鵜鶘","Minnesota Timberwolves":"灰狼","Oklahoma City Thunder":"雷霆",
-    "Utah Jazz":"爵士","San Antonio Spurs":"馬刺","Washington Wizards":"巫師"
+    "Utah Jazz":"爵士","Portland Trail Blazers":"拓荒者","Sacramento Kings":"國王"
 }
 
 TEAM_STATS = {
@@ -94,10 +95,13 @@ def run():
         model_spread = predict_spread(home, away)
         pace = pace_factor(home, away)
 
+        # 取得主隊市場平均線
         market_lines = [o["point"] for book in g.get("bookmakers", []) for m in book["markets"] if m["key"]=="spreads" for o in m["outcomes"] if o["name"]==home]
         if not market_lines: continue
         avg_market_line = sum(market_lines)/len(market_lines)
-        if abs(model_spread-avg_market_line)<1.5 or abs(avg_market_line)>14: continue
+
+        # 基礎過濾：線差 < 1.5 或 盤口 > 14 則跳過
+        if abs(model_spread - avg_market_line) < 1.5 or abs(avg_market_line) > 14: continue
 
         best_pick = None
         for book in g.get("bookmakers", []):
@@ -107,47 +111,51 @@ def run():
                     target = model_spread if o["name"]==home else -model_spread
                     prob = calc_prob(target, o["point"], pace)
                     ev = prob*(o["price"]-1)-(1-prob)
-                    if ev>=MIN_EV_THRESHOLD:
+                    
+                    # 修正 CLV 方向邏輯
+                    clv = (avg_market_line - o["point"]) if o["name"] == home else ((-avg_market_line) - o["point"])
+
+                    if ev >= MIN_EV_THRESHOLD and clv >= MIN_CLV:
                         pick = {
                             "match": f"{TEAM_CN.get(away,away)} @ {TEAM_CN.get(home,home)}",
                             "team": TEAM_CN.get(o["name"], o["name"]),
                             "label": "[受讓]" if o["point"]>0 else "[讓分]",
                             "point": f"{o['point']:+}", "odds": o["price"],
                             "ev": ev, "prob": prob, "implied":1/o["price"], "edge":prob-1/o["price"],
-                            "time": display_tw.strftime("%H:%M"), "is_live": is_live
+                            "clv": clv, "time": display_tw.strftime("%H:%M"), "is_live": is_live
                         }
-                        if not best_pick or ev>best_pick["ev"]: best_pick=pick
+                        if not best_pick or ev > best_pick["ev"]: best_pick = pick
         
         if best_pick:
             if is_live: live_picks.append(best_pick)
             else: pregame_grouped.setdefault(date_key, []).append(best_pick)
 
-    # 輸出
-    message = f"🛡️ **NBA V155 AI Syndicate**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
-    message += f"🚫 過濾: EV < {MIN_EV_THRESHOLD} | 深盤 > 14 | 線差 < 1.5\n"
+    # 輸出訊息
+    message = f"🛡️ **NBA V170 Sharp Syndicate Engine**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    message += f"🚫 過濾: EV < {MIN_EV_THRESHOLD} | 深盤 > 14 | CLV < {MIN_CLV}\n"
 
     if live_picks:
         message += "\n🔥 **[場中比賽 LIVE]**\n"
         for p in live_picks:
-            message += f"**{p['match']}** {p['label']}\n✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n💰 EV: **+{p['ev']:.2f}** | 📊 勝率: **{p['prob']:.1%}**\n--------\n"
+            message += f"**{p['match']}** {p['label']}\n✨ 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n💰 EV: **+{p['ev']:.2f}** | 📊 勝率: **{p['prob']:.1%}** | 🎯 CLV: **{p['clv']:+.2f}**\n--------\n"
 
     for date, picks in pregame_grouped.items():
         message += f"\n📅 **{date}**\n"
-        picks.sort(key=lambda x:x["ev"], reverse=True)
+        # 排序：優先排 CLV 優勢大且 EV 高的
+        picks.sort(key=lambda x: (x["clv"], x["ev"]), reverse=True)
         for p in picks:
-            message += f"**{p['match']}** {p['label']}\n✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n💰 EV: **+{p['ev']:.2f}** | 📈 Edge: **{p['edge']:+.2%}**\n📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n--------\n"
+            message += f"**{p['match']}** {p['label']}\n✨ ⏰ {p['time']} | 🎯 {p['team']} {p['point']} @ **{p['odds']}**\n💰 EV: **+{p['ev']:.2f}** | 🎯 CLV: **{p['clv']:+.2f}**\n📊 勝率: 模型 **{p['prob']:.1%}** vs 市場 **{p['implied']:.1%}**\n--------\n"
 
-        if len(picks)>=2:
+        if len(picks) >= 2:
             best_combo = None
             for n in [2, 3]:
                 if len(picks) < n: continue
                 for combo in combinations(picks, n):
-                    c_odds, c_ev, c_prob = 1, 0, 1
+                    c_odds, c_ev, c_prob, c_clv = 1, 0, 1, 0
                     for t in combo:
-                        c_odds *= t["odds"]
-                        c_ev += t["ev"]
-                        c_prob *= t["prob"]
-                    score = c_ev*0.6 + c_prob*0.4
+                        c_odds *= t["odds"]; c_ev += t["ev"]; c_prob *= t["prob"]; c_clv += t["clv"]
+                    # Sharp 評分公式
+                    score = c_ev*0.5 + c_prob*0.3 + c_clv*0.2
                     if not best_combo or score > best_combo[0]: best_combo = (score, combo, c_odds)
             
             if best_combo:
