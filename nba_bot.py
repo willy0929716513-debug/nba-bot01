@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("NBA_V98")
+log = logging.getLogger("NBA_V99")
 
 ODDS_API_KEY  = os.getenv("ODDS_API_KEY", "")
 RAPID_API_KEY = os.getenv("X_RAPIDAPI_KEY", "")
@@ -30,38 +30,43 @@ KELLY_FRACTION   = 0.25
 IMPACT_PLAYERS = {
     "Los Angeles Lakers":    ["doncic", "james", "reaves"],
     "Washington Wizards":    ["young", "davis", "sarr"],
-    "Golden State Warriors": ["green", "kuminga", "hield"],
-    "Cleveland Cavaliers":   ["harden", "mitchell", "allen"],
-    "Los Angeles Clippers":  ["leonard", "zubac", "powell"],
-    "Dallas Mavericks":      ["davis", "flagg", "irving"],
-    "Boston Celtics":        ["tatum", "brown", "hauser"],
+    "Golden State Warriors": ["curry", "green", "podzemski"],
+    "Cleveland Cavaliers":   ["harden", "mitchell", "mobley"],
+    "Los Angeles Clippers":  ["leonard", "garland", "powell"],
+    "Dallas Mavericks":      ["flagg", "thompson", "jones"],
+    "Boston Celtics":        ["brown", "white", "hauser"],
     "Denver Nuggets":        ["jokic", "murray", "gordon"],
-    "Oklahoma City Thunder": ["shai", "holmgren", "mccain"],
+    "Oklahoma City Thunder": ["shai", "holmgren", "williams"],
     "San Antonio Spurs":     ["wembanyama", "harper", "cp3"],
     "Milwaukee Bucks":       ["giannis", "lillard", "dieng"],
     "New York Knicks":       ["brunson", "towns", "alvarado"],
-    "Phoenix Suns":          ["durant", "booker", "beal"],
+    "Houston Rockets":       ["durant", "sengun", "thompson"],
+    "Indiana Pacers":        ["siakam", "turner", "zubac"],
 }
 
-SEASON_OUT = {"irving", "haliburton", "butler", "curry", "vucevic", "tatum"}
-SUPERSTARS = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young"}
+SEASON_OUT = {"irving", "haliburton", "butler", "tatum", "vanvleet"}
+LIMITED_PLAYERS = {"young", "davis", "curry"}
+SUPERSTARS = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young", "curry"}
 SUPERSTAR_PENALTY = 11.5
-STAR_PENALTY = 8.0
+STAR_PENALTY      = 8.0
+LIMITED_PENALTY   = 5.0
 
 FALLBACK_RATINGS = {
     "Los Angeles Lakers":    {"off": 118.5, "def": 112.0},
-    "Boston Celtics":        {"off": 119.0, "def": 111.0},
+    "Boston Celtics":        {"off": 118.0, "def": 111.5},
     "Denver Nuggets":        {"off": 119.0, "def": 111.0},
-    "Oklahoma City Thunder": {"off": 118.0, "def": 111.5},
-    "Cleveland Cavaliers":   {"off": 117.5, "def": 112.5},
-    "Golden State Warriors": {"off": 114.0, "def": 115.0},
+    "Oklahoma City Thunder": {"off": 119.0, "def": 110.5},
+    "Cleveland Cavaliers":   {"off": 117.5, "def": 112.0},
+    "Golden State Warriors": {"off": 113.0, "def": 115.5},
     "Milwaukee Bucks":       {"off": 117.0, "def": 113.0},
     "New York Knicks":       {"off": 116.0, "def": 113.0},
-    "Phoenix Suns":          {"off": 117.0, "def": 114.0},
+    "Houston Rockets":       {"off": 118.0, "def": 112.5},
     "San Antonio Spurs":     {"off": 115.0, "def": 116.0},
-    "Dallas Mavericks":      {"off": 115.5, "def": 115.0},
+    "Dallas Mavericks":      {"off": 113.0, "def": 116.0},
     "Washington Wizards":    {"off": 113.0, "def": 117.0},
-    "Los Angeles Clippers":  {"off": 115.0, "def": 114.5},
+    "Los Angeles Clippers":  {"off": 115.5, "def": 114.0},
+    "Indiana Pacers":        {"off": 115.0, "def": 114.5},
+    "Phoenix Suns":          {"off": 115.0, "def": 115.5},
 }
 DEFAULT_RATING = {"off": 116.0, "def": 114.0}
 
@@ -140,7 +145,6 @@ def save_history(history):
             if g.get("description") == "nba_bot_history":
                 gist_id = g["id"]
                 break
-
     payload = {
         "description": "nba_bot_history",
         "public": False,
@@ -200,7 +204,6 @@ def fetch_team_stats():
     if not data or "response" not in data:
         log.warning("Team stats API failed, using fallback ratings")
         return {}
-
     ratings = {}
     for team_data in data["response"]:
         try:
@@ -222,7 +225,6 @@ def fetch_team_stats():
             }
         except (KeyError, TypeError, ValueError):
             continue
-
     log.info("Live ratings loaded: %d teams", len(ratings))
     return ratings
 
@@ -242,7 +244,6 @@ def get_injury_report():
             if out:
                 fallback[team] = out
         return fallback
-
     injured = {}
     skip_statuses = {"available", "probable", "active"}
     for item in data:
@@ -251,12 +252,10 @@ def get_injury_report():
         status = item.get("status", "").lower()
         if not any(s in status for s in skip_statuses):
             injured.setdefault(team, []).append(player)
-
     for team, players in IMPACT_PLAYERS.items():
         for p in players:
             if p in SEASON_OUT and p not in injured.get(team, []):
                 injured.setdefault(team, []).append(p)
-
     log.info("Injury report loaded: %d entries", sum(len(v) for v in injured.values()))
     return injured
 
@@ -269,28 +268,41 @@ def predict_margin(home, away, injury_data, live_ratings):
 
     def get_missing(team):
         injured_lower = [p.lower() for p in injury_data.get(team, [])]
-        return [
-            k for k in IMPACT_PLAYERS.get(team, [])
-            if k in SEASON_OUT or any(k in p for p in injured_lower)
-        ]
+        result = []
+        for k in IMPACT_PLAYERS.get(team, []):
+            if k in SEASON_OUT or any(k in p for p in injured_lower):
+                result.append((k, "out"))
+            elif k in LIMITED_PLAYERS:
+                result.append((k, "limited"))
+        return result
 
     h_missing = get_missing(home)
     a_missing = get_missing(away)
 
-    for p in h_missing:
-        penalty = SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY
+    for p, status in h_missing:
+        if status == "out":
+            penalty = SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY
+        else:
+            penalty = LIMITED_PENALTY
         h_stat["off"] -= penalty * 0.6
         h_stat["def"] += penalty * 0.4
 
-    for p in a_missing:
-        penalty = SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY
+    for p, status in a_missing:
+        if status == "out":
+            penalty = SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY
+        else:
+            penalty = LIMITED_PENALTY
         a_stat["off"] -= penalty * 0.6
         a_stat["def"] += penalty * 0.4
 
     h_net  = (h_stat["off"] - h_stat["def"]) + h_base.get("form", 0.0)
     a_net  = (a_stat["off"] - a_stat["def"]) + a_base.get("form", 0.0)
     margin = (h_net - a_net) / 2 + HOME_ADVANTAGE
-    return margin, [p.capitalize() for p in h_missing], [p.capitalize() for p in a_missing]
+
+    def fmt(lst):
+        return ["%s(%s)" % (p.capitalize(), "缺" if s == "out" else "限") for p, s in lst]
+
+    return margin, fmt(h_missing), fmt(a_missing)
 
 
 def predict_total(home, away, live_ratings):
@@ -364,7 +376,6 @@ def chunked_send(content, webhook):
             chunk += line + "\n"
     if chunk:
         chunks.append(chunk)
-
     for i, part in enumerate(chunks, 1):
         label = "(%d/%d)\n%s" % (i, len(chunks), part) if len(chunks) > 1 else part
         try:
@@ -401,7 +412,6 @@ def run():
         except (KeyError, ValueError):
             continue
 
-        # 過濾已開賽場次
         if c_time_utc < now_utc:
             continue
 
@@ -437,7 +447,6 @@ def run():
 
                     if not (MIN_SPREAD <= abs(line) <= MAX_SPREAD):
                         continue
-                    # 過濾異常賠率
                     if not (MIN_PRICE < price <= MAX_PRICE):
                         continue
 
@@ -468,7 +477,7 @@ def run():
                     bet_cn        = TEAM_CN.get(name, name)
                     away_cn       = TEAM_CN.get(away, away)
                     home_cn       = TEAM_CN.get(home, home)
-                    missing_str   = "缺陣: " + ", ".join(missing) if missing else "陣容完整"
+                    missing_str   = "狀況: " + ", ".join(missing) if missing else "陣容完整"
                     consensus_str = "共識線: %+.1f" % consensus
 
                     msg = (
@@ -495,7 +504,6 @@ def run():
                             "kelly_stake": stake,
                             "msg":         msg,
                         }
-
                         if game_id not in history:
                             history[game_id] = {
                                 "date":        g_date,
@@ -521,7 +529,7 @@ def run():
         if total_picks else 0
     )
 
-    output = "🏀 NBA V98.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
+    output = "🏀 NBA V99.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
         now_tw.strftime("%m/%d %H:%M"), data_source, total_picks, avg_edge * 100
     )
 
