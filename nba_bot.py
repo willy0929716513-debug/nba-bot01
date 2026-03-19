@@ -117,7 +117,7 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 
 def get_injury_report():
     try:
-        url = "https://www.rotowire.com/basketball/nba-injuries.php"
+        url  = "https://www.rotowire.com/basketball/injury-report.php"
         hdrs = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
@@ -135,7 +135,8 @@ def get_injury_report():
                     if impact in line_lower and any(
                         s in line_lower for s in ["out", "injured", "dtd", "il-", "suspension"]
                     ):
-                        injured.setdefault(full_team, []).append(impact)
+                        if impact not in injured.get(full_team, []):
+                            injured.setdefault(full_team, []).append(impact)
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
@@ -500,7 +501,7 @@ def run():
                         "> 勝率: %.1f%% | Edge: %+.1f%% | Kelly建議: $%.1f\n"
                         "> %s\n"
                     ) % (
-                        tier, away_cn, home_cx,
+                        tier, away_cn, home_cn,
                         c_time_tw.strftime("%m/%d %H:%M"),
                         bet_cn, line, price, book.get("title", "?"),
                         missing_str, consensus_str,
