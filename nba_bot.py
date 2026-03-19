@@ -116,38 +116,34 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 
 
 def get_injury_report():
-    url  = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
+    url  = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
     data = safe_get(url)
-
-    if not data or "injuries" not in data:
-        log.warning("ESPN injury API failed, using SEASON_OUT fallback")
-        fallback = {}
-        for team, players in IMPACT_PLAYERS.items():
-            out = [p for p in players if p in SEASON_OUT]
-            if out:
-                fallback[team] = out
-        return fallback
-
     injured = {}
-    skip_statuses = {"active", "probable", "questionable"}
-    for team_data in data.get("injuries", []):
-        team = normalize_team(team_data.get("team", {}).get("displayName", ""))
-        if not team:
-            continue
-        for item in team_data.get("injuries", []):
-            status    = item.get("status", "").lower()
-            last_name = item.get("athlete", {}).get("lastName", "").lower()
-            if any(s in status for s in skip_statuses):
-                continue
-            if last_name:
-                injured.setdefault(team, []).append(last_name)
+
+    if data:
+        for event in data.get("events", []):
+            for competition in event.get("competitions", []):
+                for competitor in competition.get("competitors", []):
+                    team = normalize_team(
+                        competitor.get("team", {}).get("displayName", "")
+                    )
+                    if not team:
+                        continue
+                    for injury in competitor.get("injuries", []):
+                        status    = injury.get("status", "").lower()
+                        last_name = injury.get("athlete", {}).get("lastName", "").lower()
+                        if not last_name:
+                            continue
+                        if any(s in status for s in ["probable", "questionable", "active"]):
+                            continue
+                        injured.setdefault(team, []).append(last_name)
 
     for team, players in IMPACT_PLAYERS.items():
         for p in players:
             if p in SEASON_OUT and p not in injured.get(team, []):
                 injured.setdefault(team, []).append(p)
 
-    log.info("ESPN injury report loaded: %d entries", sum(len(v) for v in injured.values()))
+    log.info("Injury report loaded: %d entries", sum(len(v) for v in injured.values()))
     return injured
 
 
@@ -504,7 +500,6 @@ def run():
                         ou_note,
                     )
 
-                    # 每場每個書商都寫入 history（不再去重）
                     existing = daily_picks[g_date].get(game_id)
                     if existing is None or edge > existing["edge"]:
                         daily_picks[g_date][game_id] = {
@@ -515,8 +510,7 @@ def run():
                             "msg":         msg,
                         }
 
-                    # history key 加上書商名稱，每個推薦都記錄
-                    history_key = "%s_%s_%s" % (game_id, book.get("title", "?"), str(abs(line)))
+                    history_key = "%s_%s_%.1f" % (game_id, book.get("title", "?"), abs(line))
                     if history_key not in history and edge >= EDGE_THRESHOLD:
                         history[history_key] = {
                             "date":        g_date,
@@ -567,4 +561,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-
