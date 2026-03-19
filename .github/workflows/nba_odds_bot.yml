@@ -20,7 +20,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests nbainjuries
+        run: pip install requests nba_api
 
       - name: Run script
         env:
