@@ -118,7 +118,8 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 def get_injury_report():
     try:
         from nbainjuries import injury
-        data = injury.get_reportdata()
+        ts   = datetime.now().strftime("%Y%m%d")
+        data = injury.get_reportdata(ts)
         if not data:
             raise ValueError("empty response")
 
@@ -428,7 +429,6 @@ def run():
 
         g_date     = c_time_tw.strftime("%Y-%m-%d")
         home       = normalize_team(g.get("home_team", ""))
-        away       = normalize_team(g.get("away_type", ""))
         away       = normalize_team(g.get("away_team", ""))
         game_id    = "%s@%s_%s" % (away, home, g_date)
         bookmakers = g.get("bookmakers", [])
