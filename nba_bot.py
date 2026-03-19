@@ -8,10 +8,11 @@ from datetime import datetime, timedelta
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NBA_V99")
 
-ODDS_API_KEY  = os.getenv("ODDS_API_KEY", "")
-RAPID_API_KEY = os.getenv("X_RAPIDAPI_KEY", "")
-WEBHOOK       = os.getenv("DISCORD_WEBHOOK", "")
-GITHUB_TOKEN  = os.getenv("GH_TOKEN", "")
+ODDS_API_KEY      = os.getenv("ODDS_API_KEY", "")
+RAPID_API_KEY     = os.getenv("X_RAPIDAPI_KEY", "")
+WEBHOOK           = os.getenv("DISCORD_WEBHOOK", "")
+GITHUB_TOKEN      = os.getenv("GH_TOKEN", "")
+BALLDONTLIE_KEY   = os.getenv("BALLDONTLIE_KEY", "")
 
 SIMS             = 50000
 EDGE_THRESHOLD   = 0.05
@@ -44,9 +45,9 @@ IMPACT_PLAYERS = {
     "Indiana Pacers":        ["siakam", "turner", "zubac"],
 }
 
-SEASON_OUT = {"irving", "haliburton", "butler", "tatum", "vanvleet"}
+SEASON_OUT     = {"irving", "haliburton", "butler", "tatum", "vanvleet"}
 LIMITED_PLAYERS = {"young", "davis", "curry"}
-SUPERSTARS = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young", "curry"}
+SUPERSTARS     = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young", "curry"}
 SUPERSTAR_PENALTY = 11.5
 STAR_PENALTY      = 8.0
 LIMITED_PENALTY   = 5.0
@@ -192,32 +193,32 @@ def kelly_stake(prob, price, bankroll, fraction=KELLY_FRACTION):
 
 
 def fetch_team_stats():
-    headers = {
-        "X-RapidAPI-Key":  RAPID_API_KEY,
-        "X-RapidAPI-Host": "api-nba-v1.p.rapidapi.com",
-    }
-    data = safe_get(
-        "https://api-nba-v1.p.rapidapi.com/standings",
-        headers=headers,
-        params={"league": "standard", "season": "2025"},
-    )
-    if not data or "response" not in data:
-        log.warning("Team stats API failed, using fallback ratings")
+    if not BALLDONTLIE_KEY:
+        log.warning("BALLDONTLIE_KEY not set, using fallback")
         return {}
+    headers = {"Authorization": BALLDONTLIE_KEY}
+    data = safe_get(
+        "https://api.balldontlie.io/v1/standings",
+        headers=headers,
+        params={"season": 2025},
+    )
+    if not data or "data" not in data:
+        log.warning("Balldontlie standings failed, using fallback")
+        return {}
+
     ratings = {}
-    for team_data in data["response"]:
+    for team_data in data["data"]:
         try:
-            full_name = normalize_team(team_data["team"]["name"])
+            full_name = normalize_team(team_data["team"]["full_name"])
             if not full_name or full_name not in TEAM_CN:
                 continue
-            win   = int(team_data["win"]["total"])
-            loss  = int(team_data["loss"]["total"])
+            win   = int(team_data["wins"])
+            loss  = int(team_data["losses"])
             total = win + loss
             if total == 0:
                 continue
             win_pct    = win / total
-            last10_w   = int(team_data["win"].get("lastTen", 5))
-            form_score = (last10_w - 5) * 0.6
+            form_score = (win - loss) / total * 2
             ratings[full_name] = {
                 "off":  round(110.0 + win_pct * 18.0, 1),
                 "def":  round(120.0 - win_pct * 14.0, 1),
@@ -225,18 +226,27 @@ def fetch_team_stats():
             }
         except (KeyError, TypeError, ValueError):
             continue
-    log.info("Live ratings loaded: %d teams", len(ratings))
+
+    log.info("Balldontlie ratings loaded: %d teams", len(ratings))
     return ratings
 
 
 def get_injury_report():
-    url = "https://sports-information.p.rapidapi.com/nba/injuries"
-    headers = {
-        "X-RapidAPI-Key":  RAPID_API_KEY,
-        "X-RapidAPI-Host": "sports-information.p.rapidapi.com",
-    }
-    data = safe_get(url, headers=headers)
-    if not data:
+    if not BALLDONTLIE_KEY:
+        log.warning("BALLDONTLIE_KEY not set, using SEASON_OUT fallback")
+        fallback = {}
+        for team, players in IMPACT_PLAYERS.items():
+            out = [p for p in players if p in SEASON_OUT]
+            if out:
+                fallback[team] = out
+        return fallback
+
+    headers = {"Authorization": BALLDONTLIE_KEY}
+    data = safe_get(
+        "https://api.balldontlie.io/v1/player_injuries",
+        headers=headers,
+    )
+    if not data or "data" not in data:
         log.warning("Injury API failed, using SEASON_OUT fallback")
         fallback = {}
         for team, players in IMPACT_PLAYERS.items():
@@ -244,18 +254,23 @@ def get_injury_report():
             if out:
                 fallback[team] = out
         return fallback
+
     injured = {}
-    skip_statuses = {"available", "probable", "active"}
-    for item in data:
-        team   = normalize_team(item.get("team", ""))
-        player = item.get("player", "").lower()
-        status = item.get("status", "").lower()
-        if not any(s in status for s in skip_statuses):
-            injured.setdefault(team, []).append(player)
+    for item in data["data"]:
+        try:
+            team   = normalize_team(item["team"]["full_name"])
+            player = item["player"]["last_name"].lower()
+            status = item.get("status", "").lower()
+            if "available" not in status and "active" not in status:
+                injured.setdefault(team, []).append(player)
+        except (KeyError, TypeError):
+            continue
+
     for team, players in IMPACT_PLAYERS.items():
         for p in players:
             if p in SEASON_OUT and p not in injured.get(team, []):
                 injured.setdefault(team, []).append(p)
+
     log.info("Injury report loaded: %d entries", sum(len(v) for v in injured.values()))
     return injured
 
@@ -280,18 +295,12 @@ def predict_margin(home, away, injury_data, live_ratings):
     a_missing = get_missing(away)
 
     for p, status in h_missing:
-        if status == "out":
-            penalty = SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY
-        else:
-            penalty = LIMITED_PENALTY
+        penalty = (SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY) if status == "out" else LIMITED_PENALTY
         h_stat["off"] -= penalty * 0.6
         h_stat["def"] += penalty * 0.4
 
     for p, status in a_missing:
-        if status == "out":
-            penalty = SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY
-        else:
-            penalty = LIMITED_PENALTY
+        penalty = (SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY) if status == "out" else LIMITED_PENALTY
         a_stat["off"] -= penalty * 0.6
         a_stat["def"] += penalty * 0.4
 
@@ -386,7 +395,7 @@ def chunked_send(content, webhook):
 
 
 def run():
-    if not all([ODDS_API_KEY, RAPID_API_KEY, WEBHOOK]):
+    if not all([ODDS_API_KEY, WEBHOOK]):
         log.error("Missing env vars")
         return
 
