@@ -4,15 +4,15 @@ import random
 import logging
 import json
 from datetime import datetime, timedelta
+from html.parser import HTMLParser
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("NBA_V99")
 
-ODDS_API_KEY      = os.getenv("ODDS_API_KEY", "")
-RAPID_API_KEY     = os.getenv("X_RAPIDAPI_KEY", "")
-WEBHOOK           = os.getenv("DISCORD_WEBHOOK", "")
-GITHUB_TOKEN      = os.getenv("GH_TOKEN", "")
-BALLDONTLIE_KEY   = os.getenv("BALLDONTLIE_KEY", "")
+ODDS_API_KEY    = os.getenv("ODDS_API_KEY", "")
+WEBHOOK         = os.getenv("DISCORD_WEBHOOK", "")
+GITHUB_TOKEN    = os.getenv("GH_TOKEN", "")
+BALLDONTLIE_KEY = os.getenv("BALLDONTLIE_KEY", "")
 
 SIMS             = 50000
 EDGE_THRESHOLD   = 0.05
@@ -45,9 +45,9 @@ IMPACT_PLAYERS = {
     "Indiana Pacers":        ["siakam", "turner", "zubac"],
 }
 
-SEASON_OUT     = {"irving", "haliburton", "butler", "tatum", "vanvleet"}
+SEASON_OUT      = {"irving", "haliburton", "butler", "tatum", "vanvleet"}
 LIMITED_PLAYERS = {"young", "davis", "curry"}
-SUPERSTARS     = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young", "curry"}
+SUPERSTARS      = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young", "curry"}
 SUPERSTAR_PENALTY = 11.5
 STAR_PENALTY      = 8.0
 LIMITED_PENALTY   = 5.0
@@ -116,6 +116,156 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
     return None
 
 
+def safe_fetch(url, retries=3, timeout=15):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(url, headers=headers, timeout=timeout)
+            r.raise_for_status()
+            return r.text
+        except requests.exceptions.Timeout:
+            log.warning("Timeout attempt %d/%d: %s", attempt, retries, url)
+        except requests.exceptions.HTTPError as e:
+            log.error("HTTP error %s: %s", e.response.status_code, url)
+            break
+        except Exception as e:
+            log.warning("Fetch failed attempt %d/%d: %s", attempt, retries, e)
+    return None
+
+
+# ── Basketball-Reference 傷病爬蟲 ───────────────────────
+class InjuryParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.in_table = False
+        self.in_row   = False
+        self.in_cell  = False
+        self.cell_idx = 0
+        self.current  = {}
+        self.rows     = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "table" and "injuries" in attrs.get("id", ""):
+            self.in_table = True
+        if self.in_table and tag == "tr":
+            self.in_row  = True
+            self.cell_idx = 0
+            self.current  = {}
+        if self.in_row and tag in ("td", "th"):
+            self.in_cell = True
+
+    def handle_endtag(self, tag):
+        if tag == "table":
+            self.in_table = False
+        if tag == "tr" and self.in_row:
+            self.in_row = False
+            if self.current:
+                self.rows.append(self.current)
+        if tag in ("td", "th"):
+            self.in_cell  = False
+            self.cell_idx += 1
+
+    def handle_data(self, data):
+        if not self.in_cell:
+            return
+        data = data.strip()
+        if not data:
+            return
+        if self.cell_idx == 0:
+            self.current["player"] = data.lower()
+        elif self.cell_idx == 1:
+            self.current["team"] = data
+        elif self.cell_idx == 3:
+            self.current["status"] = data.lower()
+
+
+def get_injury_report():
+    html = safe_fetch("https://www.basketball-reference.com/friv/injuries.fcgi")
+
+    if not html:
+        log.warning("Basketball-Reference failed, using SEASON_OUT fallback")
+        fallback = {}
+        for team, players in IMPACT_PLAYERS.items():
+            out = [p for p in players if p in SEASON_OUT]
+            if out:
+                fallback[team] = out
+        return fallback
+
+    parser = InjuryParser()
+    parser.feed(html)
+
+    injured = {}
+    skip    = {"probable", "questionable"}
+    for row in parser.rows:
+        player = row.get("player", "")
+        team   = normalize_team(row.get("team", ""))
+        status = row.get("status", "")
+        if not team or not player:
+            continue
+        if any(s in status for s in skip):
+            continue
+        injured.setdefault(team, []).append(player)
+
+    for team, players in IMPACT_PLAYERS.items():
+        for p in players:
+            if p in SEASON_OUT and p not in injured.get(team, []):
+                injured.setdefault(team, []).append(p)
+
+    log.info("Injury report loaded: %d entries", sum(len(v) for v in injured.values()))
+    return injured
+
+
+# ── Balldontlie 免費 games 端點推算走勢 ─────────────────
+def fetch_team_stats():
+    if not BALLDONTLIE_KEY:
+        log.warning("BALLDONTLIE_KEY not set, using fallback")
+        return {}
+
+    headers = {"Authorization": BALLDONTLIE_KEY}
+    data = safe_get(
+        "https://api.balldontlie.io/v1/games",
+        headers=headers,
+        params={"seasons[]": 2025, "per_page": 100},
+    )
+    if not data or "data" not in data:
+        log.warning("Balldontlie games failed, using fallback")
+        return {}
+
+    win_loss = {}
+    for game in data["data"]:
+        if game.get("status") != "Final":
+            continue
+        home = normalize_team(game["home_team"]["full_name"])
+        away = normalize_team(game["visitor_team"]["full_name"])
+        hs   = game.get("home_team_score", 0)
+        vs   = game.get("visitor_team_score", 0)
+        if hs and vs:
+            win_loss.setdefault(home, {"w": 0, "l": 0})
+            win_loss.setdefault(away, {"w": 0, "l": 0})
+            if hs > vs:
+                win_loss[home]["w"] += 1
+                win_loss[away]["l"] += 1
+            else:
+                win_loss[away]["w"] += 1
+                win_loss[home]["l"] += 1
+
+    ratings = {}
+    for team, rec in win_loss.items():
+        if team not in TEAM_CN:
+            continue
+        total   = rec["w"] + rec["l"]
+        win_pct = rec["w"] / total if total else 0.5
+        ratings[team] = {
+            "off":  round(110.0 + win_pct * 18.0, 1),
+            "def":  round(120.0 - win_pct * 14.0, 1),
+            "form": round((win_pct - 0.5) * 4, 2),
+        }
+
+    log.info("Game-based ratings loaded: %d teams", len(ratings))
+    return ratings
+
+
 def load_history():
     if not GITHUB_TOKEN:
         return {}
@@ -139,7 +289,7 @@ def save_history(history):
         "Content-Type": "application/json",
     }
     content = json.dumps(history, ensure_ascii=False, indent=2)
-    gists = safe_get("https://api.github.com/gists", headers=headers)
+    gists   = safe_get("https://api.github.com/gists", headers=headers)
     gist_id = None
     if gists:
         for g in gists:
@@ -190,89 +340,6 @@ def kelly_stake(prob, price, bankroll, fraction=KELLY_FRACTION):
     k = (b * prob - q) / b
     k = max(0.0, k) * fraction
     return round(bankroll * k, 1)
-
-
-def fetch_team_stats():
-    if not BALLDONTLIE_KEY:
-        log.warning("BALLDONTLIE_KEY not set, using fallback")
-        return {}
-    headers = {"Authorization": BALLDONTLIE_KEY}
-    data = safe_get(
-        "https://api.balldontlie.io/v1/standings",
-        headers=headers,
-        params={"season": 2025},
-    )
-    if not data or "data" not in data:
-        log.warning("Balldontlie standings failed, using fallback")
-        return {}
-
-    ratings = {}
-    for team_data in data["data"]:
-        try:
-            full_name = normalize_team(team_data["team"]["full_name"])
-            if not full_name or full_name not in TEAM_CN:
-                continue
-            win   = int(team_data["wins"])
-            loss  = int(team_data["losses"])
-            total = win + loss
-            if total == 0:
-                continue
-            win_pct    = win / total
-            form_score = (win - loss) / total * 2
-            ratings[full_name] = {
-                "off":  round(110.0 + win_pct * 18.0, 1),
-                "def":  round(120.0 - win_pct * 14.0, 1),
-                "form": round(form_score, 2),
-            }
-        except (KeyError, TypeError, ValueError):
-            continue
-
-    log.info("Balldontlie ratings loaded: %d teams", len(ratings))
-    return ratings
-
-
-def get_injury_report():
-    if not BALLDONTLIE_KEY:
-        log.warning("BALLDONTLIE_KEY not set, using SEASON_OUT fallback")
-        fallback = {}
-        for team, players in IMPACT_PLAYERS.items():
-            out = [p for p in players if p in SEASON_OUT]
-            if out:
-                fallback[team] = out
-        return fallback
-
-    headers = {"Authorization": BALLDONTLIE_KEY}
-    data = safe_get(
-        "https://api.balldontlie.io/v1/player_injuries",
-        headers=headers,
-    )
-    if not data or "data" not in data:
-        log.warning("Injury API failed, using SEASON_OUT fallback")
-        fallback = {}
-        for team, players in IMPACT_PLAYERS.items():
-            out = [p for p in players if p in SEASON_OUT]
-            if out:
-                fallback[team] = out
-        return fallback
-
-    injured = {}
-    for item in data["data"]:
-        try:
-            team   = normalize_team(item["team"]["full_name"])
-            player = item["player"]["last_name"].lower()
-            status = item.get("status", "").lower()
-            if "available" not in status and "active" not in status:
-                injured.setdefault(team, []).append(player)
-        except (KeyError, TypeError):
-            continue
-
-    for team, players in IMPACT_PLAYERS.items():
-        for p in players:
-            if p in SEASON_OUT and p not in injured.get(team, []):
-                injured.setdefault(team, []).append(p)
-
-    log.info("Injury report loaded: %d entries", sum(len(v) for v in injured.values()))
-    return injured
 
 
 def predict_margin(home, away, injury_data, live_ratings):
@@ -538,7 +605,7 @@ def run():
         if total_picks else 0
     )
 
-    output = "🏀 NBA V99.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
+    output = "🏀 NBA V100.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
         now_tw.strftime("%m/%d %H:%M"), data_source, total_picks, avg_edge * 100
     )
 
