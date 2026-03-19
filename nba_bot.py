@@ -117,38 +117,36 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 
 def get_injury_report():
     try:
-        from nbainjuries import injury
-        now  = datetime.now()
-        data = injury.get_reportdata(now)
-        if not data:
-            raise ValueError("empty response")
+        url = "https://www.rotowire.com/basketball/nba-injuries.php"
+        hdrs = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        r = requests.get(url, headers=hdrs, timeout=15)
+        r.raise_for_status()
 
         injured = {}
-        skip = {"questionable", "probable", "active", "available"}
-        for item in data:
-            team   = normalize_team(item.get("Team", ""))
-            player = item.get("Player Name", "").lower()
-            status = item.get("Current Status", "").lower()
-            if "," in player:
-                last_name = player.split(",")[0].strip()
-            else:
-                last_name = player.split()[-1] if player.split() else ""
-            if not team or not last_name:
+        lines = r.text.split("\n")
+        for line in lines:
+            line_lower = line.strip().lower()
+            if not line_lower:
                 continue
-            if any(s in status for s in skip):
-                continue
-            injured.setdefault(team, []).append(last_name)
+            for full_team in IMPACT_PLAYERS:
+                for impact in IMPACT_PLAYERS[full_team]:
+                    if impact in line_lower and any(
+                        s in line_lower for s in ["out", "injured", "dtd", "il-", "suspension"]
+                    ):
+                        injured.setdefault(full_team, []).append(impact)
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
                 if p in SEASON_OUT and p not in injured.get(team, []):
                     injured.setdefault(team, []).append(p)
 
-        log.info("nbainjuries report loaded: %d entries", sum(len(v) for v in injured.values()))
+        log.info("RotoWire injury report loaded: %d entries", sum(len(v) for v in injured.values()))
         return injured
 
     except Exception as e:
-        log.warning("nbainjuries failed: %s, using SEASON_OUT fallback", e)
+        log.warning("RotoWire injury failed: %s, using SEASON_OUT fallback", e)
         fallback = {}
         for team, players in IMPACT_PLAYERS.items():
             out = [p for p in players if p in SEASON_OUT]
@@ -502,7 +500,7 @@ def run():
                         "> 勝率: %.1f%% | Edge: %+.1f%% | Kelly建議: $%.1f\n"
                         "> %s\n"
                     ) % (
-                        tier, away_cn, home_cn,
+                        tier, away_cn, home_cx,
                         c_time_tw.strftime("%m/%d %H:%M"),
                         bet_cn, line, price, book.get("title", "?"),
                         missing_str, consensus_str,
