@@ -5,76 +5,76 @@ import logging
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("NBA_V96")
+log = logging.getLogger("NBA_V97")
 
 ODDS_API_KEY  = os.getenv("ODDS_API_KEY", "")
 RAPID_API_KEY = os.getenv("X_RAPIDAPI_KEY", "")
 WEBHOOK       = os.getenv("DISCORD_WEBHOOK", "")
 
-SIMS             = 30000
+SIMS             = 50000
 EDGE_THRESHOLD   = 0.025
-MODEL_WEIGHT     = 0.45
-MARKET_WEIGHT    = 0.55
-DYNAMIC_STD_BASE = 14.8
+MODEL_WEIGHT     = 0.40
+MARKET_WEIGHT    = 0.60
+DYNAMIC_STD_BASE = 13.5
 HOME_ADVANTAGE   = 2.8
-MAX_SPREAD       = 22.0
-MIN_SPREAD       = 0.5
+MAX_SPREAD       = 18.0
+MIN_SPREAD       = 1.0
 DISCORD_CHAR_LIMIT = 1900
 
 IMPACT_PLAYERS = {
-    "Los Angeles Lakers":    ["doncic", "james", "ayton"],
+    "Los Angeles Lakers":    ["doncic", "james", "reaves"],
     "Washington Wizards":    ["young", "davis", "sarr"],
-    "Golden State Warriors": ["curry", "porzingis", "green"],
+    "Golden State Warriors": ["green", "kuminga", "hield"],
     "Cleveland Cavaliers":   ["harden", "mitchell", "allen"],
-    "Los Angeles Clippers":  ["garland", "leonard", "powell"],
-    "Dallas Mavericks":      ["flagg", "thompson", "irving"],
-    "Boston Celtics":        ["tatum", "brown", "vucevic"],
-    "Denver Nuggets":        ["jokic", "murray", "tyus"],
-    "Oklahoma City Thunder": ["shai", "holmgren", "williams"],
+    "Los Angeles Clippers":  ["leonard", "zubac", "powell"],
+    "Dallas Mavericks":      ["davis", "flagg", "irving"],
+    "Boston Celtics":        ["tatum", "brown", "hauser"],
+    "Denver Nuggets":        ["jokic", "murray", "gordon"],
+    "Oklahoma City Thunder": ["shai", "holmgren", "mccain"],
     "San Antonio Spurs":     ["wembanyama", "harper", "cp3"],
     "Milwaukee Bucks":       ["giannis", "lillard", "dieng"],
     "New York Knicks":       ["brunson", "towns", "alvarado"],
     "Phoenix Suns":          ["durant", "booker", "beal"],
 }
 
-SEASON_OUT = {"irving", "haliburton", "butler"}
-SUPERSTARS = {"doncic", "jokic", "shai", "giannis", "curry", "durant", "james"}
+SEASON_OUT = {"irving", "haliburton", "butler", "curry", "vucevic", "tatum"}
+SUPERSTARS = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young"}
 SUPERSTAR_PENALTY = 11.5
 STAR_PENALTY = 8.0
 
-TEAM_RATINGS = {
+FALLBACK_RATINGS = {
     "Los Angeles Lakers":    {"off": 118.5, "def": 112.0},
-    "Boston Celtics":        {"off": 120.0, "def": 110.5},
+    "Boston Celtics":        {"off": 119.0, "def": 111.0},
     "Denver Nuggets":        {"off": 119.0, "def": 111.0},
     "Oklahoma City Thunder": {"off": 118.0, "def": 111.5},
     "Cleveland Cavaliers":   {"off": 117.5, "def": 112.5},
-    "Golden State Warriors": {"off": 116.5, "def": 113.5},
+    "Golden State Warriors": {"off": 114.0, "def": 115.0},
     "Milwaukee Bucks":       {"off": 117.0, "def": 113.0},
     "New York Knicks":       {"off": 116.0, "def": 113.0},
     "Phoenix Suns":          {"off": 117.0, "def": 114.0},
     "San Antonio Spurs":     {"off": 115.0, "def": 116.0},
     "Dallas Mavericks":      {"off": 115.5, "def": 115.0},
-    "Washington Wizards":    {"off": 116.0, "def": 115.5},
+    "Washington Wizards":    {"off": 113.0, "def": 117.0},
     "Los Angeles Clippers":  {"off": 115.0, "def": 114.5},
 }
 DEFAULT_RATING = {"off": 116.0, "def": 114.0}
 
 TEAM_CN = {
-    "Boston Celtics": "celtics", "Milwaukee Bucks": "bucks",
-    "Denver Nuggets": "nuggets", "Golden State Warriors": "warriors",
-    "Los Angeles Lakers": "lakers", "Phoenix Suns": "suns",
-    "Dallas Mavericks": "mavs", "Los Angeles Clippers": "clippers",
-    "Miami Heat": "heat", "Philadelphia 76ers": "sixers",
-    "New York Knicks": "knicks", "Toronto Raptors": "raptors",
-    "Chicago Bulls": "bulls", "Atlanta Hawks": "hawks",
-    "Brooklyn Nets": "nets", "Cleveland Cavaliers": "cavs",
-    "Indiana Pacers": "pacers", "Detroit Pistons": "pistons",
-    "Orlando Magic": "magic", "Charlotte Hornets": "hornets",
-    "Washington Wizards": "wizards", "Houston Rockets": "rockets",
-    "San Antonio Spurs": "spurs", "Memphis Grizzlies": "grizzlies",
-    "New Orleans Pelicans": "pelicans", "Minnesota Timberwolves": "wolves",
-    "Oklahoma City Thunder": "thunder", "Utah Jazz": "jazz",
-    "Sacramento Kings": "kings", "Portland Trail Blazers": "blazers",
+    "Boston Celtics": "塞爾提克", "Milwaukee Bucks": "公鹿",
+    "Denver Nuggets": "金塊", "Golden State Warriors": "勇士",
+    "Los Angeles Lakers": "湖人", "Phoenix Suns": "太陽",
+    "Dallas Mavericks": "獨行俠", "Los Angeles Clippers": "快艇",
+    "Miami Heat": "熱火", "Philadelphia 76ers": "七六人",
+    "New York Knicks": "尼克", "Toronto Raptors": "暴龍",
+    "Chicago Bulls": "公牛", "Atlanta Hawks": "老鷹",
+    "Brooklyn Nets": "籃網", "Cleveland Cavaliers": "騎士",
+    "Indiana Pacers": "溜馬", "Detroit Pistons": "活塞",
+    "Orlando Magic": "魔術", "Charlotte Hornets": "黃蜂",
+    "Washington Wizards": "巫師", "Houston Rockets": "火箭",
+    "San Antonio Spurs": "馬刺", "Memphis Grizzlies": "灰熊",
+    "New Orleans Pelicans": "鵜鶘", "Minnesota Timberwolves": "灰狼",
+    "Oklahoma City Thunder": "雷霆", "Utah Jazz": "爵士",
+    "Sacramento Kings": "國王", "Portland Trail Blazers": "拓荒者",
 }
 
 
@@ -102,6 +102,54 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
         except Exception as e:
             log.warning("Request failed attempt %d/%d: %s", attempt, retries, e)
     return None
+
+
+def fetch_team_stats():
+    headers = {
+        "X-RapidAPI-Key":  RAPID_API_KEY,
+        "X-RapidAPI-Host": "api-nba-v1.p.rapidapi.com",
+    }
+    data = safe_get(
+        "https://api-nba-v1.p.rapidapi.com/standings",
+        headers=headers,
+        params={"league": "standard", "season": "2025"}
+    )
+
+    if not data or "response" not in data:
+        log.warning("Team stats API failed, using fallback ratings")
+        return {}
+
+    ratings = {}
+    for team_data in data["response"]:
+        try:
+            team_name = team_data["team"]["name"]
+            full_name = normalize_team(team_name)
+            if not full_name or full_name not in TEAM_CN:
+                continue
+
+            win   = int(team_data["win"]["total"])
+            loss  = int(team_data["loss"]["total"])
+            total = win + loss
+            if total == 0:
+                continue
+
+            win_pct  = win / total
+            last10_w = int(team_data["win"].get("lastTen", 5))
+            form_score = (last10_w - 5) * 0.6
+
+            off_rating = 110.0 + win_pct * 18.0
+            def_rating = 120.0 - win_pct * 14.0
+
+            ratings[full_name] = {
+                "off":  round(off_rating, 1),
+                "def":  round(def_rating, 1),
+                "form": round(form_score, 2),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+
+    log.info("Live team ratings loaded: %d teams", len(ratings))
+    return ratings
 
 
 def get_injury_report():
@@ -139,9 +187,11 @@ def get_injury_report():
     return injured
 
 
-def predict_margin(home, away, injury_data):
-    h_stat = dict(TEAM_RATINGS.get(home, DEFAULT_RATING))
-    a_stat = dict(TEAM_RATINGS.get(away, DEFAULT_RATING))
+def predict_margin(home, away, injury_data, live_ratings):
+    h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
+    a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
+    h_stat = dict(h_base)
+    a_stat = dict(a_base)
 
     def get_missing(team):
         injured_lower = [p.lower() for p in injury_data.get(team, [])]
@@ -163,8 +213,30 @@ def predict_margin(home, away, injury_data):
         a_stat["off"] -= penalty * 0.6
         a_stat["def"] += penalty * 0.4
 
-    margin = ((h_stat["off"] - h_stat["def"]) - (a_stat["off"] - a_stat["def"])) / 2 + HOME_ADVANTAGE
+    h_form = h_base.get("form", 0.0)
+    a_form = a_base.get("form", 0.0)
+
+    h_net = (h_stat["off"] - h_stat["def"]) + h_form
+    a_net = (a_stat["off"] - a_stat["def"]) + a_form
+
+    margin = (h_net - a_net) / 2 + HOME_ADVANTAGE
     return margin, [p.capitalize() for p in h_missing], [p.capitalize() for p in a_missing]
+
+
+def get_consensus_line(bookmakers, team_name):
+    lines = []
+    for book in bookmakers:
+        for market in book.get("markets", []):
+            if market.get("key") != "spreads":
+                continue
+            for outcome in market.get("outcomes", []):
+                if normalize_team(outcome.get("name", "")) == team_name:
+                    pt = outcome.get("point", None)
+                    if pt is not None:
+                        lines.append(pt)
+    if not lines:
+        return None
+    return sum(lines) / len(lines)
 
 
 def simulate_cover(blended, line):
@@ -179,7 +251,10 @@ def fetch_odds():
         "markets":    "spreads",
         "oddsFormat": "decimal",
     }
-    data = safe_get("https://api.the-odds-api.com/v4/sports/basketball_nba/odds/", params=params)
+    data = safe_get(
+        "https://api.the-odds-api.com/v4/sports/basketball_nba/odds/",
+        params=params
+    )
     if data is None:
         log.error("Odds API failed")
         return []
@@ -216,6 +291,10 @@ def run():
     now_tw  = datetime.utcnow() + timedelta(hours=8)
     today_s = now_tw.strftime("%Y-%m-%d")
 
+    live_ratings = fetch_team_stats()
+    data_source  = "即時數據" if live_ratings else "靜態備用"
+    log.info("Using: %s", data_source)
+
     injuries = get_injury_report()
     games    = fetch_odds()
     if not games:
@@ -235,9 +314,10 @@ def run():
         game_id = "%s@%s" % (away, home)
 
         daily_picks.setdefault(g_date, {})
-        margin, h_missing, a_missing = predict_margin(home, away, injuries)
+        margin, h_missing, a_missing = predict_margin(home, away, injuries, live_ratings)
+        bookmakers = g.get("bookmakers", [])
 
-        for book in g.get("bookmakers", []):
+        for book in bookmakers:
             for market in book.get("markets", []):
                 if market.get("key") != "spreads":
                     continue
@@ -251,10 +331,15 @@ def run():
                     if price <= 1.0:
                         continue
 
+                    consensus = get_consensus_line(bookmakers, name)
+                    if consensus is None:
+                        consensus = line
+
                     target  = margin if name == home else -margin
-                    blended = target * MODEL_WEIGHT + (-line) * MARKET_WEIGHT
-                    prob    = simulate_cover(blended, line)
-                    edge    = prob - (1 / price)
+                    blended = target * MODEL_WEIGHT + (-consensus) * MARKET_WEIGHT
+
+                    prob = simulate_cover(blended, line)
+                    edge = prob - (1 / price)
 
                     if edge < EDGE_THRESHOLD:
                         continue
@@ -262,21 +347,28 @@ def run():
                     missing = (h_missing if name == home else a_missing) + \
                               (a_missing if name == home else h_missing)
 
-                    tier = "TOP" if edge > 0.07 else ("STRONG" if edge > 0.05 else "SOLID")
-                    bet_cn  = TEAM_CN.get(name, name)
-                    away_cn = TEAM_CN.get(away, away)
-                    home_cn = TEAM_CN.get(home, home)
-                    missing_str = "OUT: " + ", ".join(missing) if missing else "FULL ROSTER"
+                    if edge > 0.07:
+                        tier = "💎 頂級"
+                    elif edge > 0.05:
+                        tier = "🔥 強力"
+                    else:
+                        tier = "⭐ 穩定"
+
+                    bet_cn        = TEAM_CN.get(name, name)
+                    away_cn       = TEAM_CN.get(away, away)
+                    home_cn       = TEAM_CN.get(home, home)
+                    missing_str   = "缺陣: " + ", ".join(missing) if missing else "陣容完整"
+                    consensus_str = "共識線: %+.1f" % consensus
 
                     msg = (
                         "**[%s] %s @ %s** (%s)\n"
-                        "Bet: `%s %+.1f` @ **%.2f** (%s)\n"
-                        "> %s | Win%%: %.1f%% | Edge: %+.1f%%\n"
+                        "投注: `%s %+.1f` @ **%.2f** (%s)\n"
+                        "> %s | %s | 勝率: %.1f%% | Edge: %+.1f%%\n"
                     ) % (
                         tier, away_cn, home_cn,
                         c_time.strftime("%m/%d %H:%M"),
                         bet_cn, line, price, book.get("title", "?"),
-                        missing_str, prob * 100, edge * 100
+                        missing_str, consensus_str, prob * 100, edge * 100
                     )
 
                     existing = daily_picks[g_date].get(game_id)
@@ -289,15 +381,15 @@ def run():
         if total_picks else 0
     )
 
-    output = "NBA V96.0 | Updated: %s | Picks: %d | Avg Edge: %+.1f%%\n" % (
-        now_tw.strftime("%m/%d %H:%M"), total_picks, avg_edge * 100
+    output = "🏀 NBA V97.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
+        now_tw.strftime("%m/%d %H:%M"), data_source, total_picks, avg_edge * 100
     )
 
     if not daily_picks:
-        output += "\nNo qualifying picks today.\n"
+        output += "\n今日無符合條件之推薦。\n"
     else:
         for date in sorted(daily_picks):
-            label = "[TODAY]" if date == today_s else ("[%s]" % date)
+            label = "📅 今日賽事" if date == today_s else ("⏭ 預告 %s" % date)
             output += "\n%s\n" % label
             for p in sorted(daily_picks[date].values(), key=lambda x: x["edge"], reverse=True):
                 output += p["msg"]
