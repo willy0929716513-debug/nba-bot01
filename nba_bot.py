@@ -116,35 +116,41 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 
 
 def get_injury_report():
-    url  = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
-    data = safe_get(url)
-    injured = {}
+    try:
+        from nbainjuries import injury
+        data = injury.get_reportdata()
+        if not data:
+            raise ValueError("empty response")
 
-    if data:
-        for event in data.get("events", []):
-            for competition in event.get("competitions", []):
-                for competitor in competition.get("competitors", []):
-                    team = normalize_team(
-                        competitor.get("team", {}).get("displayName", "")
-                    )
-                    if not team:
-                        continue
-                    for injury in competitor.get("injuries", []):
-                        status    = injury.get("status", "").lower()
-                        last_name = injury.get("athlete", {}).get("lastName", "").lower()
-                        if not last_name:
-                            continue
-                        if any(s in status for s in ["probable", "questionable", "active"]):
-                            continue
-                        injured.setdefault(team, []).append(last_name)
+        injured = {}
+        skip = {"questionable", "probable", "available", "active"}
+        for item in data:
+            team      = normalize_team(item.get("Team", ""))
+            player    = item.get("Player Name", "").lower()
+            status    = item.get("Current Status", "").lower()
+            last_name = player.split(",")[0].strip() if "," in player else player.split()[-1]
+            if not team or not last_name:
+                continue
+            if any(s in status for s in skip):
+                continue
+            injured.setdefault(team, []).append(last_name)
 
-    for team, players in IMPACT_PLAYERS.items():
-        for p in players:
-            if p in SEASON_OUT and p not in injured.get(team, []):
-                injured.setdefault(team, []).append(p)
+        for team, players in IMPACT_PLAYERS.items():
+            for p in players:
+                if p in SEASON_OUT and p not in injured.get(team, []):
+                    injured.setdefault(team, []).append(p)
 
-    log.info("Injury report loaded: %d entries", sum(len(v) for v in injured.values()))
-    return injured
+        log.info("nbainjuries report loaded: %d entries", sum(len(v) for v in injured.values()))
+        return injured
+
+    except Exception as e:
+        log.warning("nbainjuries failed: %s, using SEASON_OUT fallback", e)
+        fallback = {}
+        for team, players in IMPACT_PLAYERS.items():
+            out = [p for p in players if p in SEASON_OUT]
+            if out:
+                fallback[team] = out
+        return fallback
 
 
 def fetch_team_stats():
@@ -422,6 +428,7 @@ def run():
 
         g_date     = c_time_tw.strftime("%Y-%m-%d")
         home       = normalize_team(g.get("home_team", ""))
+        away       = normalize_team(g.get("away_type", ""))
         away       = normalize_team(g.get("away_team", ""))
         game_id    = "%s@%s_%s" % (away, home, g_date)
         bookmakers = g.get("bookmakers", [])
