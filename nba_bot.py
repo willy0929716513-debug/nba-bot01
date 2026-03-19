@@ -5,7 +5,7 @@ import random
 from datetime import datetime, timedelta
 
 # ==========================================
-# NBA V83.0 Final - Market Scanner + Auto Injury
+# NBA V84.2 Ultimate Accuracy - 整合修復版
 # ==========================================
 
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
@@ -14,32 +14,48 @@ WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 BASE_URL = "https://api.the-odds-api.com/v4/sports/basketball_nba"
 
 # --- 核心分析參數 ---
-SIMS = 20000
-EDGE_THRESHOLD = 0.01      # 1% 以上就顯示，讓你觀察全盤
-MODEL_WEIGHT = 0.45        # 模型佔比
-MARKET_WEIGHT = 0.55       # 市場權重 (避險)
+SIMS = 25000               # 提高模擬次數增加穩定度
+EDGE_THRESHOLD = 0.02      # 門檻 2% 
+MODEL_WEIGHT = 0.45
+MARKET_WEIGHT = 0.55
+DYNAMIC_STD_BASE = 14.5    # 提高標準差防止勝率膨脹
 
-# 明星球員名單 (對戰力影響最大的人)
-IMPACT_PLAYERS = {
-    "Boston Celtics": ["Jayson Tatum", "Jaylen Brown", "Kristaps Porzingis"],
-    "Denver Nuggets": ["Nikola Jokic", "Jamal Murray"],
-    "Milwaukee Bucks": ["Giannis Antetokounmpo", "Damian Lillard"],
-    "Dallas Mavericks": ["Luka Doncic", "Kyrie Irving"],
-    "Philadelphia 76ers": ["Joel Embiid", "Tyrese Maxey"],
-    "Los Angeles Lakers": ["LeBron James", "Anthony Davis"],
-    "Golden State Warriors": ["Stephen Curry"],
-    "Phoenix Suns": ["Kevin Durant", "Devin Booker"],
-    "Minnesota Timberwolves": ["Anthony Edwards", "Karl-Anthony Towns"],
-    "Oklahoma City Thunder": ["Shai Gilgeous-Alexander", "Chet Holmgren"],
-    "Sacramento Kings": ["De'Aaron Fox", "Domantas Sabonis"],
-    "Indiana Pacers": ["Tyrese Haliburton"],
-    "Miami Heat": ["Jimmy Butler", "Bam Adebayo"],
-    "New York Knicks": ["Jalen Brunson"]
-}
+# --- 1. 名稱正規化工具 (修復關鍵) ---
+def clean_name(name):
+    """將 'James, LeBron' 或 'L. James' 統一轉為小寫名姓格式"""
+    if not name: return ""
+    name = name.lower().replace("'", "").replace(".", "").replace("-", " ")
+    if "," in name:
+        parts = name.split(",")
+        return f"{parts[1].strip()} {parts[0].strip()}"
+    return name.strip()
 
+def normalize_team(team_name):
+    """統一球隊名稱對應"""
+    for full_name in TEAM_STATS.keys():
+        if team_name in full_name or full_name in team_name:
+            return full_name
+    return team_name
+
+# --- 2. 數據庫 ---
 TEAM_CN = {"Boston Celtics":"塞爾提克","Milwaukee Bucks":"公鹿","Denver Nuggets":"金塊","Golden State Warriors":"勇士","Los Angeles Lakers":"湖人","Phoenix Suns":"太陽","Dallas Mavericks":"獨行俠","Los Angeles Clippers":"快艇","Miami Heat":"熱火","Philadelphia 76ers":"七六人","New York Knicks":"尼克","Toronto Raptors":"暴龍","Chicago Bulls":"公牛","Atlanta Hawks":"老鷹","Brooklyn Nets":"籃網","Cleveland Cavaliers":"騎士","Indiana Pacers":"溜馬","Detroit Pistons":"活塞","Orlando Magic":"魔術","Charlotte Hornets":"黃蜂","Washington Wizards":"巫師","Houston Rockets":"火箭","San Antonio Spurs":"馬刺","Memphis Grizzlies":"灰熊","New Orleans Pelicans":"鵜鶘","Minnesota Timberwolves":"灰狼","Oklahoma City Thunder":"雷霆","Utah Jazz":"爵士","Sacramento Kings":"國王","Portland Trail Blazers":"拓荒者"}
 
-# 球隊基礎數據 (2026 最新版)
+IMPACT_PLAYERS = {
+    "Boston Celtics": ["jayson tatum", "jaylen brown", "kristaps porzingis"],
+    "Denver Nuggets": ["nikola jokic", "jamal murray"],
+    "Milwaukee Bucks": ["giannis antetokounmpo", "damian lillard"],
+    "Dallas Mavericks": ["luka doncic", "kyrie irving"],
+    "Philadelphia 76ers": ["joel embiid", "tyrese maxey"],
+    "Los Angeles Lakers": ["lebron james", "anthony davis"],
+    "Golden State Warriors": ["stephen curry"],
+    "Phoenix Suns": ["kevin durant", "devin bootker"],
+    "Minnesota Timberwolves": ["anthony edwards", "karl anthony towns"],
+    "Oklahoma City Thunder": ["shai gilgeous alexander", "chet holmgren"],
+    "Sacramento Kings": ["dearon fox", "domantas sabonis"],
+    "New York Knicks": ["jalen brunson"],
+    "Indiana Pacers": ["tyrese haliburton"]
+}
+
 TEAM_STATS = {
     "Boston Celtics": {"off":121,"def":110,"pace":99}, "Denver Nuggets": {"off":118,"def":112,"pace":97},
     "Oklahoma City Thunder": {"off":120,"def":111,"pace":101}, "Milwaukee Bucks": {"off":119,"def":113,"pace":100},
@@ -58,87 +74,88 @@ TEAM_STATS = {
     "Memphis Grizzlies": {"off":113,"def":113,"pace":100}, "Orlando Magic": {"off":113,"def":110,"pace":97}
 }
 
-# --- 1. 自動抓取傷病報告 ---
+# --- 3. 傷病偵測功能 ---
 def get_injury_report():
     url = "https://nba-injury-reports.p.rapidapi.com/"
     headers = {"X-RapidAPI-Key": RAPID_API_KEY, "X-RapidAPI-Host": "nba-injury-reports.p.rapidapi.com"}
     injured_dict = {}
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=12)
         data = response.json()
         for item in data:
             status = item.get("status", "").lower()
             if any(s in status for s in ["out", "questionable", "doubtful"]):
-                team, player = item.get("team"), item.get("player")
+                team = normalize_team(item.get("team", ""))
+                player = clean_name(item.get("player", ""))
                 if team not in injured_dict: injured_dict[team] = []
                 injured_dict[team].append(player)
         return injured_dict
     except: return {}
 
-# --- 2. 核心分析：加入傷病懲罰 ---
+# --- 4. 預測核心 ---
 def predict_margin(home, away, injury_data):
     h = TEAM_STATS.get(home, {"off":114,"def":114,"pace":100}).copy()
     a = TEAM_STATS.get(away, {"off":114,"def":114,"pace":100}).copy()
     
-    # 模糊匹配名稱 (例如 "LeBron James" vs "James, LeBron")
-    h_missing = [p for p in IMPACT_PLAYERS.get(home, []) if any(p in name for name in injury_data.get(home, []))]
-    a_missing = [p for p in IMPACT_PLAYERS.get(away, []) if any(p in name for name in injury_data.get(away, []))]
+    h_missing = [p for p in IMPACT_PLAYERS.get(home, []) if any(p in injured for injured in injury_data.get(home, []))]
+    a_missing = [p for p in IMPACT_PLAYERS.get(away, []) if any(p in injured for injured in injury_data.get(away, []))]
     
-    # 權重懲罰：主將缺陣對 OffRtg 與 DefRtg 的影響
-    for _ in h_missing: h["off"] -= 6.0; h["def"] += 2.0
-    for _ in a_missing: a["off"] -= 6.0; a["def"] += 2.0
+    for _ in h_missing: h["off"] -= 7.0; h["def"] += 1.5
+    for _ in a_missing: a["off"] -= 7.0; a["def"] += 1.5
     
-    pace_factor = ((h["pace"] + a["pace"]) / 2) / 100
-    base_margin = (((h["off"]-h["def"]) - (a["off"]-a["def"])) / 2) * pace_factor
-    return base_margin + 2.4, pace_factor, h_missing, a_missing
+    pace_f = ((h["pace"] + a["pace"]) / 2) / 100
+    margin = (((h["off"]-h["def"]) - (a["off"]-a["def"])) / 2) * pace_f + 2.4
+    return margin, pace_f, h_missing, a_missing
 
 def run():
     now_tw = datetime.utcnow() + timedelta(hours=8)
-    injuries = get_injury_report() # 先抓傷病
+    injuries = get_injury_report()
     
     try:
         r = requests.get(f"{BASE_URL}/odds/", params={"apiKey":ODDS_API_KEY, "regions":"us", "markets":"spreads", "oddsFormat":"decimal"})
         games = r.json()
     except: return
 
-    report = []
-    for g in games:
-        home, away = g["home_team"], g["away_team"]
-        raw_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
-        if abs((raw_time - now_tw).total_seconds()) > 86400: continue
+    # --- 5. 同場去重與最優選 ---
+    best_picks = {} 
 
-        # 多莊家比價
-        best_outcomes = {}
+    for g in games:
+        home, away = normalize_team(g["home_team"]), normalize_team(g["away_team"])
+        game_id = f"{away}@{home}"
+        
         for book in g.get("bookmakers", []):
             for market in book.get("markets", []):
                 for o in market.get("outcomes"):
-                    key = (o["name"], o["point"])
-                    if key not in best_outcomes or o["price"] > best_outcomes[key]["price"]:
-                        best_outcomes[key] = {"price": o["price"], "source": book["title"]}
+                    name = normalize_team(o["name"])
+                    line = o.get("point", 0)
+                    
+                    margin, pf, h_m, a_m = predict_margin(home, away, injuries)
+                    raw_target = margin if name == home else -margin
+                    blended_target = (raw_target * MODEL_WEIGHT) + ((-line) * MARKET_WEIGHT)
+                    
+                    win_count = sum(1 for _ in range(SIMS) if (blended_target + random.gauss(0, DYNAMIC_STD_BASE) + line) > 0)
+                    prob = win_count / SIMS
+                    edge = prob - (1/o["price"])
 
-        for (name, line), data in best_outcomes.items():
-            model_margin, pace_f, h_abs, a_abs = predict_margin(home, away, injuries)
-            raw_target = model_margin if name == home else -model_margin
-            blended_target = (raw_target * MODEL_WEIGHT) + ((-line) * MARKET_WEIGHT)
-            
-            win_count = sum(1 for _ in range(SIMS) if (blended_target + random.gauss(0, 12.5 + pace_f*1.5) + line) > 0)
-            prob = win_count / SIMS
-            edge = prob - (1/data["price"])
+                    if edge >= EDGE_THRESHOLD:
+                        tier = "🔥強力" if edge > 0.05 else ("⭐穩定" if edge > 0.03 else "📊觀察")
+                        inj_msg = f"⚠️ 缺陣: {', '.join([p.title() for p in (h_m + a_m)])}" if (h_m + a_m) else "✅ 陣容完整"
+                        
+                        pick_data = {
+                            "edge": edge, "tier": tier, "prob": prob,
+                            "msg": f"{tier} | {away}@{home}\n🎯 {TEAM_CN.get(name,name)} {line:+} @ **{o['price']}** ({book['title']})\n   └ {inj_msg} | 勝率: {prob:.1%} | 領先: {edge:+.1%}"
+                        }
+                        
+                        if game_id not in best_picks or edge > best_picks[game_id]["edge"]:
+                            best_picks[game_id] = pick_data
 
-            if edge >= EDGE_THRESHOLD:
-                tier = "🔥強力" if edge > 0.04 else ("⭐穩定" if edge > 0.02 else "📊觀察")
-                inj_alert = f"⚠️ 缺陣: {', '.join(h_abs + a_abs)}" if (h_abs + a_abs) else "✅ 陣容完整"
-                
-                report.append({
-                    "edge": edge,
-                    "msg": f"{tier} | {TEAM_CN.get(away,away)}@{TEAM_CN.get(home,home)}\n🎯 {TEAM_CN.get(name,name)} {line:+} @ **{data['price']}** ({data['source']})\n   └ {inj_alert} | 勝率: {prob:.1%} | 領先: {edge:+.1%}"
-                })
-
-    report.sort(key=lambda x: x["edge"], reverse=True)
-    msg = f"🛡️ **NBA V83.0 Active Roster**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
-    if not report: msg += "📭 市場穩定，無明顯獲利空間。"
+    # --- 6. 輸出 ---
+    sorted_picks = sorted(best_picks.values(), key=lambda x: x["edge"], reverse=True)
+    msg = f"🛡️ **NBA V84.2 Ultimate**\n⏱ {now_tw.strftime('%m/%d %H:%M')}\n"
+    
+    if not sorted_picks: msg += "📭 市場盤口緊繃，無明顯偏差場次。"
     else:
-        for r in report[:8]: msg += f"\n{r['msg']}\n----------------"
+        for p in sorted_picks[:6]: msg += f"\n{p['msg']}\n----------------"
 
     requests.post(WEBHOOK, json={"content": msg})
 
