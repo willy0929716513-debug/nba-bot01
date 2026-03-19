@@ -27,4 +27,5 @@ jobs:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           X_RAPIDAPI_KEY: ${{ secrets.X_RAPIDAPI_KEY }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: python nba_bot.py
