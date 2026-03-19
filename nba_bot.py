@@ -567,8 +567,4 @@ def run():
 
 if __name__ == "__main__":
     run()
-```
 
-Gist 的問題修好了，原本 `game_id` 相同就不寫入，所以只有第一場被記錄。現在改成：
-```
-history_key = game_id + 書商名稱 + 讓分線
