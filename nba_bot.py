@@ -11,8 +11,7 @@ log = logging.getLogger("NBA_V98")
 ODDS_API_KEY  = os.getenv("ODDS_API_KEY", "")
 RAPID_API_KEY = os.getenv("X_RAPIDAPI_KEY", "")
 WEBHOOK       = os.getenv("DISCORD_WEBHOOK", "")
-GITHUB_TOKEN  = os.getenv("GITHUB_TOKEN", "")
-GITHUB_REPO   = os.getenv("GITHUB_REPO", "")
+GITHUB_TOKEN  = os.getenv("GH_TOKEN", "")
 
 SIMS             = 50000
 EDGE_THRESHOLD   = 0.05
@@ -22,6 +21,8 @@ DYNAMIC_STD_BASE = 13.5
 HOME_ADVANTAGE   = 2.8
 MAX_SPREAD       = 18.0
 MIN_SPREAD       = 1.0
+MIN_PRICE        = 1.0
+MAX_PRICE        = 3.0
 DISCORD_CHAR_LIMIT = 1900
 BANKROLL         = 1000.0
 KELLY_FRACTION   = 0.25
@@ -109,7 +110,6 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
     return None
 
 
-# ── 回測系統: 用 GitHub Gist 儲存紀錄 ──────────────────
 def load_history():
     if not GITHUB_TOKEN:
         return {}
@@ -150,16 +150,12 @@ def save_history(history):
         if gist_id:
             requests.patch(
                 "https://api.github.com/gists/%s" % gist_id,
-                headers=headers,
-                json=payload,
-                timeout=10,
+                headers=headers, json=payload, timeout=10,
             )
         else:
             requests.post(
                 "https://api.github.com/gists",
-                headers=headers,
-                json=payload,
-                timeout=10,
+                headers=headers, json=payload, timeout=10,
             )
         log.info("History saved to Gist")
     except Exception as e:
@@ -169,7 +165,7 @@ def save_history(history):
 def calc_performance(history):
     total = win = 0
     profit = 0.0
-    for game_id, record in history.items():
+    for record in history.values():
         if record.get("result") not in ["win", "loss"]:
             continue
         total += 1
@@ -183,7 +179,6 @@ def calc_performance(history):
     return total, win, win_rate, profit
 
 
-# ── Kelly 公式 ──────────────────────────────────────────
 def kelly_stake(prob, price, bankroll, fraction=KELLY_FRACTION):
     q = 1 - prob
     b = price - 1
@@ -192,7 +187,6 @@ def kelly_stake(prob, price, bankroll, fraction=KELLY_FRACTION):
     return round(bankroll * k, 1)
 
 
-# ── 球隊即時數據 ────────────────────────────────────────
 def fetch_team_stats():
     headers = {
         "X-RapidAPI-Key":  RAPID_API_KEY,
@@ -233,7 +227,6 @@ def fetch_team_stats():
     return ratings
 
 
-# ── 傷病報告 ────────────────────────────────────────────
 def get_injury_report():
     url = "https://sports-information.p.rapidapi.com/nba/injuries"
     headers = {
@@ -268,7 +261,6 @@ def get_injury_report():
     return injured
 
 
-# ── 預測模型 ────────────────────────────────────────────
 def predict_margin(home, away, injury_data, live_ratings):
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
@@ -304,8 +296,7 @@ def predict_margin(home, away, injury_data, live_ratings):
 def predict_total(home, away, live_ratings):
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
-    total  = (h_base["off"] + a_base["off"]) / 2 * 2 * 0.97
-    return round(total, 1)
+    return round((h_base["off"] + a_base["off"]) / 2 * 2 * 0.97, 1)
 
 
 def get_consensus_line(bookmakers, team_name):
@@ -344,7 +335,6 @@ def simulate_cover(blended, line):
     return wins / SIMS
 
 
-# ── 賠率資料 ────────────────────────────────────────────
 def fetch_odds():
     params = {
         "apiKey":     ODDS_API_KEY,
@@ -363,7 +353,6 @@ def fetch_odds():
     return data
 
 
-# ── Discord 推送 ────────────────────────────────────────
 def chunked_send(content, webhook):
     lines = content.split("\n")
     chunk, chunks = "", []
@@ -385,13 +374,13 @@ def chunked_send(content, webhook):
             log.error("Discord send failed chunk %d: %s", i, e)
 
 
-# ── 主流程 ──────────────────────────────────────────────
 def run():
     if not all([ODDS_API_KEY, RAPID_API_KEY, WEBHOOK]):
         log.error("Missing env vars")
         return
 
-    now_tw  = datetime.utcnow() + timedelta(hours=8)
+    now_utc = datetime.utcnow()
+    now_tw  = now_utc + timedelta(hours=8)
     today_s = now_tw.strftime("%Y-%m-%d")
 
     live_ratings = fetch_team_stats()
@@ -407,11 +396,16 @@ def run():
 
     for g in games:
         try:
-            c_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ") + timedelta(hours=8)
+            c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+            c_time_tw  = c_time_utc + timedelta(hours=8)
         except (KeyError, ValueError):
             continue
 
-        g_date     = c_time.strftime("%Y-%m-%d")
+        # 過濾已開賽場次
+        if c_time_utc < now_utc:
+            continue
+
+        g_date     = c_time_tw.strftime("%Y-%m-%d")
         home       = normalize_team(g.get("home_team", ""))
         away       = normalize_team(g.get("away_team", ""))
         game_id    = "%s@%s_%s" % (away, home, g_date)
@@ -420,8 +414,7 @@ def run():
         daily_picks.setdefault(g_date, {})
         margin, h_missing, a_missing = predict_margin(home, away, injuries, live_ratings)
 
-        # OU 分析
-        model_total    = predict_total(home, away, live_ratings)
+        model_total     = predict_total(home, away, live_ratings)
         consensus_total = get_consensus_total(bookmakers)
         ou_note = ""
         if consensus_total:
@@ -444,7 +437,8 @@ def run():
 
                     if not (MIN_SPREAD <= abs(line) <= MAX_SPREAD):
                         continue
-                    if price <= 1.0:
+                    # 過濾異常賠率
+                    if not (MIN_PRICE < price <= MAX_PRICE):
                         continue
 
                     consensus = get_consensus_line(bookmakers, name)
@@ -485,7 +479,7 @@ def run():
                         "> %s\n"
                     ) % (
                         tier, away_cn, home_cn,
-                        c_time.strftime("%m/%d %H:%M"),
+                        c_time_tw.strftime("%m/%d %H:%M"),
                         bet_cn, line, price, book.get("title", "?"),
                         missing_str, consensus_str,
                         prob * 100, edge * 100, stake,
@@ -502,7 +496,6 @@ def run():
                             "msg":         msg,
                         }
 
-                        # 回測: 記錄新推薦（待結果）
                         if game_id not in history:
                             history[game_id] = {
                                 "date":        g_date,
@@ -514,7 +507,6 @@ def run():
                                 "result":      "pending",
                             }
 
-    # ── 績效報告 ──────────────────────────────────────────
     total_rec, wins, win_rate, profit = calc_performance(history)
     perf_msg = (
         "\n📊 **歷史績效報告**\n"
@@ -523,7 +515,6 @@ def run():
         "（以每場 Kelly 建議金額計算）\n"
     ) % (len(history), total_rec, win_rate, profit)
 
-    # ── 組裝輸出 ──────────────────────────────────────────
     total_picks = sum(len(v) for v in daily_picks.values())
     avg_edge    = (
         sum(p["edge"] for d in daily_picks.values() for p in d.values()) / total_picks
@@ -547,7 +538,6 @@ def run():
     output += perf_msg
 
     save_history(history)
-
     log.info("Sending to Discord, length: %d", len(output))
     chunked_send(output, WEBHOOK)
     log.info("Done")
