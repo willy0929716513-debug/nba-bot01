@@ -4,10 +4,9 @@ import random
 import logging
 import json
 from datetime import datetime, timedelta
-from html.parser import HTMLParser
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("NBA_V99")
+log = logging.getLogger("NBA_V100")
 
 ODDS_API_KEY    = os.getenv("ODDS_API_KEY", "")
 WEBHOOK         = os.getenv("DISCORD_WEBHOOK", "")
@@ -116,75 +115,12 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
     return None
 
 
-def safe_fetch(url, retries=3, timeout=15):
-    headers = {"User-Agent": "Mozilla/5.0"}
-    for attempt in range(1, retries + 1):
-        try:
-            r = requests.get(url, headers=headers, timeout=timeout)
-            r.raise_for_status()
-            return r.text
-        except requests.exceptions.Timeout:
-            log.warning("Timeout attempt %d/%d: %s", attempt, retries, url)
-        except requests.exceptions.HTTPError as e:
-            log.error("HTTP error %s: %s", e.response.status_code, url)
-            break
-        except Exception as e:
-            log.warning("Fetch failed attempt %d/%d: %s", attempt, retries, e)
-    return None
-
-
-# ── Basketball-Reference 傷病爬蟲 ───────────────────────
-class InjuryParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.in_table = False
-        self.in_row   = False
-        self.in_cell  = False
-        self.cell_idx = 0
-        self.current  = {}
-        self.rows     = []
-
-    def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
-        if tag == "table" and "injuries" in attrs.get("id", ""):
-            self.in_table = True
-        if self.in_table and tag == "tr":
-            self.in_row  = True
-            self.cell_idx = 0
-            self.current  = {}
-        if self.in_row and tag in ("td", "th"):
-            self.in_cell = True
-
-    def handle_endtag(self, tag):
-        if tag == "table":
-            self.in_table = False
-        if tag == "tr" and self.in_row:
-            self.in_row = False
-            if self.current:
-                self.rows.append(self.current)
-        if tag in ("td", "th"):
-            self.in_cell  = False
-            self.cell_idx += 1
-
-    def handle_data(self, data):
-        if not self.in_cell:
-            return
-        data = data.strip()
-        if not data:
-            return
-        if self.cell_idx == 0:
-            self.current["player"] = data.lower()
-        elif self.cell_idx == 1:
-            self.current["team"] = data
-        elif self.cell_idx == 3:
-            self.current["status"] = data.lower()
-
-
 def get_injury_report():
-    html = safe_fetch("https://www.basketball-reference.com/friv/injuries.fcgi")
+    url  = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries"
+    data = safe_get(url)
 
-    if not html:
-        log.warning("Basketball-Reference failed, using SEASON_OUT fallback")
+    if not data or "injuries" not in data:
+        log.warning("ESPN injury API failed, using SEASON_OUT fallback")
         fallback = {}
         for team, players in IMPACT_PLAYERS.items():
             out = [p for p in players if p in SEASON_OUT]
@@ -192,36 +128,33 @@ def get_injury_report():
                 fallback[team] = out
         return fallback
 
-    parser = InjuryParser()
-    parser.feed(html)
-
     injured = {}
-    skip    = {"probable", "questionable"}
-    for row in parser.rows:
-        player = row.get("player", "")
-        team   = normalize_team(row.get("team", ""))
-        status = row.get("status", "")
-        if not team or not player:
+    skip_statuses = {"active", "probable", "questionable"}
+    for team_data in data.get("injuries", []):
+        team = normalize_team(team_data.get("team", {}).get("displayName", ""))
+        if not team:
             continue
-        if any(s in status for s in skip):
-            continue
-        injured.setdefault(team, []).append(player)
+        for item in team_data.get("injuries", []):
+            status    = item.get("status", "").lower()
+            last_name = item.get("athlete", {}).get("lastName", "").lower()
+            if any(s in status for s in skip_statuses):
+                continue
+            if last_name:
+                injured.setdefault(team, []).append(last_name)
 
     for team, players in IMPACT_PLAYERS.items():
         for p in players:
             if p in SEASON_OUT and p not in injured.get(team, []):
                 injured.setdefault(team, []).append(p)
 
-    log.info("Injury report loaded: %d entries", sum(len(v) for v in injured.values()))
+    log.info("ESPN injury report loaded: %d entries", sum(len(v) for v in injured.values()))
     return injured
 
 
-# ── Balldontlie 免費 games 端點推算走勢 ─────────────────
 def fetch_team_stats():
     if not BALLDONTLIE_KEY:
         log.warning("BALLDONTLIE_KEY not set, using fallback")
         return {}
-
     headers = {"Authorization": BALLDONTLIE_KEY}
     data = safe_get(
         "https://api.balldontlie.io/v1/games",
@@ -270,13 +203,13 @@ def load_history():
     if not GITHUB_TOKEN:
         return {}
     headers = {"Authorization": "token %s" % GITHUB_TOKEN}
-    gists = safe_get("https://api.github.com/gists", headers=headers)
+    gists   = safe_get("https://api.github.com/gists", headers=headers)
     if not gists:
         return {}
     for g in gists:
         if g.get("description") == "nba_bot_history":
             raw_url = list(g["files"].values())[0]["raw_url"]
-            data = safe_get(raw_url)
+            data    = safe_get(raw_url)
             return data if isinstance(data, dict) else {}
     return {}
 
@@ -286,7 +219,7 @@ def save_history(history):
         return
     headers = {
         "Authorization": "token %s" % GITHUB_TOKEN,
-        "Content-Type": "application/json",
+        "Content-Type":  "application/json",
     }
     content = json.dumps(history, ensure_ascii=False, indent=2)
     gists   = safe_get("https://api.github.com/gists", headers=headers)
@@ -298,8 +231,8 @@ def save_history(history):
                 break
     payload = {
         "description": "nba_bot_history",
-        "public": False,
-        "files": {"history.json": {"content": content}},
+        "public":      False,
+        "files":       {"history.json": {"content": content}},
     }
     try:
         if gist_id:
@@ -326,7 +259,7 @@ def calc_performance(history):
         total += 1
         stake = record.get("kelly_stake", 10.0)
         if record["result"] == "win":
-            win += 1
+            win    += 1
             profit += stake * (record.get("price", 1.9) - 1)
         else:
             profit -= stake
@@ -571,6 +504,7 @@ def run():
                         ou_note,
                     )
 
+                    # 每場每個書商都寫入 history（不再去重）
                     existing = daily_picks[g_date].get(game_id)
                     if existing is None or edge > existing["edge"]:
                         daily_picks[g_date][game_id] = {
@@ -580,16 +514,20 @@ def run():
                             "kelly_stake": stake,
                             "msg":         msg,
                         }
-                        if game_id not in history:
-                            history[game_id] = {
-                                "date":        g_date,
-                                "bet":         "%s %+.1f" % (TEAM_CN.get(name, name), line),
-                                "price":       price,
-                                "prob":        round(prob, 4),
-                                "edge":        round(edge, 4),
-                                "kelly_stake": stake,
-                                "result":      "pending",
-                            }
+
+                    # history key 加上書商名稱，每個推薦都記錄
+                    history_key = "%s_%s_%s" % (game_id, book.get("title", "?"), str(abs(line)))
+                    if history_key not in history and edge >= EDGE_THRESHOLD:
+                        history[history_key] = {
+                            "date":        g_date,
+                            "bet":         "%s %+.1f" % (TEAM_CN.get(name, name), line),
+                            "book":        book.get("title", "?"),
+                            "price":       price,
+                            "prob":        round(prob, 4),
+                            "edge":        round(edge, 4),
+                            "kelly_stake": stake,
+                            "result":      "pending",
+                        }
 
     total_rec, wins, win_rate, profit = calc_performance(history)
     perf_msg = (
@@ -629,3 +567,8 @@ def run():
 
 if __name__ == "__main__":
     run()
+```
+
+Gist 的問題修好了，原本 `game_id` 相同就不寫入，所以只有第一場被記錄。現在改成：
+```
+history_key = game_id + 書商名稱 + 讓分線
