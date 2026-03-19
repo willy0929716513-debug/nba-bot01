@@ -28,4 +28,5 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           X_RAPIDAPI_KEY: ${{ secrets.X_RAPIDAPI_KEY }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
         run: python nba_bot.py
