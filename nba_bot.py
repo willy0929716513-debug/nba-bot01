@@ -117,22 +117,21 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 
 def get_injury_report():
     try:
-        from nbainjuries import injury
-        ts   = datetime.now().strftime("%Y%m%d")
-        data = injury.get_reportdata(ts)
-        if not data:
-            raise ValueError("empty response")
+        from nba_api.stats.endpoints import injuryreport
+        report      = injuryreport.InjuryReport()
+        data        = report.get_dict()
+        rows        = data["resultSets"][0]["rowSet"]
+        headers_row = data["resultSets"][0]["headers"]
+
+        team_idx   = headers_row.index("Team")
+        player_idx = headers_row.index("Player_Name")
 
         injured = {}
-        skip = {"questionable", "probable", "available", "active"}
-        for item in data:
-            team      = normalize_team(item.get("Team", ""))
-            player    = item.get("Player Name", "").lower()
-            status    = item.get("Current Status", "").lower()
-            last_name = player.split(",")[0].strip() if "," in player else player.split()[-1]
+        for row in rows:
+            team      = normalize_team(row[team_idx])
+            player    = str(row[player_idx]).lower()
+            last_name = player.split()[-1] if player.split() else ""
             if not team or not last_name:
-                continue
-            if any(s in status for s in skip):
                 continue
             injured.setdefault(team, []).append(last_name)
 
@@ -141,11 +140,11 @@ def get_injury_report():
                 if p in SEASON_OUT and p not in injured.get(team, []):
                     injured.setdefault(team, []).append(p)
 
-        log.info("nbainjuries report loaded: %d entries", sum(len(v) for v in injured.values()))
+        log.info("nba_api injury report loaded: %d entries", sum(len(v) for v in injured.values()))
         return injured
 
     except Exception as e:
-        log.warning("nbainjuries failed: %s, using SEASON_OUT fallback", e)
+        log.warning("nba_api injury failed: %s, using SEASON_OUT fallback", e)
         fallback = {}
         for team, players in IMPACT_PLAYERS.items():
             out = [p for p in players if p in SEASON_OUT]
@@ -517,18 +516,20 @@ def run():
                             "msg":         msg,
                         }
 
-                    history_key = "%s_%s_%.1f" % (game_id, book.get("title", "?"), abs(line))
-                    if history_key not in history and edge >= EDGE_THRESHOLD:
-                        history[history_key] = {
-                            "date":        g_date,
-                            "bet":         "%s %+.1f" % (TEAM_CN.get(name, name), line),
-                            "book":        book.get("title", "?"),
-                            "price":       price,
-                            "prob":        round(prob, 4),
-                            "edge":        round(edge, 4),
-                            "kelly_stake": stake,
-                            "result":      "pending",
-                        }
+                    # 每場只記錄一筆，保留 edge 最高的
+                    if edge >= EDGE_THRESHOLD:
+                        existing_h = history.get(game_id)
+                        if existing_h is None or edge > existing_h.get("edge", 0):
+                            history[game_id] = {
+                                "date":        g_date,
+                                "bet":         "%s %+.1f" % (TEAM_CN.get(name, name), line),
+                                "book":        book.get("title", "?"),
+                                "price":       price,
+                                "prob":        round(prob, 4),
+                                "edge":        round(edge, 4),
+                                "kelly_stake": stake,
+                                "result":      existing_h.get("result", "pending") if existing_h else "pending",
+                            }
 
     total_rec, wins, win_rate, profit = calc_performance(history)
     perf_msg = (
