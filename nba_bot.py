@@ -28,25 +28,50 @@ BANKROLL         = 1000.0
 KELLY_FRACTION   = 0.25
 
 IMPACT_PLAYERS = {
-    "Los Angeles Lakers":    ["doncic", "james", "reaves"],
-    "Washington Wizards":    ["young", "davis", "sarr"],
-    "Golden State Warriors": ["curry", "green", "podzemski"],
-    "Cleveland Cavaliers":   ["harden", "mitchell", "mobley"],
-    "Los Angeles Clippers":  ["leonard", "garland", "powell"],
-    "Dallas Mavericks":      ["flagg", "thompson", "jones"],
-    "Boston Celtics":        ["brown", "white", "hauser"],
-    "Denver Nuggets":        ["jokic", "murray", "gordon"],
-    "Oklahoma City Thunder": ["shai", "holmgren", "williams"],
-    "San Antonio Spurs":     ["wembanyama", "harper", "cp3"],
-    "Milwaukee Bucks":       ["giannis", "lillard", "dieng"],
-    "New York Knicks":       ["brunson", "towns", "alvarado"],
-    "Houston Rockets":       ["durant", "sengun", "thompson"],
-    "Indiana Pacers":        ["siakam", "turner", "zubac"],
+    "Los Angeles Lakers":     ["doncic", "james", "reaves"],
+    "Washington Wizards":     ["young", "davis", "sarr"],
+    "Golden State Warriors":  ["podziemski", "green", "moody"],
+    "Cleveland Cavaliers":    ["harden", "mitchell", "mobley"],
+    "Los Angeles Clippers":   ["leonard", "garland", "powell"],
+    "Dallas Mavericks":       ["flagg", "thompson", "jones"],
+    "Boston Celtics":         ["brown", "white", "horford"],
+    "Denver Nuggets":         ["jokic", "murray", "gordon"],
+    "Oklahoma City Thunder":  ["shai", "holmgren", "williams"],
+    "San Antonio Spurs":      ["wembanyama", "harper", "cp3"],
+    "Milwaukee Bucks":        ["giannis", "lillard", "dieng"],
+    "New York Knicks":        ["brunson", "towns", "alvarado"],
+    "Houston Rockets":        ["durant", "sengun", "green"],
+    "Indiana Pacers":         ["siakam", "turner", "mathurin"],
+    "Philadelphia 76ers":     ["embiid", "maxey", "oubre"],
+    "Minnesota Timberwolves": ["randle", "edwards", "gobert"],
+    "Miami Heat":             ["adebayo", "herro", "robinson"],
+    "Portland Trail Blazers": ["avdija", "clingan", "camara"],
+    "Detroit Pistons":        ["cunningham", "duren", "jenkins"],
 }
 
-SEASON_OUT      = {"irving", "haliburton", "butler", "tatum", "vanvleet"}
-LIMITED_PLAYERS = {"young", "davis", "curry"}
-SUPERSTARS      = {"doncic", "jokic", "shai", "giannis", "durant", "james", "harden", "young", "curry"}
+SEASON_OUT = {
+    "irving",      # 整季報銷
+    "haliburton",  # Achilles 整季報銷
+    "butler",      # ACL 整季報銷
+    "tatum",       # 手術缺陣
+    "vanvleet",    # ACL 整季報銷
+    "curry",       # 膝傷長期缺陣
+    "maxey",       # 手指傷 3週
+}
+
+LIMITED_PLAYERS = {
+    "young",        # 巫師 分鐘數限制
+    "davis",        # 巫師 手指傷
+    "embiid",       # 76人 Doubtful
+    "leonard",      # 快艇 膝蓋管理
+    "cunningham",   # 活塞 肺塌陷 兩週後重新評估
+}
+
+SUPERSTARS = {
+    "doncic", "jokic", "shai", "giannis", "durant",
+    "james", "harden", "young", "embiid", "randle",
+    "edwards",
+}
 SUPERSTAR_PENALTY = 11.5
 STAR_PENALTY      = 8.0
 LIMITED_PENALTY   = 5.0
