@@ -30,7 +30,7 @@ KELLY_FRACTION   = 0.20
 IMPACT_PLAYERS = {
     "Los Angeles Lakers":     ["doncic", "james", "reaves"],
     "Washington Wizards":     ["young", "davis", "sarr"],
-    "Golden State Warriors":  ["podziemski", "green", "moody"],
+    "Golden State Warriors":  ["podziemski", "green", "payton"],
     "Cleveland Cavaliers":    ["harden", "mitchell", "mobley"],
     "Los Angeles Clippers":   ["leonard", "garland", "powell"],
     "Dallas Mavericks":       ["flagg", "thompson", "jones"],
@@ -51,7 +51,7 @@ IMPACT_PLAYERS = {
 
 SEASON_OUT = {
     "irving", "haliburton", "butler", "tatum",
-    "vanvleet", "curry", "maxey",
+    "vanvleet", "curry", "maxey", "moody", "williams",
 }
 
 LIMITED_PLAYERS = {
@@ -138,41 +138,40 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 
 def get_injury_report():
     try:
-        from nbainjuries import injury
-        now  = datetime.now()
-        data = injury.get_reportdata(datetime(
-            year=now.year, month=now.month, day=now.day,
-            hour=now.hour, minute=now.minute
-        ))
-        if not data:
-            raise ValueError("empty response")
+        url  = "https://www.rotowire.com/basketball/injury-report.php"
+        hdrs = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        r = requests.get(url, headers=hdrs, timeout=15)
+        r.raise_for_status()
 
         injured = {}
-        skip = {"questionable", "probable", "active", "available"}
-        for item in data:
-            team   = normalize_team(item.get("Team", ""))
-            player = item.get("Player Name", "").lower()
-            status = item.get("Current Status", "").lower()
-            if "," in player:
-                last_name = player.split(",")[0].strip()
-            else:
-                last_name = player.split()[-1] if player.split() else ""
-            if not team or not last_name:
-                continue
-            if any(s in status for s in skip):
-                continue
-            injured.setdefault(team, []).append(last_name)
+        text = r.text.lower()
+
+        out_keywords  = ["ruled out", "will not play", "is out", "has been ruled out", "out ("]
+        skip_keywords = ["questionable", "probable", "available", "good to go", "day-to-day"]
+
+        for full_team in IMPACT_PLAYERS:
+            for player in IMPACT_PLAYERS[full_team]:
+                if player in text:
+                    idx     = text.find(player)
+                    context = text[max(0, idx - 80):idx + 200]
+                    if any(s in context for s in skip_keywords):
+                        continue
+                    if any(s in context for s in out_keywords):
+                        if player not in injured.get(full_team, []):
+                            injured.setdefault(full_team, []).append(player)
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
                 if p in SEASON_OUT and p not in injured.get(team, []):
                     injured.setdefault(team, []).append(p)
 
-        log.info("nbainjuries loaded: %d entries", sum(len(v) for v in injured.values()))
+        log.info("RotoWire injury loaded: %d entries", sum(len(v) for v in injured.values()))
         return injured
 
     except Exception as e:
-        log.warning("nbainjuries failed: %s, using SEASON_OUT fallback", e)
+        log.warning("RotoWire failed: %s, using SEASON_OUT fallback", e)
         fallback = {}
         for team, players in IMPACT_PLAYERS.items():
             out = [p for p in players if p in SEASON_OUT]
@@ -491,7 +490,6 @@ def run():
                     if consensus is None:
                         consensus = line
 
-                    # 書商線比共識線更有利才投
                     line_advantage = line - consensus if line > 0 else consensus - line
                     if line_advantage < 0:
                         continue
