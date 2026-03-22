@@ -430,6 +430,10 @@ def run():
     now_tw  = now_utc + timedelta(hours=8)
     today_s = now_tw.strftime("%Y-%m-%d")
 
+    # 只有早上 6 點排程那次才寫入回測記錄
+    is_official_run = (now_utc.hour == 22)
+    log.info("Official run: %s (UTC hour: %d)", is_official_run, now_utc.hour)
+
     live_ratings = fetch_team_stats()
     data_source  = "即時數據" if live_ratings else "靜態備用"
     injuries     = get_injury_report()
@@ -545,7 +549,7 @@ def run():
                             "msg":         msg,
                         }
 
-                    if edge >= EDGE_THRESHOLD:
+                    if edge >= EDGE_THRESHOLD and is_official_run:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
@@ -577,6 +581,11 @@ def run():
         now_tw.strftime("%m/%d %H:%M"), data_source, total_picks, avg_edge * 100
     )
 
+    if is_official_run:
+        output += "📌 正式記錄版本\n"
+    else:
+        output += "🔧 測試版本（不寫入回測）\n"
+
     if not daily_picks:
         output += "\n今日無符合條件之推薦。\n"
     else:
@@ -589,7 +598,12 @@ def run():
 
     output += perf_msg
 
-    save_history(history)
+    if is_official_run:
+        save_history(history)
+        log.info("History saved (official run)")
+    else:
+        log.info("History NOT saved (test run)")
+
     log.info("Sending to Discord, length: %d", len(output))
     chunked_send(output, WEBHOOK)
     log.info("Done")
