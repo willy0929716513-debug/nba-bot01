@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("NBA_V100")
+log = logging.getLogger("NBA_V101")
 
 ODDS_API_KEY    = os.getenv("ODDS_API_KEY", "")
 WEBHOOK         = os.getenv("DISCORD_WEBHOOK", "")
@@ -14,18 +14,18 @@ GITHUB_TOKEN    = os.getenv("GH_TOKEN", "")
 BALLDONTLIE_KEY = os.getenv("BALLDONTLIE_KEY", "")
 
 SIMS             = 50000
-EDGE_THRESHOLD   = 0.05
-MODEL_WEIGHT     = 0.40
-MARKET_WEIGHT    = 0.60
-DYNAMIC_STD_BASE = 13.5
+EDGE_THRESHOLD   = 0.07
+MODEL_WEIGHT     = 0.35
+MARKET_WEIGHT    = 0.65
+DYNAMIC_STD_BASE = 13.0
 HOME_ADVANTAGE   = 2.8
-MAX_SPREAD       = 18.0
-MIN_SPREAD       = 1.0
-MIN_PRICE        = 1.0
-MAX_PRICE        = 3.0
+MAX_SPREAD       = 14.0
+MIN_SPREAD       = 5.0
+MIN_PRICE        = 1.80
+MAX_PRICE        = 2.10
 DISCORD_CHAR_LIMIT = 1900
 BANKROLL         = 1000.0
-KELLY_FRACTION   = 0.25
+KELLY_FRACTION   = 0.20
 
 IMPACT_PLAYERS = {
     "Los Angeles Lakers":     ["doncic", "james", "reaves"],
@@ -50,48 +50,44 @@ IMPACT_PLAYERS = {
 }
 
 SEASON_OUT = {
-    "irving",      # 整季報銷
-    "haliburton",  # Achilles 整季報銷
-    "butler",      # ACL 整季報銷
-    "tatum",       # 手術缺陣
-    "vanvleet",    # ACL 整季報銷
-    "curry",       # 膝傷長期缺陣
-    "maxey",       # 手指傷 3週
+    "irving", "haliburton", "butler", "tatum",
+    "vanvleet", "curry", "maxey",
 }
 
 LIMITED_PLAYERS = {
-    "young",        # 巫師 分鐘數限制
-    "davis",        # 巫師 手指傷
-    "embiid",       # 76人 Doubtful
-    "leonard",      # 快艇 膝蓋管理
-    "cunningham",   # 活塞 肺塌陷 兩週後重新評估
+    "young", "davis", "embiid", "leonard", "cunningham",
 }
 
 SUPERSTARS = {
     "doncic", "jokic", "shai", "giannis", "durant",
-    "james", "harden", "young", "embiid", "randle",
-    "edwards",
+    "james", "harden", "young", "embiid", "randle", "edwards",
 }
+
 SUPERSTAR_PENALTY = 11.5
 STAR_PENALTY      = 8.0
 LIMITED_PENALTY   = 5.0
 
 FALLBACK_RATINGS = {
-    "Los Angeles Lakers":    {"off": 118.5, "def": 112.0},
-    "Boston Celtics":        {"off": 118.0, "def": 111.5},
-    "Denver Nuggets":        {"off": 119.0, "def": 111.0},
-    "Oklahoma City Thunder": {"off": 119.0, "def": 110.5},
-    "Cleveland Cavaliers":   {"off": 117.5, "def": 112.0},
-    "Golden State Warriors": {"off": 113.0, "def": 115.5},
-    "Milwaukee Bucks":       {"off": 117.0, "def": 113.0},
-    "New York Knicks":       {"off": 116.0, "def": 113.0},
-    "Houston Rockets":       {"off": 118.0, "def": 112.5},
-    "San Antonio Spurs":     {"off": 115.0, "def": 116.0},
-    "Dallas Mavericks":      {"off": 113.0, "def": 116.0},
-    "Washington Wizards":    {"off": 113.0, "def": 117.0},
-    "Los Angeles Clippers":  {"off": 115.5, "def": 114.0},
-    "Indiana Pacers":        {"off": 115.0, "def": 114.5},
-    "Phoenix Suns":          {"off": 115.0, "def": 115.5},
+    "Los Angeles Lakers":     {"off": 118.5, "def": 112.0},
+    "Boston Celtics":         {"off": 118.0, "def": 111.5},
+    "Denver Nuggets":         {"off": 119.0, "def": 111.0},
+    "Oklahoma City Thunder":  {"off": 119.0, "def": 110.5},
+    "Cleveland Cavaliers":    {"off": 117.5, "def": 112.0},
+    "Golden State Warriors":  {"off": 113.0, "def": 115.5},
+    "Milwaukee Bucks":        {"off": 117.0, "def": 113.0},
+    "New York Knicks":        {"off": 116.0, "def": 113.0},
+    "Houston Rockets":        {"off": 118.0, "def": 112.5},
+    "San Antonio Spurs":      {"off": 115.0, "def": 116.0},
+    "Dallas Mavericks":       {"off": 113.0, "def": 116.0},
+    "Washington Wizards":     {"off": 113.0, "def": 117.0},
+    "Los Angeles Clippers":   {"off": 115.5, "def": 114.0},
+    "Indiana Pacers":         {"off": 115.0, "def": 114.5},
+    "Phoenix Suns":           {"off": 115.0, "def": 115.5},
+    "Philadelphia 76ers":     {"off": 114.0, "def": 115.0},
+    "Minnesota Timberwolves": {"off": 117.0, "def": 112.5},
+    "Miami Heat":             {"off": 114.5, "def": 114.0},
+    "Portland Trail Blazers": {"off": 112.0, "def": 117.0},
+    "Detroit Pistons":        {"off": 119.5, "def": 110.0},
 }
 DEFAULT_RATING = {"off": 116.0, "def": 114.0}
 
@@ -142,37 +138,41 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
 
 def get_injury_report():
     try:
-        url  = "https://www.rotowire.com/basketball/injury-report.php"
-        hdrs = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        r = requests.get(url, headers=hdrs, timeout=15)
-        r.raise_for_status()
+        from nbainjuries import injury
+        now  = datetime.now()
+        data = injury.get_reportdata(datetime(
+            year=now.year, month=now.month, day=now.day,
+            hour=now.hour, minute=now.minute
+        ))
+        if not data:
+            raise ValueError("empty response")
 
         injured = {}
-        lines = r.text.split("\n")
-        for line in lines:
-            line_lower = line.strip().lower()
-            if not line_lower:
+        skip = {"questionable", "probable", "active", "available"}
+        for item in data:
+            team   = normalize_team(item.get("Team", ""))
+            player = item.get("Player Name", "").lower()
+            status = item.get("Current Status", "").lower()
+            if "," in player:
+                last_name = player.split(",")[0].strip()
+            else:
+                last_name = player.split()[-1] if player.split() else ""
+            if not team or not last_name:
                 continue
-            for full_team in IMPACT_PLAYERS:
-                for impact in IMPACT_PLAYERS[full_team]:
-                    if impact in line_lower and any(
-                        s in line_lower for s in ["out", "injured", "dtd", "il-", "suspension"]
-                    ):
-                        if impact not in injured.get(full_team, []):
-                            injured.setdefault(full_team, []).append(impact)
+            if any(s in status for s in skip):
+                continue
+            injured.setdefault(team, []).append(last_name)
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
                 if p in SEASON_OUT and p not in injured.get(team, []):
                     injured.setdefault(team, []).append(p)
 
-        log.info("RotoWire injury report loaded: %d entries", sum(len(v) for v in injured.values()))
+        log.info("nbainjuries loaded: %d entries", sum(len(v) for v in injured.values()))
         return injured
 
     except Exception as e:
-        log.warning("RotoWire injury failed: %s, using SEASON_OUT fallback", e)
+        log.warning("nbainjuries failed: %s, using SEASON_OUT fallback", e)
         fallback = {}
         for team, players in IMPACT_PLAYERS.items():
             out = [p for p in players if p in SEASON_OUT]
@@ -183,7 +183,6 @@ def get_injury_report():
 
 def fetch_team_stats():
     if not BALLDONTLIE_KEY:
-        log.warning("BALLDONTLIE_KEY not set, using fallback")
         return {}
     headers = {"Authorization": BALLDONTLIE_KEY}
     data = safe_get(
@@ -192,7 +191,6 @@ def fetch_team_stats():
         params={"seasons[]": 2025, "per_page": 100},
     )
     if not data or "data" not in data:
-        log.warning("Balldontlie games failed, using fallback")
         return {}
 
     win_loss = {}
@@ -493,6 +491,11 @@ def run():
                     if consensus is None:
                         consensus = line
 
+                    # 書商線比共識線更有利才投
+                    line_advantage = line - consensus if line > 0 else consensus - line
+                    if line_advantage < 0:
+                        continue
+
                     target  = margin if name == home else -margin
                     blended = target * MODEL_WEIGHT + (-consensus) * MARKET_WEIGHT
                     prob    = simulate_cover(blended, line)
@@ -506,9 +509,9 @@ def run():
 
                     stake = kelly_stake(prob, price, BANKROLL)
 
-                    if edge > 0.07:
+                    if edge > 0.12:
                         tier = "💎 頂級"
-                    elif edge > 0.05:
+                    elif edge > 0.09:
                         tier = "🔥 強力"
                     else:
                         tier = "⭐ 穩定"
@@ -572,7 +575,7 @@ def run():
         if total_picks else 0
     )
 
-    output = "🏀 NBA V100.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
+    output = "🏀 NBA V101.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
         now_tw.strftime("%m/%d %H:%M"), data_source, total_picks, avg_edge * 100
     )
 
