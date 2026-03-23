@@ -430,7 +430,6 @@ def run():
     now_tw  = now_utc + timedelta(hours=8)
     today_s = now_tw.strftime("%Y-%m-%d")
 
-    # 只有早上 6 點排程那次才寫入回測記錄
     is_official_run = (now_utc.hour == 22)
     log.info("Official run: %s (UTC hour: %d)", is_official_run, now_utc.hour)
 
@@ -549,7 +548,8 @@ def run():
                             "msg":         msg,
                         }
 
-                    if edge >= EDGE_THRESHOLD and is_official_run:
+                    # 只寫入今天的比賽，明天的預告不寫入
+                    if edge >= EDGE_THRESHOLD and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
@@ -600,7 +600,7 @@ def run():
 
     if is_official_run:
         save_history(history)
-        log.info("History saved (official run)")
+        log.info("History saved (official run, today only)")
     else:
         log.info("History NOT saved (test run)")
 
