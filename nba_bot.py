@@ -583,7 +583,7 @@ def run():
                             "msg":         msg,
                         }
 
-                    if edge >= EDGE_THRESHOLD and is_official_run and g_date == today_s:
+                    if edge > 0.09 and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
