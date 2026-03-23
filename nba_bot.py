@@ -40,27 +40,52 @@ IMPACT_PLAYERS = {
     "San Antonio Spurs":      ["wembanyama", "harper", "cp3"],
     "Milwaukee Bucks":        ["giannis", "lillard", "dieng"],
     "New York Knicks":        ["brunson", "towns", "alvarado"],
-    "Houston Rockets":        ["durant", "sengun", "green"],
+    "Houston Rockets":        ["durant", "sengun", "sheppard"],
     "Indiana Pacers":         ["siakam", "turner", "mathurin"],
     "Philadelphia 76ers":     ["embiid", "maxey", "oubre"],
     "Minnesota Timberwolves": ["randle", "edwards", "gobert"],
-    "Miami Heat":             ["adebayo", "herro", "robinson"],
-    "Portland Trail Blazers": ["avdija", "clingan", "camara"],
-    "Detroit Pistons":        ["cunningham", "duren", "jenkins"],
+    "Miami Heat":             ["adebayo", "herro", "powell"],
+    "Portland Trail Blazers": ["avdija", "clingan", "grant"],
+    "Detroit Pistons":        ["duren", "jenkins", "stewart"],
+    "Sacramento Kings":       ["fox", "monk", "keegan"],
+    "Atlanta Hawks":          ["murray", "hunter", "okongwu"],
+    "Chicago Bulls":          ["vucevic", "drummond", "dosunmu"],
+    "Charlotte Hornets":      ["lamelo", "bridges", "miles"],
+    "Orlando Magic":          ["banchero", "suggs", "wagner"],
+    "Toronto Raptors":        ["barrett", "quickley", "boucher"],
+    "Memphis Grizzlies":      ["morant", "smart", "aldama"],
+    "New Orleans Pelicans":   ["ingram", "murphy", "daniels"],
+    "Utah Jazz":              ["collins", "george", "kessler"],
+    "Brooklyn Nets":          ["johnson", "claxton", "thomas"],
 }
 
 SEASON_OUT = {
-    "irving", "haliburton", "butler", "tatum",
-    "vanvleet", "curry", "maxey", "moody", "williams",
+    "irving",      # 整季報銷
+    "haliburton",  # Achilles 整季報銷
+    "butler",      # ACL 整季報銷
+    "tatum",       # 手術缺陣
+    "vanvleet",    # ACL 整季報銷
+    "maxey",       # 手指傷
+    "porter",      # 季報銷
+    "cunningham",  # 活塞 肺塌陷 長期缺陣
+    "sabonis",     # 國王 季報銷
+    "edwards",     # 灰狼 膝蓋 兩週缺陣
+    "lillard",     # 公鹿 Achilles 長期缺陣
 }
 
 LIMITED_PLAYERS = {
-    "young", "davis", "embiid", "leonard", "cunningham",
+    "young",    # 巫師 Questionable
+    "davis",    # 巫師 短期 OUT
+    "embiid",   # 76人 Doubtful
+    "leonard",  # 快艇 膝蓋管理
+    "williams", # 雷霆 剛回歸
+    "curry",    # 勇士 預計 3/25 復出
 }
 
 SUPERSTARS = {
     "doncic", "jokic", "shai", "giannis", "durant",
-    "james", "harden", "young", "embiid", "randle", "edwards",
+    "james", "harden", "young", "embiid", "randle",
+    "edwards", "lillard", "wembanyama", "morant", "banchero",
 }
 
 SUPERSTAR_PENALTY = 11.5
@@ -74,7 +99,7 @@ FALLBACK_RATINGS = {
     "Oklahoma City Thunder":  {"off": 119.0, "def": 110.5},
     "Cleveland Cavaliers":    {"off": 117.5, "def": 112.0},
     "Golden State Warriors":  {"off": 113.0, "def": 115.5},
-    "Milwaukee Bucks":        {"off": 117.0, "def": 113.0},
+    "Milwaukee Bucks":        {"off": 116.0, "def": 113.5},
     "New York Knicks":        {"off": 116.0, "def": 113.0},
     "Houston Rockets":        {"off": 118.0, "def": 112.5},
     "San Antonio Spurs":      {"off": 115.0, "def": 116.0},
@@ -84,10 +109,20 @@ FALLBACK_RATINGS = {
     "Indiana Pacers":         {"off": 115.0, "def": 114.5},
     "Phoenix Suns":           {"off": 115.0, "def": 115.5},
     "Philadelphia 76ers":     {"off": 114.0, "def": 115.0},
-    "Minnesota Timberwolves": {"off": 117.0, "def": 112.5},
+    "Minnesota Timberwolves": {"off": 116.0, "def": 113.0},
     "Miami Heat":             {"off": 114.5, "def": 114.0},
     "Portland Trail Blazers": {"off": 112.0, "def": 117.0},
-    "Detroit Pistons":        {"off": 119.5, "def": 110.0},
+    "Detroit Pistons":        {"off": 117.0, "def": 112.0},
+    "Sacramento Kings":       {"off": 115.5, "def": 114.5},
+    "Atlanta Hawks":          {"off": 115.0, "def": 115.0},
+    "Chicago Bulls":          {"off": 113.5, "def": 116.0},
+    "Charlotte Hornets":      {"off": 113.0, "def": 116.5},
+    "Orlando Magic":          {"off": 114.0, "def": 113.5},
+    "Toronto Raptors":        {"off": 112.5, "def": 116.5},
+    "Memphis Grizzlies":      {"off": 116.0, "def": 114.0},
+    "New Orleans Pelicans":   {"off": 113.0, "def": 116.0},
+    "Utah Jazz":              {"off": 112.0, "def": 117.5},
+    "Brooklyn Nets":          {"off": 111.5, "def": 118.0},
 }
 DEFAULT_RATING = {"off": 116.0, "def": 114.0}
 
@@ -548,7 +583,6 @@ def run():
                             "msg":         msg,
                         }
 
-                    # 只寫入今天的比賽，明天的預告不寫入
                     if edge >= EDGE_THRESHOLD and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
