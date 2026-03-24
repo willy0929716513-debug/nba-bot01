@@ -60,26 +60,14 @@ IMPACT_PLAYERS = {
 }
 
 SEASON_OUT = {
-    "irving",      # 整季報銷
-    "haliburton",  # Achilles 整季報銷
-    "butler",      # ACL 整季報銷
-    "tatum",       # 手術缺陣
-    "vanvleet",    # ACL 整季報銷
-    "maxey",       # 手指傷
-    "porter",      # 季報銷
-    "cunningham",  # 活塞 肺塌陷 長期缺陣
-    "sabonis",     # 國王 季報銷
-    "edwards",     # 灰狼 膝蓋 兩週缺陣
-    "lillard",     # 公鹿 Achilles 長期缺陣
+    "irving",      "haliburton",  "butler",
+    "tatum",       "vanvleet",    "maxey",
+    "porter",      "cunningham",  "sabonis",
+    "edwards",     "lillard",
 }
 
 LIMITED_PLAYERS = {
-    "young",    # 巫師 Questionable
-    "davis",    # 巫師 短期 OUT
-    "embiid",   # 76人 Doubtful
-    "leonard",  # 快艇 膝蓋管理
-    "williams", # 雷霆 剛回歸
-    "curry",    # 勇士 預計 3/25 復出
+    "young", "davis", "embiid", "leonard", "williams", "curry",
 }
 
 SUPERSTARS = {
@@ -583,7 +571,8 @@ def run():
                             "msg":         msg,
                         }
 
-                    if edge > 0.09 and is_official_run and g_date == today_s:
+                    # 只寫入今天 + 頂級 (edge > 0.12) 的場次
+                    if edge > 0.12 and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
@@ -599,7 +588,7 @@ def run():
 
     total_rec, wins, win_rate, profit = calc_performance(history)
     perf_msg = (
-        "\n📊 **歷史績效報告**\n"
+        "\n📊 **歷史績效報告** (僅統計💎頂級)\n"
         "總推薦: %d 場 | 已結算: %d 場\n"
         "勝率: %.1f%% | 損益: %+.1f 元\n"
         "（以每場 Kelly 建議金額計算）\n"
@@ -634,7 +623,7 @@ def run():
 
     if is_official_run:
         save_history(history)
-        log.info("History saved (official run, today only)")
+        log.info("History saved (official run, top tier only)")
     else:
         log.info("History NOT saved (test run)")
 
