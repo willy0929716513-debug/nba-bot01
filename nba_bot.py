@@ -29,51 +29,63 @@ KELLY_FRACTION   = 0.20
 
 IMPACT_PLAYERS = {
     "Los Angeles Lakers":     ["doncic", "james", "reaves"],
-    "Washington Wizards":     ["young", "davis", "sarr"],
-    "Golden State Warriors":  ["podziemski", "green", "payton"],
+    "Washington Wizards":     ["mccollum", "davis", "sarr"],
+    "Golden State Warriors":  ["podziemski", "porzingis", "green"],
     "Cleveland Cavaliers":    ["harden", "mitchell", "mobley"],
-    "Los Angeles Clippers":   ["leonard", "garland", "powell"],
+    "Los Angeles Clippers":   ["leonard", "garland", "brown"],
     "Dallas Mavericks":       ["flagg", "thompson", "jones"],
-    "Boston Celtics":         ["brown", "white", "horford"],
+    "Boston Celtics":         ["brown", "white", "vucevic"],
     "Denver Nuggets":         ["jokic", "murray", "gordon"],
-    "Oklahoma City Thunder":  ["shai", "holmgren", "williams"],
-    "San Antonio Spurs":      ["wembanyama", "harper", "cp3"],
-    "Milwaukee Bucks":        ["giannis", "lillard", "dieng"],
+    "Oklahoma City Thunder":  ["shai", "holmgren", "mccain"],
+    "San Antonio Spurs":      ["wembanyama", "fox", "cp3"],
+    "Milwaukee Bucks":        ["giannis", "turner", "dieng"],
     "New York Knicks":        ["brunson", "towns", "alvarado"],
     "Houston Rockets":        ["durant", "sengun", "sheppard"],
-    "Indiana Pacers":         ["siakam", "turner", "mathurin"],
-    "Philadelphia 76ers":     ["embiid", "maxey", "oubre"],
+    "Indiana Pacers":         ["siakam", "zubac", "nembhard"],
+    "Philadelphia 76ers":     ["maxey", "embiid", "oubre"],
     "Minnesota Timberwolves": ["randle", "edwards", "gobert"],
-    "Miami Heat":             ["adebayo", "herro", "powell"],
+    "Miami Heat":             ["adebayo", "herro", "collins"],
     "Portland Trail Blazers": ["avdija", "clingan", "grant"],
-    "Detroit Pistons":        ["duren", "jenkins", "stewart"],
+    "Detroit Pistons":        ["cunningham", "duren", "jenkins"],
     "Sacramento Kings":       ["fox", "monk", "keegan"],
-    "Atlanta Hawks":          ["murray", "hunter", "okongwu"],
-    "Chicago Bulls":          ["vucevic", "drummond", "dosunmu"],
+    "Atlanta Hawks":          ["young", "hunter", "okongwu"],
+    "Chicago Bulls":          ["white", "drummond", "dosunmu"],
     "Charlotte Hornets":      ["lamelo", "bridges", "miles"],
     "Orlando Magic":          ["banchero", "suggs", "wagner"],
-    "Toronto Raptors":        ["barrett", "quickley", "boucher"],
-    "Memphis Grizzlies":      ["morant", "smart", "aldama"],
-    "New Orleans Pelicans":   ["ingram", "murphy", "daniels"],
-    "Utah Jazz":              ["collins", "george", "kessler"],
-    "Brooklyn Nets":          ["johnson", "claxton", "thomas"],
+    "Toronto Raptors":        ["ingram", "quickley", "boucher"],
+    "Memphis Grizzlies":      ["morant", "jackson", "aldama"],
+    "New Orleans Pelicans":   ["zion", "murphy", "daniels"],
+    "Utah Jazz":              ["markkanen", "george", "kessler"],
+    "Brooklyn Nets":          ["porter", "claxton", "thomas"],
 }
 
 SEASON_OUT = {
-    "irving",      "haliburton",  "butler",
-    "tatum",       "vanvleet",    "maxey",
-    "porter",      "cunningham",  "sabonis",
-    "edwards",     "lillard",
+    "irving",      # 整季報銷
+    "haliburton",  # Achilles 整季報銷
+    "butler",      # ACL 整季報銷
+    "vanvleet",    # ACL 整季報銷
+    "maxey",       # 手指傷
+    "cunningham",  # 肺塌陷 長期缺陣
+    "sabonis",     # 季報銷
+    "edwards",     # 膝蓋 兩週缺陣
+    "lillard",     # Achilles 長期缺陣
 }
 
 LIMITED_PLAYERS = {
-    "young", "davis", "embiid", "leonard", "williams", "curry",
+    "davis",       # 巫師 短期 OUT
+    "embiid",      # 76人 Doubtful
+    "leonard",     # 快艇 膝蓋管理
+    "williams",    # 雷霆 剛回歸
+    "curry",       # 勇士 預計復出
+    "porzingis",   # 勇士 傷後回歸
+    "zion",        # 鵜鶘 出賽時間管理
+    "tatum", 
 }
 
 SUPERSTARS = {
     "doncic", "jokic", "shai", "giannis", "durant",
-    "james", "harden", "young", "embiid", "randle",
-    "edwards", "lillard", "wembanyama", "morant", "banchero",
+    "james", "harden", "embiid", "randle", "edwards",
+    "wembanyama", "morant", "banchero", "young", "fox",
 }
 
 SUPERSTAR_PENALTY = 11.5
@@ -81,36 +93,36 @@ STAR_PENALTY      = 8.0
 LIMITED_PENALTY   = 5.0
 
 FALLBACK_RATINGS = {
-    "Los Angeles Lakers":     {"off": 118.5, "def": 112.0},
-    "Boston Celtics":         {"off": 118.0, "def": 111.5},
+    "Los Angeles Lakers":     {"off": 120.0, "def": 111.0},
+    "Boston Celtics":         {"off": 117.5, "def": 111.5},
     "Denver Nuggets":         {"off": 119.0, "def": 111.0},
-    "Oklahoma City Thunder":  {"off": 119.0, "def": 110.5},
-    "Cleveland Cavaliers":    {"off": 117.5, "def": 112.0},
-    "Golden State Warriors":  {"off": 113.0, "def": 115.5},
-    "Milwaukee Bucks":        {"off": 116.0, "def": 113.5},
-    "New York Knicks":        {"off": 116.0, "def": 113.0},
-    "Houston Rockets":        {"off": 118.0, "def": 112.5},
-    "San Antonio Spurs":      {"off": 115.0, "def": 116.0},
+    "Oklahoma City Thunder":  {"off": 120.0, "def": 109.5},
+    "Cleveland Cavaliers":    {"off": 118.0, "def": 111.5},
+    "Golden State Warriors":  {"off": 114.0, "def": 115.0},
+    "Milwaukee Bucks":        {"off": 116.5, "def": 113.0},
+    "New York Knicks":        {"off": 116.5, "def": 112.5},
+    "Houston Rockets":        {"off": 118.5, "def": 112.0},
+    "San Antonio Spurs":      {"off": 115.5, "def": 115.5},
     "Dallas Mavericks":       {"off": 113.0, "def": 116.0},
     "Washington Wizards":     {"off": 113.0, "def": 117.0},
-    "Los Angeles Clippers":   {"off": 115.5, "def": 114.0},
-    "Indiana Pacers":         {"off": 115.0, "def": 114.5},
-    "Phoenix Suns":           {"off": 115.0, "def": 115.5},
-    "Philadelphia 76ers":     {"off": 114.0, "def": 115.0},
-    "Minnesota Timberwolves": {"off": 116.0, "def": 113.0},
+    "Los Angeles Clippers":   {"off": 116.0, "def": 113.5},
+    "Indiana Pacers":         {"off": 115.5, "def": 114.0},
+    "Phoenix Suns":           {"off": 115.5, "def": 115.0},
+    "Philadelphia 76ers":     {"off": 115.0, "def": 114.5},
+    "Minnesota Timberwolves": {"off": 116.5, "def": 112.5},
     "Miami Heat":             {"off": 114.5, "def": 114.0},
     "Portland Trail Blazers": {"off": 112.0, "def": 117.0},
-    "Detroit Pistons":        {"off": 117.0, "def": 112.0},
+    "Detroit Pistons":        {"off": 119.5, "def": 110.0},
     "Sacramento Kings":       {"off": 115.5, "def": 114.5},
-    "Atlanta Hawks":          {"off": 115.0, "def": 115.0},
+    "Atlanta Hawks":          {"off": 115.5, "def": 115.0},
     "Chicago Bulls":          {"off": 113.5, "def": 116.0},
     "Charlotte Hornets":      {"off": 113.0, "def": 116.5},
     "Orlando Magic":          {"off": 114.0, "def": 113.5},
-    "Toronto Raptors":        {"off": 112.5, "def": 116.5},
-    "Memphis Grizzlies":      {"off": 116.0, "def": 114.0},
-    "New Orleans Pelicans":   {"off": 113.0, "def": 116.0},
-    "Utah Jazz":              {"off": 112.0, "def": 117.5},
-    "Brooklyn Nets":          {"off": 111.5, "def": 118.0},
+    "Toronto Raptors":        {"off": 113.0, "def": 116.0},
+    "Memphis Grizzlies":      {"off": 116.5, "def": 113.5},
+    "New Orleans Pelicans":   {"off": 113.5, "def": 115.5},
+    "Utah Jazz":              {"off": 112.5, "def": 117.0},
+    "Brooklyn Nets":          {"off": 114.0, "def": 116.0},
 }
 DEFAULT_RATING = {"off": 116.0, "def": 114.0}
 
@@ -571,7 +583,6 @@ def run():
                             "msg":         msg,
                         }
 
-                    # 只寫入今天 + 頂級 (edge > 0.12) 的場次
                     if edge > 0.12 and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
