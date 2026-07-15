@@ -1,0 +1,465 @@
+<meta charset="utf-8">
+<title>NBA 賽事分析儀表板</title>
+<meta name="description" content="NBA 賠率模型每日推薦、歷史績效與夏季聯賽觀察">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --blue:           #2a78d6;
+    --orange:         #eb6834;
+    --aqua:           #1baf7a;
+    --violet:         #4a3aa7;
+    --red:            #e34948;
+    --good:           #0ca30c;
+    --warning:        #b9790a;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --blue:           #3987e5;
+      --orange:         #d95926;
+      --aqua:           #199e70;
+      --violet:         #9085e9;
+      --red:            #e66767;
+      --good:           #0ca30c;
+      --warning:        #fab219;
+      --critical:       #e66767;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page:           #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --border:         rgba(255,255,255,0.10);
+    --blue:           #3987e5;
+    --orange:         #d95926;
+    --aqua:           #199e70;
+    --violet:         #9085e9;
+    --red:            #e66767;
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --critical:       #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+  }
+  a { color: var(--blue); }
+
+  .wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+
+  header.top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  header.top h1 {
+    font-size: 22px;
+    margin: 0 0 4px;
+  }
+  .meta-line {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    margin-right: 6px;
+  }
+  button#theme-toggle {
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .stat-tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .stat-tile .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .stat-tile .value {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: proportional-nums;
+  }
+  .stat-tile .value.good { color: var(--good); }
+  .stat-tile .value.bad { color: var(--critical); }
+
+  section { margin-bottom: 36px; }
+  section > h2 {
+    font-size: 16px;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gridline);
+  }
+
+  .day-block { margin-bottom: 18px; }
+  .day-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 0 0 8px;
+  }
+
+  .pick-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .pick-card .row1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pick-card .matchup { font-weight: 700; font-size: 15px; }
+  .pick-card .time { color: var(--text-muted); font-size: 12px; }
+  .tier-badge {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .tier-top    { color: var(--violet); }
+  .tier-strong { color: var(--orange); }
+  .tier-stable { color: var(--aqua); }
+
+  .pick-card .bet-line {
+    margin: 8px 0 4px;
+    font-size: 14px;
+  }
+  .pick-card .bet-line b { font-variant-numeric: tabular-nums; }
+  .pick-card .sub {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 2px 0;
+  }
+  .pick-card .figures {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+  }
+  .pick-card .figures b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+  .empty {
+    color: var(--text-muted);
+    font-size: 14px;
+    background: var(--surface-1);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    text-align: center;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--gridline);
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 12px;
+  }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap { overflow-x: auto; }
+
+  .margin-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 140px;
+  }
+  .margin-bar-track {
+    position: relative;
+    width: 90px;
+    height: 8px;
+    background: var(--gridline);
+    border-radius: 4px;
+  }
+  .margin-bar-fill {
+    position: absolute;
+    top: 0; bottom: 0;
+    border-radius: 4px;
+  }
+
+  .note-box {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+
+  footer {
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+    margin-top: 40px;
+    line-height: 1.8;
+  }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>🏀 NBA 賽事分析儀表板</h1>
+      <div class="meta-line" id="meta-line">載入中…</div>
+    </div>
+    <button id="theme-toggle" type="button">切換深色/淺色</button>
+  </header>
+
+  <div class="stat-grid" id="stat-grid"></div>
+
+  <section id="regular-season-section">
+    <h2>📅 例行賽推薦</h2>
+    <div id="regular-season-body"><div class="empty">載入中…</div></div>
+  </section>
+
+  <section id="summer-league-section">
+    <h2>🏖️ 夏季聯賽觀察</h2>
+    <div id="summer-league-body"><div class="empty">載入中…</div></div>
+  </section>
+
+  <footer>
+    本頁面資料由自動化模型每日更新，僅供研究與參考，不構成投注建議；請自負風險並遵守當地法規。<br>
+    夏季聯賽陣容多為菜鳥／雙向合約球員，樣本數極小，波動大，不納入資金配置建議。
+  </footer>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var saved = localStorage.getItem("theme");
+  if (saved) root.setAttribute("data-theme", saved);
+  document.getElementById("theme-toggle").addEventListener("click", function () {
+    var cur = root.getAttribute("data-theme");
+    var next = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
+  });
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function tierClass(tier) {
+    if (!tier) return "";
+    if (tier.indexOf("頂級") !== -1) return "tier-top";
+    if (tier.indexOf("強力") !== -1) return "tier-strong";
+    return "tier-stable";
+  }
+
+  function renderStats(data) {
+    var rs = data.regular_season || {};
+    var perf = data.performance || {};
+    var tiles = [
+      { label: "今日/近期推薦場次", value: rs.total_picks || 0 },
+      { label: "平均 Edge", value: (rs.avg_edge != null ? rs.avg_edge.toFixed(1) : "0.0") + "%" },
+      {
+        label: "歷史勝率（💎頂級）", value: (perf.win_rate != null ? perf.win_rate.toFixed(1) : "0.0") + "%",
+        cls: perf.win_rate >= 55 ? "good" : (perf.win_rate > 0 && perf.win_rate < 45 ? "bad" : "")
+      },
+      {
+        label: "歷史損益", value: (perf.profit > 0 ? "+" : "") + (perf.profit != null ? perf.profit.toFixed(1) : "0.0"),
+        cls: perf.profit > 0 ? "good" : (perf.profit < 0 ? "bad" : "")
+      }
+    ];
+    var html = tiles.map(function (t) {
+      return '<div class="stat-tile"><div class="label">' + esc(t.label) + '</div>' +
+        '<div class="value ' + (t.cls || "") + '">' + esc(t.value) + "</div></div>";
+    }).join("");
+    document.getElementById("stat-grid").innerHTML = html;
+  }
+
+  function renderRegularSeason(data) {
+    var rs = data.regular_season || {};
+    var days = rs.days || [];
+    var body = document.getElementById("regular-season-body");
+    var anyPicks = days.some(function (d) { return d.picks && d.picks.length; });
+    if (!anyPicks) {
+      body.innerHTML = '<div class="empty">目前無符合條件之推薦（門檻: Edge ≥ 6%）。</div>';
+      return;
+    }
+    var html = "";
+    days.forEach(function (day) {
+      if (!day.picks || !day.picks.length) return;
+      html += '<div class="day-block"><p class="day-label">' + esc(day.label) + "</p>";
+      day.picks.forEach(function (p) {
+        html += '<div class="pick-card">' +
+          '<div class="row1">' +
+            '<span class="matchup">' + esc(p.matchup) + '</span>' +
+            '<span class="time">' + esc(p.start_time) + '</span>' +
+          '</div>' +
+          '<div class="bet-line">' +
+            '<span class="tier-badge ' + tierClass(p.tier) + '">' + esc(p.tier) + '</span> ' +
+            '投注 <b>' + esc(p.bet) + '</b> @ <b>' + Number(p.price).toFixed(2) + '</b> (' + esc(p.book) + ')' +
+          '</div>' +
+          '<div class="sub">' + esc(p.missing) + " ｜ " + esc(p.consensus) + '</div>' +
+          (p.ou_note ? '<div class="sub">' + esc(p.ou_note) + '</div>' : '') +
+          '<div class="figures">' +
+            '<span>勝率 <b>' + Number(p.prob).toFixed(1) + '%</b></span>' +
+            '<span>Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b></span>' +
+            '<span>Kelly 建議 <b>$' + Number(p.kelly_stake).toFixed(1) + '</b></span>' +
+          '</div>' +
+        '</div>';
+      });
+      html += "</div>";
+    });
+    body.innerHTML = html;
+  }
+
+  function marginBar(v) {
+    var max = 20;
+    var pct = Math.min(Math.abs(v) / max, 1) * 50;
+    var color = v >= 0 ? "var(--blue)" : "var(--red)";
+    var left = v >= 0 ? "50%" : (50 - pct) + "%";
+    return '<div class="margin-bar-wrap"><div class="margin-bar-track">' +
+      '<div class="margin-bar-fill" style="left:' + left + ';width:' + pct + '%;background:' + color + ';"></div>' +
+      '</div><span>' + (v >= 0 ? "+" : "") + v.toFixed(1) + '</span></div>';
+  }
+
+  function renderSummerLeague(data) {
+    var sl = data.summer_league || {};
+    var body = document.getElementById("summer-league-body");
+    if (!sl.available) {
+      body.innerHTML = '<div class="empty">目前查無夏季聯賽賽事或盤口資料（可能尚未開打或資料源未提供）。</div>';
+      return;
+    }
+
+    var html = "";
+
+    if (sl.games && sl.games.length) {
+      html += '<div class="table-wrap"><table><thead><tr><th>客隊</th><th>比分</th><th>主隊</th><th>狀態</th></tr></thead><tbody>';
+      sl.games.forEach(function (g) {
+        html += "<tr><td>" + esc(g.away) + "</td><td>" + g.away_score + " - " + g.home_score +
+          "</td><td>" + esc(g.home) + "</td><td>" + esc(g.status) + "</td></tr>";
+      });
+      html += "</tbody></table></div>";
+    }
+
+    if (sl.power_ranking && sl.power_ranking.length) {
+      html += '<h3 style="font-size:14px;margin:18px 0 8px;color:var(--text-secondary);">戰力排行（依已完賽場次平均分差）</h3>';
+      html += '<div class="table-wrap"><table><thead><tr><th>球隊</th><th>場次</th><th>平均分差</th></tr></thead><tbody>';
+      sl.power_ranking.forEach(function (r) {
+        html += "<tr><td>" + esc(r.team) + "</td><td>" + r.games + "</td><td>" + marginBar(r.avg_margin) + "</td></tr>";
+      });
+      html += "</tbody></table></div>";
+    }
+
+    if (sl.watchlist && sl.watchlist.length) {
+      html += '<h3 style="font-size:14px;margin:18px 0 8px;color:var(--text-secondary);">盤口觀察（僅供參考，非資金建議）</h3>';
+      html += '<div class="table-wrap"><table><thead><tr><th>對戰</th><th>盤口</th><th>選項</th><th>賠率</th><th>盤口商</th></tr></thead><tbody>';
+      sl.watchlist.forEach(function (w) {
+        var pick = w.pick + (w.point != null ? " " + (w.point >= 0 ? "+" : "") + w.point : "");
+        html += "<tr><td>" + esc(w.matchup) + "</td><td>" + esc(w.market) + "</td><td>" + esc(pick) +
+          "</td><td>" + Number(w.price).toFixed(2) + "</td><td>" + esc(w.book) + "</td></tr>";
+      });
+      html += "</tbody></table></div>";
+    }
+
+    if (!sl.games.length && !sl.power_ranking.length && !sl.watchlist.length) {
+      html = '<div class="empty">資料源回應但目前沒有可顯示的賽事。</div>';
+    }
+
+    if (sl.note) {
+      html += '<div class="note-box">ⓘ ' + esc(sl.note) + "</div>";
+    }
+
+    body.innerHTML = html;
+  }
+
+  function render(data) {
+    var meta = document.getElementById("meta-line");
+    var updated = data.generated_at ? esc(data.generated_at) + " (台灣時間)" : "尚未產生資料";
+    meta.innerHTML =
+      '<span class="pill">' + esc(data.version || "") + '</span>' +
+      '<span class="pill">' + (data.run_type === "official" ? "正式紀錄" : "測試") + '</span>' +
+      '<span class="pill">資料來源: ' + esc(data.data_source || "-") + '</span>' +
+      "更新於 " + updated;
+    renderStats(data);
+    renderRegularSeason(data);
+    renderSummerLeague(data);
+  }
+
+  fetch("data/latest.json?t=" + Date.now())
+    .then(function (r) { return r.json(); })
+    .then(render)
+    .catch(function (err) {
+      document.getElementById("meta-line").textContent = "資料載入失敗";
+      document.getElementById("regular-season-body").innerHTML =
+        '<div class="empty">無法載入資料，請稍後再試。</div>';
+      document.getElementById("summer-league-body").innerHTML = "";
+      console.error(err);
+    });
+})();
+</script>
