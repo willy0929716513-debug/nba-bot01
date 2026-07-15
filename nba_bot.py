@@ -161,10 +161,20 @@ TEAM_CN = {
 }
 
 
+# Substring matching below only catches full.lower() are literal substrings
+# of one another, which misses common city abbreviations (e.g. "LA Clippers"
+# is not a substring of "Los Angeles Clippers" -- "los" vs "la").
+TEAM_ALIASES = {
+    "la clippers": "los angeles clippers",
+    "la lakers":   "los angeles lakers",
+}
+
+
 def normalize_team(name):
     if not name:
         return name
     n = name.lower()
+    n = TEAM_ALIASES.get(n, n)
     for full in TEAM_CN:
         if n in full.lower() or full.lower() in n:
             return full
