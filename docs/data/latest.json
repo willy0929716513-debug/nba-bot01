@@ -22,5 +22,246 @@
     "note": ""
   },
   "history": [],
-  "team_stars": []
+  "team_stars": [
+    {
+      "team": "湖人",
+      "players": [
+        "Doncic",
+        "James",
+        "Reaves"
+      ]
+    },
+    {
+      "team": "巫師",
+      "players": [
+        "McCollum",
+        "Davis",
+        "Sarr"
+      ]
+    },
+    {
+      "team": "勇士",
+      "players": [
+        "Podziemski",
+        "Porzingis",
+        "Green"
+      ]
+    },
+    {
+      "team": "騎士",
+      "players": [
+        "Harden",
+        "Mitchell",
+        "Mobley"
+      ]
+    },
+    {
+      "team": "快艇",
+      "players": [
+        "Leonard",
+        "Garland",
+        "Brown"
+      ]
+    },
+    {
+      "team": "獨行俠",
+      "players": [
+        "Flagg",
+        "Thompson",
+        "Jones"
+      ]
+    },
+    {
+      "team": "塞爾提克",
+      "players": [
+        "Brown",
+        "White",
+        "Vucevic"
+      ]
+    },
+    {
+      "team": "金塊",
+      "players": [
+        "Jokic",
+        "Murray",
+        "Gordon"
+      ]
+    },
+    {
+      "team": "雷霆",
+      "players": [
+        "Shai",
+        "Holmgren",
+        "McCain"
+      ]
+    },
+    {
+      "team": "馬刺",
+      "players": [
+        "Wembanyama",
+        "Fox",
+        "CP3"
+      ]
+    },
+    {
+      "team": "公鹿",
+      "players": [
+        "Giannis",
+        "Turner",
+        "Dieng"
+      ]
+    },
+    {
+      "team": "尼克",
+      "players": [
+        "Brunson",
+        "Towns",
+        "Alvarado"
+      ]
+    },
+    {
+      "team": "火箭",
+      "players": [
+        "Durant",
+        "Sengun",
+        "Sheppard"
+      ]
+    },
+    {
+      "team": "溜馬",
+      "players": [
+        "Siakam",
+        "Zubac",
+        "Nembhard"
+      ]
+    },
+    {
+      "team": "七六人",
+      "players": [
+        "Maxey",
+        "Embiid",
+        "Oubre"
+      ]
+    },
+    {
+      "team": "灰狼",
+      "players": [
+        "Randle",
+        "Edwards",
+        "Gobert"
+      ]
+    },
+    {
+      "team": "熱火",
+      "players": [
+        "Adebayo",
+        "Herro",
+        "Collins"
+      ]
+    },
+    {
+      "team": "拓荒者",
+      "players": [
+        "Avdija",
+        "Clingan",
+        "Grant"
+      ]
+    },
+    {
+      "team": "活塞",
+      "players": [
+        "Cunningham",
+        "Duren",
+        "Jenkins"
+      ]
+    },
+    {
+      "team": "國王",
+      "players": [
+        "Fox",
+        "Monk",
+        "Keegan"
+      ]
+    },
+    {
+      "team": "老鷹",
+      "players": [
+        "Young",
+        "Hunter",
+        "Okongwu"
+      ]
+    },
+    {
+      "team": "公牛",
+      "players": [
+        "White",
+        "Drummond",
+        "Dosunmu"
+      ]
+    },
+    {
+      "team": "黃蜂",
+      "players": [
+        "LaMelo",
+        "Bridges",
+        "Miles"
+      ]
+    },
+    {
+      "team": "魔術",
+      "players": [
+        "Banchero",
+        "Suggs",
+        "Wagner"
+      ]
+    },
+    {
+      "team": "暴龍",
+      "players": [
+        "Ingram",
+        "Quickley",
+        "Boucher"
+      ]
+    },
+    {
+      "team": "灰熊",
+      "players": [
+        "Morant",
+        "Jackson",
+        "Aldama"
+      ]
+    },
+    {
+      "team": "鵜鶘",
+      "players": [
+        "Zion",
+        "Murphy",
+        "Daniels"
+      ]
+    },
+    {
+      "team": "爵士",
+      "players": [
+        "Markkanen",
+        "George",
+        "Kessler"
+      ]
+    },
+    {
+      "team": "籃網",
+      "players": [
+        "Porter",
+        "Claxton",
+        "Thomas"
+      ]
+    },
+    {
+      "team": "太陽",
+      "players": [
+        "Booker",
+        "Green",
+        "Brooks"
+      ]
+    }
+  ]
 }
