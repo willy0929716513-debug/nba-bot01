@@ -1,8 +1,8 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-16 06:51",
+  "generated_at": "2026-07-16 06:55",
   "data_source": "即時數據",
-  "run_type": "test",
+  "run_type": "official",
   "regular_season": {
     "total_picks": 0,
     "avg_edge": 0,
@@ -37,7 +37,7 @@
         "status": "進行中",
         "home": "騎士",
         "away": "鵜鶘",
-        "home_score": 52,
+        "home_score": 54,
         "away_score": 49,
         "start_time": "2026-07-15T21:30Z"
       },
@@ -46,7 +46,7 @@
         "home": "活塞",
         "away": "太陽",
         "home_score": 46,
-        "away_score": 49,
+        "away_score": 51,
         "start_time": "2026-07-15T22:00Z"
       },
       {
@@ -111,7 +111,7 @@
         "market": "獨贏",
         "pick": "騎士",
         "point": null,
-        "price": 1.57,
+        "price": 1.56,
         "book": "FanDuel"
       },
       {
@@ -120,7 +120,7 @@
         "market": "獨贏",
         "pick": "鵜鶘",
         "point": null,
-        "price": 2.36,
+        "price": 2.4,
         "book": "FanDuel"
       },
       {
@@ -129,7 +129,7 @@
         "market": "讓分",
         "pick": "騎士",
         "point": -2.5,
-        "price": 1.93,
+        "price": 1.88,
         "book": "FanDuel"
       },
       {
@@ -138,7 +138,7 @@
         "market": "讓分",
         "pick": "鵜鶘",
         "point": 2.5,
-        "price": 1.83,
+        "price": 1.87,
         "book": "FanDuel"
       },
       {
@@ -147,7 +147,7 @@
         "market": "獨贏",
         "pick": "活塞",
         "point": null,
-        "price": 3.65,
+        "price": 3.0,
         "book": "FanDuel"
       },
       {
@@ -156,7 +156,7 @@
         "market": "獨贏",
         "pick": "太陽",
         "point": null,
-        "price": 1.27,
+        "price": 1.38,
         "book": "FanDuel"
       },
       {
@@ -164,8 +164,8 @@
         "start_time": "2026-07-15T22:00:00Z",
         "market": "讓分",
         "pick": "活塞",
-        "point": 6.5,
-        "price": 1.93,
+        "point": 4.5,
+        "price": 1.98,
         "book": "FanDuel"
       },
       {
@@ -173,8 +173,8 @@
         "start_time": "2026-07-15T22:00:00Z",
         "market": "讓分",
         "pick": "太陽",
-        "point": -6.5,
-        "price": 1.83,
+        "point": -4.5,
+        "price": 1.78,
         "book": "FanDuel"
       },
       {
