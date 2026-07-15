@@ -84,6 +84,7 @@ IMPACT_PLAYERS = {
     "New Orleans Pelicans":   ["zion", "murphy", "daniels"],
     "Utah Jazz":              ["markkanen", "george", "kessler"],
     "Brooklyn Nets":          ["porter", "claxton", "thomas"],
+    "Phoenix Suns":           ["booker", "green", "brooks"],
 }
 
 # NOTE: these two sets are a *manual fallback* only, merged in when the live
@@ -186,6 +187,32 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
     return None
 
 
+def _player_marked_out(text, player, team_nickname, out_keywords, skip_keywords):
+    """Scan every occurrence of `player` in `text`, not just the first.
+
+    Many players share a surname across the league (Davis, Brown, Williams,
+    Green, Jones, ...), and IMPACT_PLAYERS only stores last names, so a
+    single `text.find()` can lock onto an unrelated mention (a different
+    player, a nav link, an unrelated story) and never look further. Each
+    occurrence is only trusted if the team's nickname also appears nearby,
+    which is how RotoWire groups players under a team heading.
+    """
+    start = 0
+    while True:
+        idx = text.find(player, start)
+        if idx == -1:
+            return False
+        start = idx + len(player)
+        wide_window = text[max(0, idx - 300):idx + 300]
+        if team_nickname not in wide_window:
+            continue
+        local_window = text[max(0, idx - 80):idx + 200]
+        if any(s in local_window for s in skip_keywords):
+            continue
+        if any(s in local_window for s in out_keywords):
+            return True
+
+
 def get_injury_report():
     try:
         url  = "https://www.rotowire.com/basketball/injury-report.php"
@@ -202,15 +229,13 @@ def get_injury_report():
         skip_keywords = ["questionable", "probable", "available", "good to go", "day-to-day"]
 
         for full_team in IMPACT_PLAYERS:
+            nickname = full_team.split()[-1].lower()
             for player in IMPACT_PLAYERS[full_team]:
-                if player in text:
-                    idx     = text.find(player)
-                    context = text[max(0, idx - 80):idx + 200]
-                    if any(s in context for s in skip_keywords):
-                        continue
-                    if any(s in context for s in out_keywords):
-                        if player not in injured.get(full_team, []):
-                            injured.setdefault(full_team, []).append(player)
+                if player not in text:
+                    continue
+                if _player_marked_out(text, player, nickname, out_keywords, skip_keywords):
+                    if player not in injured.get(full_team, []):
+                        injured.setdefault(full_team, []).append(player)
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
@@ -345,8 +370,10 @@ def calc_performance(history):
 
 
 def kelly_stake(prob, price, bankroll, fraction=KELLY_FRACTION):
-    q = 1 - prob
     b = price - 1
+    if b <= 0:
+        return 0.0
+    q = 1 - prob
     k = (b * prob - q) / b
     k = max(0.0, k) * fraction
     return round(bankroll * k, 1)
@@ -623,6 +650,13 @@ def format_summer_league_section(sl):
 
 def chunked_send(content, webhook):
     lines = content.split("\n")
+    # A single line longer than the chunk limit would otherwise produce an
+    # oversized chunk that Discord's 2000-char hard cap rejects outright,
+    # silently dropping that part of the message.
+    lines = [
+        (line[: DISCORD_CHAR_LIMIT - 3] + "...") if len(line) > DISCORD_CHAR_LIMIT else line
+        for line in lines
+    ]
     chunk, chunks = "", []
     for line in lines:
         if len(chunk) + len(line) + 1 > DISCORD_CHAR_LIMIT:
@@ -712,8 +746,18 @@ def run():
     now_tw  = now_utc + timedelta(hours=8)
     today_s = now_tw.strftime("%Y-%m-%d")
 
-    is_official_run = (now_utc.hour == 22)
-    log.info("Official run: %s (UTC hour: %d)", is_official_run, now_utc.hour)
+    # GITHUB_EVENT_NAME ("schedule" vs "workflow_dispatch") is set automatically
+    # by GitHub Actions and is a reliable signal. Falling back to a wall-clock
+    # hour check (as before) only when that env var is absent -- e.g. running
+    # locally -- since GH Actions cron runs can be delayed past the exact
+    # minute/hour they were scheduled for, which silently turned "official"
+    # runs into untracked ones under the old hour==22 check.
+    github_event = os.getenv("GITHUB_EVENT_NAME", "")
+    if github_event:
+        is_official_run = (github_event == "schedule")
+    else:
+        is_official_run = (now_utc.hour == 22)
+    log.info("Official run: %s (event: %s, UTC hour: %d)", is_official_run, github_event or "n/a", now_utc.hour)
 
     live_ratings = fetch_team_stats()
     data_source  = "即時數據" if live_ratings else "靜態備用"
@@ -777,7 +821,13 @@ def run():
                     if consensus is None:
                         consensus = line
 
-                    line_advantage = line - consensus if line > 0 else consensus - line
+                    # A higher signed point value is always better for whichever side
+                    # you're betting: more cushion for the underdog (+5.5 beats +4.5),
+                    # less to cover for the favorite (-4.5 beats -5.5). So the
+                    # comparison is `line - consensus` uniformly -- no sign flip by
+                    # favorite/underdog. (Previously flipped for negative lines, which
+                    # inverted the favorable/unfavorable verdict for every favorite bet.)
+                    line_advantage = line - consensus
                     if line_advantage < 0:
                         continue
 
