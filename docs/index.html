@@ -1,7 +1,10 @@
 <meta charset="utf-8">
 <title>NBA 賽事分析儀表板</title>
 <meta name="description" content="NBA 賠率模型每日推薦、歷史績效與夏季聯賽觀察">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
 <style>
   :root {
     color-scheme: light;
@@ -12,6 +15,7 @@
     --text-muted:     #898781;
     --gridline:       #e1e0d9;
     --border:         rgba(11,11,11,0.10);
+    --shadow:         0 1px 3px rgba(11,11,11,0.06);
     --blue:           #2a78d6;
     --orange:         #eb6834;
     --aqua:           #1baf7a;
@@ -31,6 +35,7 @@
       --text-muted:     #898781;
       --gridline:       #2c2c2a;
       --border:         rgba(255,255,255,0.10);
+      --shadow:         0 1px 3px rgba(0,0,0,0.4);
       --blue:           #3987e5;
       --orange:         #d95926;
       --aqua:           #199e70;
@@ -50,6 +55,7 @@
     --text-muted:     #898781;
     --gridline:       #2c2c2a;
     --border:         rgba(255,255,255,0.10);
+    --shadow:         0 1px 3px rgba(0,0,0,0.4);
     --blue:           #3987e5;
     --orange:         #d95926;
     --aqua:           #199e70;
@@ -60,7 +66,8 @@
     --critical:       #e66767;
   }
 
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0;
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -72,7 +79,7 @@
   .wrap {
     max-width: 960px;
     margin: 0 auto;
-    padding: 24px 16px 64px;
+    padding: 20px 16px calc(64px + env(safe-area-inset-bottom));
   }
 
   header.top {
@@ -81,15 +88,17 @@
     justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
   header.top h1 {
-    font-size: 22px;
+    font-size: 21px;
     margin: 0 0 4px;
+    line-height: 1.3;
   }
   .meta-line {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
+    line-height: 2;
   }
   .pill {
     display: inline-block;
@@ -101,27 +110,76 @@
     color: var(--text-secondary);
     margin-right: 6px;
   }
+  button {
+    font-family: inherit;
+  }
   button#theme-toggle {
     border: 1px solid var(--border);
     background: var(--surface-1);
     color: var(--text-primary);
     border-radius: 8px;
-    padding: 6px 12px;
+    padding: 8px 14px;
     font-size: 13px;
     cursor: pointer;
+    min-height: 40px;
+  }
+
+  /* sticky section nav */
+  .section-nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    background: color-mix(in srgb, var(--page) 88%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 8px 0 10px;
+    margin: 0 -16px 18px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-bottom: 1px solid var(--gridline);
+  }
+  .section-nav::-webkit-scrollbar { display: none; }
+  .section-nav a {
+    flex: 0 0 auto;
+    padding: 7px 13px;
+    border-radius: 999px;
+    font-size: 13px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    background: var(--surface-1);
+    white-space: nowrap;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+  }
+  .section-nav a:hover { color: var(--text-primary); }
+
+  section { margin-bottom: 32px; scroll-margin-top: 56px; }
+  section > h2 {
+    font-size: 16px;
+    margin: 0 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gridline);
   }
 
   .stat-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }
   .stat-tile {
     background: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 14px 16px;
+    box-shadow: var(--shadow);
   }
   .stat-tile .label {
     font-size: 12px;
@@ -129,19 +187,86 @@
     margin-bottom: 6px;
   }
   .stat-tile .value {
-    font-size: 24px;
+    font-size: 23px;
     font-weight: 700;
     font-variant-numeric: proportional-nums;
   }
   .stat-tile .value.good { color: var(--good); }
   .stat-tile .value.bad { color: var(--critical); }
 
-  section { margin-bottom: 36px; }
-  section > h2 {
-    font-size: 16px;
-    margin: 0 0 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--gridline);
+  /* trigger card */
+  .trigger-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow);
+  }
+  .trigger-card summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    list-style: none;
+  }
+  .trigger-card summary::-webkit-details-marker { display: none; }
+  .trigger-card summary::before { content: "▸ "; color: var(--text-muted); }
+  .trigger-card[open] summary::before { content: "▾ "; }
+  .trigger-body { margin-top: 12px; }
+  .trigger-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .trigger-row input[type="password"] {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--page);
+    color: var(--text-primary);
+    font-size: 13px;
+    min-height: 44px;
+  }
+  .btn-primary {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+  .btn-primary:active { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .btn-text {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 4px 0;
+  }
+  .trigger-status { font-size: 12px; margin-top: 8px; color: var(--text-secondary); min-height: 16px; }
+  .trigger-status.ok { color: var(--good); }
+  .trigger-status.err { color: var(--critical); }
+  .trigger-hint {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 10px;
+    line-height: 1.7;
+  }
+  .trigger-hint a { color: var(--text-muted); text-decoration: underline; }
+  .token-saved-badge {
+    font-size: 12px;
+    color: var(--good);
+    margin-top: 6px;
   }
 
   .day-block { margin-bottom: 18px; }
@@ -158,6 +283,7 @@
     border-radius: 12px;
     padding: 14px 16px;
     margin-bottom: 10px;
+    box-shadow: var(--shadow);
   }
   .pick-card .row1 {
     display: flex;
@@ -207,6 +333,7 @@
     border-radius: 12px;
     padding: 18px;
     text-align: center;
+    line-height: 1.7;
   }
 
   table {
@@ -217,12 +344,14 @@
     border-radius: 12px;
     overflow: hidden;
     font-size: 13px;
+    box-shadow: var(--shadow);
   }
   th, td {
     text-align: left;
     padding: 8px 10px;
     border-bottom: 1px solid var(--gridline);
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   th {
     color: var(--text-muted);
@@ -230,7 +359,21 @@
     font-size: 12px;
   }
   tr:last-child td { border-bottom: none; }
-  .table-wrap { overflow-x: auto; }
+  .table-wrap { position: relative; overflow-x: auto; border-radius: 12px; }
+  .table-wrap table { border-radius: 0; box-shadow: none; }
+  .table-wrap.scrollable::after {
+    content: "";
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 28px;
+    background: linear-gradient(to right, transparent, var(--surface-1));
+    pointer-events: none;
+  }
+
+  .result-badge { font-weight: 700; }
+  .result-win  { color: var(--good); }
+  .result-loss { color: var(--critical); }
+  .result-pending { color: var(--text-muted); }
 
   .margin-bar-wrap {
     display: flex;
@@ -258,12 +401,60 @@
     line-height: 1.6;
   }
 
+  .subhead {
+    font-size: 14px;
+    margin: 18px 0 8px;
+    color: var(--text-secondary);
+  }
+
+  .stars-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  .star-card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    box-shadow: var(--shadow);
+  }
+  .star-card .team-name { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+  .star-chip {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--page);
+    border: 1px solid var(--border);
+    margin: 2px 3px 0 0;
+    color: var(--text-secondary);
+  }
+
   footer {
     color: var(--text-muted);
     font-size: 12px;
     text-align: center;
     margin-top: 40px;
     line-height: 1.8;
+  }
+
+  /* iPhone-width tuning (covers the ~375-430pt CSS-px range spanning
+     iPhone SE/mini through Pro Max, including 16e/17e-class entry models) */
+  @media (max-width: 430px) {
+    .wrap { padding: 14px 12px calc(56px + env(safe-area-inset-bottom)); }
+    header.top h1 { font-size: 18px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .stat-tile { padding: 12px; }
+    .stat-tile .value { font-size: 20px; }
+    section > h2 { font-size: 15px; }
+    th, td { padding: 7px 6px; font-size: 12px; }
+    .pick-card .matchup { font-size: 14px; }
+    .pick-card .figures { gap: 10px; }
+    .section-nav a { font-size: 12.5px; padding: 6px 11px; }
+    .trigger-row { flex-direction: column; align-items: stretch; }
+    .trigger-row input[type="password"] { width: 100%; }
+    .btn-primary { width: 100%; }
   }
 </style>
 
@@ -276,7 +467,33 @@
     <button id="theme-toggle" type="button">切換深色/淺色</button>
   </header>
 
+  <nav class="section-nav" aria-label="區塊導覽">
+    <a href="#regular-season-section">📅 推薦</a>
+    <a href="#summer-league-section">🏖️ 夏季聯賽</a>
+    <a href="#history-section">📜 歷史紀錄</a>
+    <a href="#team-stars-section">⭐ 當家球星</a>
+  </nav>
+
   <div class="stat-grid" id="stat-grid"></div>
+
+  <details class="trigger-card" id="trigger-card">
+    <summary>⚙️ 手動觸發最新分析</summary>
+    <div class="trigger-body">
+      <div class="trigger-row">
+        <input type="password" id="gh-token-input" placeholder="貼上你的 GitHub Token（僅存於此瀏覽器）" autocomplete="off">
+        <button class="btn-primary" id="trigger-btn" type="button">立即執行分析</button>
+      </div>
+      <div id="token-saved-badge"></div>
+      <div class="trigger-status" id="trigger-status"></div>
+      <div class="trigger-hint">
+        ⓘ 這裡不會內建任何金鑰——Token 只會存在<b>你自己瀏覽器</b>的 localStorage，按下按鈕時直接從你的瀏覽器呼叫 GitHub API 觸發 workflow，不會經過任何第三方伺服器。
+        建議到 GitHub 建立一個 <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Fine-grained personal access token</a>，只勾選 <code>willy0929716513-debug/nba-bot01</code> 這個 repo、權限只給 <code>Actions: Read and write</code>，其他都不要勾，降低外洩風險。
+        <br>不想貼 Token 的話，也可以直接去
+        <a href="https://github.com/willy0929716513-debug/nba-bot01/actions/workflows/nba_odds_bot.yml" target="_blank" rel="noopener">GitHub Actions 頁面手動按 Run workflow</a>。
+        <br><button class="btn-text" id="clear-token-btn" type="button">清除已儲存的 Token</button>
+      </div>
+    </div>
+  </details>
 
   <section id="regular-season-section">
     <h2>📅 例行賽推薦</h2>
@@ -286,6 +503,17 @@
   <section id="summer-league-section">
     <h2>🏖️ 夏季聯賽觀察</h2>
     <div id="summer-league-body"><div class="empty">載入中…</div></div>
+  </section>
+
+  <section id="history-section">
+    <h2>📜 歷史紀錄</h2>
+    <div id="history-body"><div class="empty">載入中…</div></div>
+  </section>
+
+  <section id="team-stars-section">
+    <h2>⭐ 各隊當家球星</h2>
+    <p class="note-box" style="margin-top:-4px;margin-bottom:12px;">模型用來判斷傷兵影響的主力名單，非完整陣容。</p>
+    <div id="team-stars-body"><div class="empty">載入中…</div></div>
   </section>
 
   <footer>
@@ -319,6 +547,80 @@
     return "tier-stable";
   }
 
+  function resultClass(result) {
+    if (result === "獲勝") return "result-win";
+    if (result === "落敗") return "result-loss";
+    return "result-pending";
+  }
+
+  // ---- GitHub workflow_dispatch trigger (client-side only, user's own token) ----
+  (function setupTrigger() {
+    var GH_OWNER = "willy0929716513-debug";
+    var GH_REPO = "nba-bot01";
+    var GH_WORKFLOW = "nba_odds_bot.yml";
+    var GH_REF = "main";
+    var TOKEN_KEY = "nba_dashboard_gh_token";
+
+    var input   = document.getElementById("gh-token-input");
+    var btn     = document.getElementById("trigger-btn");
+    var status  = document.getElementById("trigger-status");
+    var badge   = document.getElementById("token-saved-badge");
+    var clearBtn = document.getElementById("clear-token-btn");
+
+    function refreshBadge() {
+      badge.innerHTML = localStorage.getItem(TOKEN_KEY)
+        ? '<div class="token-saved-badge">🔒 已儲存 Token（僅存於此瀏覽器）</div>' : "";
+    }
+    refreshBadge();
+
+    clearBtn.addEventListener("click", function () {
+      localStorage.removeItem(TOKEN_KEY);
+      input.value = "";
+      refreshBadge();
+      status.textContent = "已清除。";
+      status.className = "trigger-status";
+    });
+
+    btn.addEventListener("click", function () {
+      var token = input.value.trim() || localStorage.getItem(TOKEN_KEY) || "";
+      if (!token) {
+        status.textContent = "請先貼上你的 GitHub Token。";
+        status.className = "trigger-status err";
+        return;
+      }
+      localStorage.setItem(TOKEN_KEY, token);
+      input.value = "";
+      refreshBadge();
+      btn.disabled = true;
+      status.textContent = "觸發中…";
+      status.className = "trigger-status";
+
+      fetch("https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/actions/workflows/" + GH_WORKFLOW + "/dispatches", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Accept": "application/vnd.github+json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ ref: GH_REF })
+      }).then(function (r) {
+        btn.disabled = false;
+        if (r.status === 204) {
+          status.textContent = "✅ 已觸發！約 1-2 分鐘後跑完，完成後重新整理本頁即可看到最新資料。";
+          status.className = "trigger-status ok";
+        } else {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            throw new Error(j.message || ("HTTP " + r.status));
+          });
+        }
+      }).catch(function (err) {
+        btn.disabled = false;
+        status.textContent = "❌ 觸發失敗：" + err.message + "（請確認 Token 是否正確、是否有此 repo 的 Actions 讀寫權限）";
+        status.className = "trigger-status err";
+      });
+    });
+  })();
+
   function renderStats(data) {
     var rs = data.regular_season || {};
     var perf = data.performance || {};
@@ -347,7 +649,8 @@
     var body = document.getElementById("regular-season-body");
     var anyPicks = days.some(function (d) { return d.picks && d.picks.length; });
     if (!anyPicks) {
-      body.innerHTML = '<div class="empty">目前無符合條件之推薦（門檻: Edge ≥ 6%）。</div>';
+      body.innerHTML = '<div class="empty">目前無符合條件之推薦（門檻: Edge ≥ 6%）。<br>' +
+        '這代表模型掃過賽事後，沒有任何一條盤口的預期勝率明顯高於賠率隱含機率，是正常結果，不是錯誤——寧可不推薦，也不要硬湊一個沒把握的注。</div>';
       return;
     }
     var html = "";
@@ -408,7 +711,7 @@
     }
 
     if (sl.power_ranking && sl.power_ranking.length) {
-      html += '<h3 style="font-size:14px;margin:18px 0 8px;color:var(--text-secondary);">戰力排行（依已完賽場次平均分差）</h3>';
+      html += '<h3 class="subhead">戰力排行（依已完賽場次平均分差）</h3>';
       html += '<div class="table-wrap"><table><thead><tr><th>球隊</th><th>場次</th><th>平均分差</th></tr></thead><tbody>';
       sl.power_ranking.forEach(function (r) {
         html += "<tr><td>" + esc(r.team) + "</td><td>" + r.games + "</td><td>" + marginBar(r.avg_margin) + "</td></tr>";
@@ -417,7 +720,7 @@
     }
 
     if (sl.watchlist && sl.watchlist.length) {
-      html += '<h3 style="font-size:14px;margin:18px 0 8px;color:var(--text-secondary);">盤口觀察（僅供參考，非資金建議）</h3>';
+      html += '<h3 class="subhead">盤口觀察（僅供參考，非資金建議）</h3>';
       html += '<div class="table-wrap"><table><thead><tr><th>對戰</th><th>盤口</th><th>選項</th><th>賠率</th><th>盤口商</th></tr></thead><tbody>';
       sl.watchlist.forEach(function (w) {
         var pick = w.pick + (w.point != null ? " " + (w.point >= 0 ? "+" : "") + w.point : "");
@@ -438,9 +741,48 @@
     body.innerHTML = html;
   }
 
+  function renderHistory(data) {
+    var history = data.history || [];
+    var body = document.getElementById("history-body");
+    if (!history.length) {
+      body.innerHTML = '<div class="empty">目前沒有歷史紀錄——只有「正式執行」且達到 💎頂級 等級的推薦才會被記錄。</div>';
+      return;
+    }
+    var html = '<div class="table-wrap"><table><thead><tr>' +
+      '<th>日期</th><th>投注</th><th>盤口商</th><th>賠率</th><th>模型勝率</th><th>Edge</th><th>Kelly</th><th>結果</th>' +
+      '</tr></thead><tbody>';
+    history.forEach(function (h) {
+      html += "<tr><td>" + esc(h.date) + "</td><td>" + esc(h.bet) + "</td><td>" + esc(h.book) +
+        "</td><td>" + Number(h.price).toFixed(2) + "</td><td>" + Number(h.prob).toFixed(1) + "%</td><td>+" +
+        Number(h.edge).toFixed(1) + "%</td><td>$" + Number(h.kelly_stake).toFixed(1) +
+        '</td><td class="result-badge ' + resultClass(h.result) + '">' + esc(h.result) + "</td></tr>";
+    });
+    html += "</tbody></table></div>";
+    body.innerHTML = html;
+  }
+
+  function renderTeamStars(data) {
+    var stars = data.team_stars || [];
+    var body = document.getElementById("team-stars-body");
+    if (!stars.length) {
+      body.innerHTML = '<div class="empty">載入中或暫無資料。</div>';
+      return;
+    }
+    var html = '<div class="stars-grid">';
+    stars.forEach(function (s) {
+      html += '<div class="star-card"><div class="team-name">' + esc(s.team) + '</div>';
+      (s.players || []).forEach(function (p) {
+        html += '<span class="star-chip">' + esc(p) + '</span>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
   function render(data) {
     var meta = document.getElementById("meta-line");
-    var updated = data.generated_at ? esc(data.generated_at) + " (台灣時間)" : "尚未產生資料";
+    var updated = data.generated_at ? esc(data.generated_at) + "（台灣時間）" : "尚未產生資料";
     meta.innerHTML =
       '<span class="pill">' + esc(data.version || "") + '</span>' +
       '<span class="pill">' + (data.run_type === "official" ? "正式紀錄" : "測試") + '</span>' +
@@ -449,7 +791,17 @@
     renderStats(data);
     renderRegularSeason(data);
     renderSummerLeague(data);
+    renderHistory(data);
+    renderTeamStars(data);
+    markScrollableTables();
   }
+
+  function markScrollableTables() {
+    document.querySelectorAll(".table-wrap").forEach(function (w) {
+      w.classList.toggle("scrollable", w.scrollWidth > w.clientWidth + 2);
+    });
+  }
+  window.addEventListener("resize", markScrollableTables);
 
   fetch("data/latest.json?t=" + Date.now())
     .then(function (r) { return r.json(); })
@@ -459,6 +811,8 @@
       document.getElementById("regular-season-body").innerHTML =
         '<div class="empty">無法載入資料，請稍後再試。</div>';
       document.getElementById("summer-league-body").innerHTML = "";
+      document.getElementById("history-body").innerHTML = "";
+      document.getElementById("team-stars-body").innerHTML = "";
       console.error(err);
     });
 })();
