@@ -1,0 +1,24 @@
+{
+  "version": "V2.0",
+  "generated_at": null,
+  "data_source": "尚未執行",
+  "run_type": "test",
+  "regular_season": {
+    "total_picks": 0,
+    "avg_edge": 0,
+    "days": []
+  },
+  "performance": {
+    "total_recommendations": 0,
+    "wins": 0,
+    "win_rate": 0,
+    "profit": 0
+  },
+  "summer_league": {
+    "available": false,
+    "games": [],
+    "power_ranking": [],
+    "watchlist": [],
+    "note": ""
+  }
+}

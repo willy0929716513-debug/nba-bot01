@@ -6,12 +6,39 @@ import json
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("NBA_V101")
+log = logging.getLogger("NBA_V2")
+
+VERSION = "V2.0"
 
 ODDS_API_KEY    = os.getenv("ODDS_API_KEY", "")
 WEBHOOK         = os.getenv("DISCORD_WEBHOOK", "")
 GITHUB_TOKEN    = os.getenv("GH_TOKEN", "")
 BALLDONTLIE_KEY = os.getenv("BALLDONTLIE_KEY", "")
+
+SITE_DATA_PATH = os.getenv("SITE_DATA_PATH", "docs/data/latest.json")
+
+
+def current_season_year(now=None):
+    """NBA season is labeled by its starting year (e.g. 2025-26 season -> 2025).
+    Season kicks off in October, so before October the *previous* calendar
+    year is still the season currently in progress / most recently completed.
+    """
+    now = now or datetime.utcnow()
+    return now.year if now.month >= 10 else now.year - 1
+
+
+SEASON_YEAR = current_season_year()
+
+# Neither the-odds-api nor ESPN document a stable Summer League identifier,
+# and the host city (hence the ESPN slug) shifts year to year, so both are
+# discovered/tried defensively at runtime instead of hardcoded to one value.
+SUMMER_LEAGUE_ESPN_SLUGS = [
+    "nba-summer-las-vegas",
+    "nba-summer-league",
+    "nba-summer-utah",
+    "nba-summer-sacramento",
+    "nba-summer-california",
+]
 
 SIMS             = 50000
 EDGE_THRESHOLD   = 0.06
@@ -59,28 +86,16 @@ IMPACT_PLAYERS = {
     "Brooklyn Nets":          ["porter", "claxton", "thomas"],
 }
 
-SEASON_OUT = {
-    "irving",      # 整季報銷
-    "haliburton",  # Achilles 整季報銷
-    "butler",      # ACL 整季報銷
-    "vanvleet",    # ACL 整季報銷
-    "maxey",       # 手指傷
-    "cunningham",  # 肺塌陷 長期缺陣
-    "sabonis",     # 季報銷
-    "edwards",     # 膝蓋 兩週缺陣
-    "lillard",     # Achilles 長期缺陣
-}
+# NOTE: these two sets are a *manual fallback* only, merged in when the live
+# RotoWire scrape (get_injury_report) can't confirm a status on its own. They
+# go stale every offseason/trade-deadline and must be re-verified against
+# current injury reports before each new season — last reviewed 2026-07,
+# intentionally left empty at the start of a new season since no prior
+# season's season-ending injury still applies and rosters shift heavily in
+# the offseason. Populate as real season-long injuries are confirmed.
+SEASON_OUT = set()
 
-LIMITED_PLAYERS = {
-    "davis",       # 巫師 短期 OUT
-    "embiid",      # 76人 Doubtful
-    "leonard",     # 快艇 膝蓋管理
-    "williams",    # 雷霆 剛回歸
-    "curry",       # 勇士 預計復出
-    "porzingis",   # 勇士 傷後回歸
-    "zion",        # 鵜鶘 出賽時間管理
-    "tatum", 
-}
+LIMITED_PLAYERS = set()
 
 SUPERSTARS = {
     "doncic", "jokic", "shai", "giannis", "durant",
@@ -222,7 +237,7 @@ def fetch_team_stats():
     data = safe_get(
         "https://api.balldontlie.io/v1/games",
         headers=headers,
-        params={"seasons[]": 2025, "per_page": 100},
+        params={"seasons[]": SEASON_YEAR, "per_page": 100},
     )
     if not data or "data" not in data:
         return {}
@@ -436,6 +451,176 @@ def fetch_odds():
     return data
 
 
+def fetch_summer_league_sport_key():
+    """Scan the live Odds API sports list for a basketball entry whose key or
+    title mentions 'summer' -- the exact sport_key isn't documented and can
+    change, so it's discovered instead of hardcoded."""
+    data = safe_get(
+        "https://api.the-odds-api.com/v4/sports/",
+        params={"apiKey": ODDS_API_KEY, "all": "true"},
+    )
+    if not data:
+        return None
+    for sport in data:
+        key   = (sport.get("key") or "").lower()
+        title = (sport.get("title") or "").lower()
+        group = (sport.get("group") or "").lower()
+        if "basketball" not in group and "basketball" not in key:
+            continue
+        if "summer" in key or "summer" in title:
+            log.info("Summer League sport_key discovered: %s", sport.get("key"))
+            return sport.get("key")
+    return None
+
+
+def fetch_summer_league_odds():
+    sport_key = fetch_summer_league_sport_key()
+    if not sport_key:
+        log.info("No NBA Summer League market currently listed on Odds API")
+        return []
+    data = safe_get(
+        "https://api.the-odds-api.com/v4/sports/%s/odds/" % sport_key,
+        params={
+            "apiKey":     ODDS_API_KEY,
+            "regions":    "us",
+            "markets":    "h2h,spreads,totals",
+            "oddsFormat": "decimal",
+        },
+    )
+    return data or []
+
+
+def fetch_summer_league_scores():
+    """Try known ESPN league slugs in turn; the host city (and so the slug)
+    moves year to year and isn't documented."""
+    for slug in SUMMER_LEAGUE_ESPN_SLUGS:
+        data = safe_get(
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/%s/scoreboard" % slug
+        )
+        events = (data or {}).get("events") if data else None
+        if events:
+            log.info("Summer League scores loaded via ESPN slug '%s': %d events", slug, len(events))
+            return events
+    log.info("No ESPN Summer League scoreboard responded")
+    return []
+
+
+def analyze_summer_league():
+    """Lightweight, informational-only Summer League report.
+
+    Summer League rosters are dominated by rookies/two-way/G-League players
+    and change daily, and the sample size per team is tiny (a handful of
+    games), so unlike the regular-season model this deliberately does NOT
+    run Kelly staking or bankroll sizing -- only a scoreboard, a simple
+    point-margin power ranking, and a market watchlist for reference.
+    """
+    events     = fetch_summer_league_scores()
+    odds_games = fetch_summer_league_odds()
+
+    games   = []
+    margins = {}
+    for ev in events:
+        comp = (ev.get("competitions") or [{}])[0]
+        competitors = comp.get("competitors", [])
+        if len(competitors) != 2:
+            continue
+        home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
+        away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[1])
+        h_name = (home.get("team") or {}).get("displayName", "?")
+        a_name = (away.get("team") or {}).get("displayName", "?")
+        try:
+            h_score = int(home.get("score", 0) or 0)
+            a_score = int(away.get("score", 0) or 0)
+        except (TypeError, ValueError):
+            h_score = a_score = 0
+        status_type = (ev.get("status") or {}).get("type") or {}
+        status      = status_type.get("description") or "?"
+        is_final    = bool(status_type.get("completed"))
+
+        games.append({
+            "status":      status,
+            "home":        h_name,
+            "away":        a_name,
+            "home_score":  h_score,
+            "away_score":  a_score,
+            "start_time":  ev.get("date", ""),
+        })
+
+        if is_final and (h_score or a_score):
+            margins.setdefault(h_name, []).append(h_score - a_score)
+            margins.setdefault(a_name, []).append(a_score - h_score)
+
+    power_ranking = [
+        {"team": t, "games": len(v), "avg_margin": round(sum(v) / len(v), 1)}
+        for t, v in margins.items()
+    ]
+    power_ranking.sort(key=lambda x: x["avg_margin"], reverse=True)
+
+    watchlist = []
+    for g in odds_games:
+        try:
+            c_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        home = g.get("home_team", "")
+        away = g.get("away_team", "")
+        for book in g.get("bookmakers", [])[:1]:
+            for market in book.get("markets", []):
+                if market.get("key") not in ("h2h", "spreads"):
+                    continue
+                for outcome in market.get("outcomes", []):
+                    price = outcome.get("price")
+                    if not price:
+                        continue
+                    watchlist.append({
+                        "matchup":    "%s @ %s" % (away, home),
+                        "start_time": c_time.isoformat() + "Z",
+                        "market":     market.get("key"),
+                        "pick":       outcome.get("name"),
+                        "point":      outcome.get("point"),
+                        "price":      price,
+                        "book":       book.get("title", "?"),
+                    })
+
+    return {
+        "available":     bool(events or odds_games),
+        "games":         games,
+        "power_ranking": power_ranking[:10],
+        "watchlist":     watchlist[:15],
+        "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，僅供參考觀察，不計入 Kelly 資金配置。",
+    }
+
+
+def format_summer_league_section(sl):
+    if not sl.get("available"):
+        return "\n🏖️ **夏季聯賽**\n目前查無夏季聯賽賽事或盤口資料（可能尚未開打或資料源未提供）。\n"
+
+    lines = ["\n🏖️ **NBA 夏季聯賽觀察**\n"]
+
+    if sl["games"]:
+        lines.append("📋 賽事:")
+        for g in sl["games"][:10]:
+            lines.append("> %s %d - %d %s (%s)" % (
+                g["away"], g["away_score"], g["home_score"], g["home"], g["status"]
+            ))
+
+    if sl["power_ranking"]:
+        lines.append("\n📈 戰力排行 (依已完賽場次平均分差):")
+        for r in sl["power_ranking"][:8]:
+            lines.append("> %s: %+.1f (%d 場)" % (r["team"], r["avg_margin"], r["games"]))
+
+    if sl["watchlist"]:
+        lines.append("\n👀 盤口觀察 (僅供參考，非資金建議):")
+        for w in sl["watchlist"][:8]:
+            point = (" %+.1f" % w["point"]) if w["point"] is not None else ""
+            lines.append("> %s | %s%s @ %.2f (%s)" % (
+                w["matchup"], w["pick"], point, w["price"], w["book"]
+            ))
+
+    lines.append("\n> %s\n" % sl["note"])
+    return "\n".join(lines) + "\n"
+
+
 def chunked_send(content, webhook):
     lines = content.split("\n")
     chunk, chunks = "", []
@@ -456,6 +641,68 @@ def chunked_send(content, webhook):
             log.error("Discord send failed chunk %d: %s", i, e)
 
 
+def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
+                      total_rec, wins, win_rate, profit, summer_league):
+    """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
+    days = []
+    for date in sorted(daily_picks):
+        picks = sorted(daily_picks[date].values(), key=lambda x: x["edge"], reverse=True)
+        days.append({
+            "date":  date,
+            "label": "今日賽事" if date == today_s else ("預告 %s" % date),
+            "picks": [
+                {
+                    "tier":       p["tier"],
+                    "matchup":    p["matchup"],
+                    "start_time": p["start_time"],
+                    "bet":        p["bet"],
+                    "price":      p["price"],
+                    "book":       p["book"],
+                    "prob":       round(p["prob"] * 100, 1),
+                    "edge":       round(p["edge"] * 100, 1),
+                    "kelly_stake": p["kelly_stake"],
+                    "missing":    p["missing"],
+                    "consensus":  p["consensus"],
+                    "ou_note":    p["ou_note"],
+                }
+                for p in picks
+            ],
+        })
+
+    total_picks = sum(len(v) for v in daily_picks.values())
+    avg_edge    = (
+        sum(p["edge"] for d in daily_picks.values() for p in d.values()) / total_picks
+        if total_picks else 0
+    )
+
+    payload = {
+        "version":          VERSION,
+        "generated_at":     now_tw.strftime("%Y-%m-%d %H:%M"),
+        "data_source":      data_source,
+        "run_type":         "official" if is_official_run else "test",
+        "regular_season": {
+            "total_picks": total_picks,
+            "avg_edge":    round(avg_edge * 100, 1),
+            "days":        days,
+        },
+        "performance": {
+            "total_recommendations": total_rec,
+            "wins":                  wins,
+            "win_rate":              round(win_rate, 1),
+            "profit":                round(profit, 1),
+        },
+        "summer_league": summer_league,
+    }
+
+    try:
+        os.makedirs(os.path.dirname(SITE_DATA_PATH) or ".", exist_ok=True)
+        with open(SITE_DATA_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        log.info("Site data written: %s", SITE_DATA_PATH)
+    except OSError as e:
+        log.error("Failed to write site data: %s", e)
+
+
 def run():
     if not all([ODDS_API_KEY, WEBHOOK]):
         log.error("Missing env vars")
@@ -473,8 +720,10 @@ def run():
     injuries     = get_injury_report()
     games        = fetch_odds()
     history      = load_history()
+    summer_league = analyze_summer_league()
 
-    if not games:
+    if not games and not summer_league.get("available"):
+        log.info("No regular-season games and no Summer League data; nothing to report")
         return
 
     daily_picks = {}
@@ -581,6 +830,14 @@ def run():
                             "price":       price,
                             "kelly_stake": stake,
                             "msg":         msg,
+                            "tier":        tier,
+                            "matchup":     "%s @ %s" % (away_cn, home_cn),
+                            "start_time":  c_time_tw.strftime("%m/%d %H:%M"),
+                            "bet":         "%s %+.1f" % (bet_cn, line),
+                            "book":        book.get("title", "?"),
+                            "missing":     missing_str,
+                            "consensus":   consensus_str,
+                            "ou_note":     ou_note,
                         }
 
                     if edge > 0.12 and is_official_run and g_date == today_s:
@@ -611,8 +868,8 @@ def run():
         if total_picks else 0
     )
 
-    output = "🏀 NBA V101.0 | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
-        now_tw.strftime("%m/%d %H:%M"), data_source, total_picks, avg_edge * 100
+    output = "🏀 NBA %s | 更新: %s | 資料: %s | 推薦: %d 場 | 平均Edge: %+.1f%%\n" % (
+        VERSION, now_tw.strftime("%m/%d %H:%M"), data_source, total_picks, avg_edge * 100
     )
 
     if is_official_run:
@@ -631,12 +888,20 @@ def run():
             output += "-" * 30 + "\n"
 
     output += perf_msg
+    output += format_summer_league_section(summer_league)
 
     if is_official_run:
         save_history(history)
         log.info("History saved (official run, top tier only)")
     else:
         log.info("History NOT saved (test run)")
+
+    export_site_data(
+        now_tw=now_tw, data_source=data_source, is_official_run=is_official_run,
+        daily_picks=daily_picks, today_s=today_s,
+        total_rec=total_rec, wins=wins, win_rate=win_rate, profit=profit,
+        summer_league=summer_league,
+    )
 
     log.info("Sending to Discord, length: %d", len(output))
     chunked_send(output, WEBHOOK)
