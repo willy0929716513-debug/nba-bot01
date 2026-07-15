@@ -1,7 +1,7 @@
 {
   "version": "V2.0",
-  "generated_at": null,
-  "data_source": "尚未執行",
+  "generated_at": "2026-07-16 06:51",
+  "data_source": "即時數據",
   "run_type": "test",
   "regular_season": {
     "total_picks": 0,
@@ -9,19 +9,462 @@
     "days": []
   },
   "performance": {
-    "total_recommendations": 0,
-    "wins": 0,
-    "win_rate": 0,
-    "profit": 0
+    "total_recommendations": 19,
+    "wins": 10,
+    "win_rate": 52.6,
+    "profit": 94.6
   },
   "summer_league": {
-    "available": false,
-    "games": [],
-    "power_ranking": [],
-    "watchlist": [],
-    "note": ""
+    "available": true,
+    "games": [
+      {
+        "status": "已完賽",
+        "home": "灰狼",
+        "away": "溜馬",
+        "home_score": 114,
+        "away_score": 98,
+        "start_time": "2026-07-15T19:30Z"
+      },
+      {
+        "status": "已完賽",
+        "home": "七六人",
+        "away": "魔術",
+        "home_score": 92,
+        "away_score": 99,
+        "start_time": "2026-07-15T20:00Z"
+      },
+      {
+        "status": "進行中",
+        "home": "騎士",
+        "away": "鵜鶘",
+        "home_score": 52,
+        "away_score": 49,
+        "start_time": "2026-07-15T21:30Z"
+      },
+      {
+        "status": "進行中",
+        "home": "活塞",
+        "away": "太陽",
+        "home_score": 46,
+        "away_score": 49,
+        "start_time": "2026-07-15T22:00Z"
+      },
+      {
+        "status": "未開始",
+        "home": "黃蜂",
+        "away": "公鹿",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-15T23:30Z"
+      },
+      {
+        "status": "未開始",
+        "home": "國王",
+        "away": "塞爾提克",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T00:00Z"
+      },
+      {
+        "status": "未開始",
+        "home": "馬刺",
+        "away": "爵士",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T01:30Z"
+      },
+      {
+        "status": "未開始",
+        "home": "LA Clippers",
+        "away": "巫師",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T02:30Z"
+      }
+    ],
+    "power_ranking": [
+      {
+        "team": "灰狼",
+        "games": 1,
+        "avg_margin": 16.0
+      },
+      {
+        "team": "魔術",
+        "games": 1,
+        "avg_margin": 7.0
+      },
+      {
+        "team": "七六人",
+        "games": 1,
+        "avg_margin": -7.0
+      },
+      {
+        "team": "溜馬",
+        "games": 1,
+        "avg_margin": -16.0
+      }
+    ],
+    "watchlist": [
+      {
+        "matchup": "鵜鶘 @ 騎士",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "獨贏",
+        "pick": "騎士",
+        "point": null,
+        "price": 1.57,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "鵜鶘 @ 騎士",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "獨贏",
+        "pick": "鵜鶘",
+        "point": null,
+        "price": 2.36,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "鵜鶘 @ 騎士",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "讓分",
+        "pick": "騎士",
+        "point": -2.5,
+        "price": 1.93,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "鵜鶘 @ 騎士",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "讓分",
+        "pick": "鵜鶘",
+        "point": 2.5,
+        "price": 1.83,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "太陽 @ 活塞",
+        "start_time": "2026-07-15T22:00:00Z",
+        "market": "獨贏",
+        "pick": "活塞",
+        "point": null,
+        "price": 3.65,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "太陽 @ 活塞",
+        "start_time": "2026-07-15T22:00:00Z",
+        "market": "獨贏",
+        "pick": "太陽",
+        "point": null,
+        "price": 1.27,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "太陽 @ 活塞",
+        "start_time": "2026-07-15T22:00:00Z",
+        "market": "讓分",
+        "pick": "活塞",
+        "point": 6.5,
+        "price": 1.93,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "太陽 @ 活塞",
+        "start_time": "2026-07-15T22:00:00Z",
+        "market": "讓分",
+        "pick": "太陽",
+        "point": -6.5,
+        "price": 1.83,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "公鹿 @ 黃蜂",
+        "start_time": "2026-07-15T23:30:00Z",
+        "market": "獨贏",
+        "pick": "黃蜂",
+        "point": null,
+        "price": 1.53,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "公鹿 @ 黃蜂",
+        "start_time": "2026-07-15T23:30:00Z",
+        "market": "獨贏",
+        "pick": "公鹿",
+        "point": null,
+        "price": 2.52,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "公鹿 @ 黃蜂",
+        "start_time": "2026-07-15T23:30:00Z",
+        "market": "讓分",
+        "pick": "黃蜂",
+        "point": -4.5,
+        "price": 1.89,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "公鹿 @ 黃蜂",
+        "start_time": "2026-07-15T23:30:00Z",
+        "market": "讓分",
+        "pick": "公鹿",
+        "point": 4.5,
+        "price": 1.93,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "塞爾提克 @ 國王",
+        "start_time": "2026-07-16T00:00:00Z",
+        "market": "獨贏",
+        "pick": "塞爾提克",
+        "point": null,
+        "price": 1.45,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "塞爾提克 @ 國王",
+        "start_time": "2026-07-16T00:00:00Z",
+        "market": "獨贏",
+        "pick": "國王",
+        "point": null,
+        "price": 2.76,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "塞爾提克 @ 國王",
+        "start_time": "2026-07-16T00:00:00Z",
+        "market": "讓分",
+        "pick": "塞爾提克",
+        "point": -5.5,
+        "price": 1.88,
+        "book": "FanDuel"
+      }
+    ],
+    "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，僅供參考觀察，不計入 Kelly 資金配置。"
   },
-  "history": [],
+  "history": [
+    {
+      "date": "2026-04-11",
+      "bet": "雷霆 +12.0",
+      "book": "BetRivers",
+      "price": 1.89,
+      "prob": 68.0,
+      "edge": 15.1,
+      "kelly_stake": 64.3,
+      "result": "待開獎"
+    },
+    {
+      "date": "2026-04-08",
+      "bet": "溜馬 +13.0",
+      "book": "MyBookie.ag",
+      "price": 1.91,
+      "prob": 65.6,
+      "edge": 13.2,
+      "kelly_stake": 55.4,
+      "result": "待開獎"
+    },
+    {
+      "date": "2026-04-08",
+      "bet": "爵士 +10.5",
+      "book": "MyBookie.ag",
+      "price": 1.91,
+      "prob": 71.1,
+      "edge": 18.8,
+      "kelly_stake": 78.7,
+      "result": "待開獎"
+    },
+    {
+      "date": "2026-04-06",
+      "bet": "國王 +13.5",
+      "book": "LowVig.ag",
+      "price": 1.94,
+      "prob": 68.4,
+      "edge": 16.8,
+      "kelly_stake": 69.5,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-04-04",
+      "bet": "公牛 +14.5",
+      "book": "FanDuel",
+      "price": 1.91,
+      "prob": 67.9,
+      "edge": 15.5,
+      "kelly_stake": 65.2,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-04-04",
+      "bet": "灰熊 +14.5",
+      "book": "BetUS",
+      "price": 1.91,
+      "prob": 67.8,
+      "edge": 15.5,
+      "kelly_stake": 64.9,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-04-04",
+      "bet": "國王 +6.5",
+      "book": "DraftKings",
+      "price": 1.85,
+      "prob": 69.2,
+      "edge": 15.2,
+      "kelly_stake": 66.0,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-04-02",
+      "bet": "灰熊 +14.0",
+      "book": "MyBookie.ag",
+      "price": 1.91,
+      "prob": 64.7,
+      "edge": 12.3,
+      "kelly_stake": 51.8,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-31",
+      "bet": "灰熊 +12.5",
+      "book": "LowVig.ag",
+      "price": 1.98,
+      "prob": 64.7,
+      "edge": 14.2,
+      "kelly_stake": 57.2,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-03-24",
+      "bet": "公牛 +9.0",
+      "book": "LowVig.ag",
+      "price": 1.94,
+      "prob": 65.8,
+      "edge": 14.2,
+      "kelly_stake": 58.7,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-24",
+      "bet": "公鹿 +13.5",
+      "book": "LowVig.ag",
+      "price": 1.93,
+      "prob": 64.6,
+      "edge": 12.8,
+      "kelly_stake": 53.0,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-03-23",
+      "bet": "灰狼 +10.0",
+      "book": "LowVig.ag",
+      "price": 1.93,
+      "prob": 61.3,
+      "edge": 9.4,
+      "kelly_stake": 39.2,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-22",
+      "bet": "魔術 +4.0",
+      "book": "MyBookie.ag",
+      "price": 1.91,
+      "prob": 59.5,
+      "edge": 7.1,
+      "kelly_stake": 37.4,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-22",
+      "bet": "獨行俠 +7.0",
+      "book": "LowVig.ag",
+      "price": 1.99,
+      "prob": 57.7,
+      "edge": 7.4,
+      "kelly_stake": 37.4,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-22",
+      "bet": "爵士 +6.0",
+      "book": "BetRivers",
+      "price": 1.91,
+      "prob": 60.4,
+      "edge": 8.0,
+      "kelly_stake": 42.0,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-03-22",
+      "bet": "灰熊 +16.5",
+      "book": "LowVig.ag",
+      "price": 1.99,
+      "prob": 64.9,
+      "edge": 14.7,
+      "kelly_stake": 73.7,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-03-22",
+      "bet": "勇士 +10.5",
+      "book": "LowVig.ag",
+      "price": 1.93,
+      "prob": 62.3,
+      "edge": 10.5,
+      "kelly_stake": 54.3,
+      "result": "落敗"
+    },
+    {
+      "date": "2026-03-22",
+      "bet": "公鹿 +11.5",
+      "book": "LowVig.ag",
+      "price": 1.94,
+      "prob": 66.3,
+      "edge": 14.7,
+      "kelly_stake": 76.1,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-21",
+      "bet": "籃網 +17.5",
+      "book": "Bovada",
+      "price": 1.95,
+      "prob": 62.5,
+      "edge": 11.2,
+      "kelly_stake": 57.6,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-21",
+      "bet": "灰熊 +15.0",
+      "book": "LowVig.ag",
+      "price": 1.99,
+      "prob": 74.2,
+      "edge": 23.9,
+      "kelly_stake": 120.3,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-20",
+      "bet": "公牛 +13.0",
+      "book": "LowVig.ag",
+      "price": 1.95,
+      "prob": 73.1,
+      "edge": 21.8,
+      "kelly_stake": 111.8,
+      "result": "獲勝"
+    },
+    {
+      "date": "2026-03-20",
+      "bet": "快艇 +4.0",
+      "book": "LowVig.ag",
+      "price": 1.94,
+      "prob": 59.9,
+      "edge": 8.3,
+      "kelly_stake": 43.1,
+      "result": "落敗"
+    }
+  ],
   "team_stars": [
     {
       "team": "湖人",
