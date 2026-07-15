@@ -1,7 +1,7 @@
 {
   "version": "V2.0",
-  "generated_at": null,
-  "data_source": "尚未執行",
+  "generated_at": "2026-07-16 00:58",
+  "data_source": "即時數據",
   "run_type": "test",
   "regular_season": {
     "total_picks": 0,
@@ -9,16 +9,217 @@
     "days": []
   },
   "performance": {
-    "total_recommendations": 0,
-    "wins": 0,
-    "win_rate": 0,
-    "profit": 0
+    "total_recommendations": 19,
+    "wins": 10,
+    "win_rate": 52.6,
+    "profit": 94.6
   },
   "summer_league": {
-    "available": false,
-    "games": [],
+    "available": true,
+    "games": [
+      {
+        "status": "Scheduled",
+        "home": "Minnesota Timberwolves",
+        "away": "Indiana Pacers",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-15T19:30Z"
+      },
+      {
+        "status": "Scheduled",
+        "home": "Philadelphia 76ers",
+        "away": "Orlando Magic",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-15T20:00Z"
+      },
+      {
+        "status": "Scheduled",
+        "home": "Cleveland Cavaliers",
+        "away": "New Orleans Pelicans",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-15T21:30Z"
+      },
+      {
+        "status": "Scheduled",
+        "home": "Detroit Pistons",
+        "away": "Phoenix Suns",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-15T22:00Z"
+      },
+      {
+        "status": "Scheduled",
+        "home": "Charlotte Hornets",
+        "away": "Milwaukee Bucks",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-15T23:30Z"
+      },
+      {
+        "status": "Scheduled",
+        "home": "Sacramento Kings",
+        "away": "Boston Celtics",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T00:00Z"
+      },
+      {
+        "status": "Scheduled",
+        "home": "San Antonio Spurs",
+        "away": "Utah Jazz",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T01:30Z"
+      },
+      {
+        "status": "Scheduled",
+        "home": "LA Clippers",
+        "away": "Washington Wizards",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T02:30Z"
+      }
+    ],
     "power_ranking": [],
-    "watchlist": [],
-    "note": ""
+    "watchlist": [
+      {
+        "matchup": "Indiana Pacers @ Minnesota Timberwolves",
+        "start_time": "2026-07-15T19:30:00Z",
+        "market": "h2h",
+        "pick": "Indiana Pacers",
+        "point": null,
+        "price": 2.18,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Indiana Pacers @ Minnesota Timberwolves",
+        "start_time": "2026-07-15T19:30:00Z",
+        "market": "h2h",
+        "pick": "Minnesota Timberwolves",
+        "point": null,
+        "price": 1.69,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Indiana Pacers @ Minnesota Timberwolves",
+        "start_time": "2026-07-15T19:30:00Z",
+        "market": "spreads",
+        "pick": "Indiana Pacers",
+        "point": 2.5,
+        "price": 1.91,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Indiana Pacers @ Minnesota Timberwolves",
+        "start_time": "2026-07-15T19:30:00Z",
+        "market": "spreads",
+        "pick": "Minnesota Timberwolves",
+        "point": -2.5,
+        "price": 1.91,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Orlando Magic @ Philadelphia 76ers",
+        "start_time": "2026-07-15T20:00:00Z",
+        "market": "h2h",
+        "pick": "Orlando Magic",
+        "point": null,
+        "price": 1.44,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Orlando Magic @ Philadelphia 76ers",
+        "start_time": "2026-07-15T20:00:00Z",
+        "market": "h2h",
+        "pick": "Philadelphia 76ers",
+        "point": null,
+        "price": 2.8,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Orlando Magic @ Philadelphia 76ers",
+        "start_time": "2026-07-15T20:00:00Z",
+        "market": "spreads",
+        "pick": "Orlando Magic",
+        "point": -5.5,
+        "price": 1.91,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Orlando Magic @ Philadelphia 76ers",
+        "start_time": "2026-07-15T20:00:00Z",
+        "market": "spreads",
+        "pick": "Philadelphia 76ers",
+        "point": 5.5,
+        "price": 1.91,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "New Orleans Pelicans @ Cleveland Cavaliers",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "h2h",
+        "pick": "Cleveland Cavaliers",
+        "point": null,
+        "price": 1.61,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "New Orleans Pelicans @ Cleveland Cavaliers",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "h2h",
+        "pick": "New Orleans Pelicans",
+        "point": null,
+        "price": 2.34,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "New Orleans Pelicans @ Cleveland Cavaliers",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "spreads",
+        "pick": "Cleveland Cavaliers",
+        "point": -3.5,
+        "price": 1.91,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "New Orleans Pelicans @ Cleveland Cavaliers",
+        "start_time": "2026-07-15T21:30:00Z",
+        "market": "spreads",
+        "pick": "New Orleans Pelicans",
+        "point": 3.5,
+        "price": 1.91,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Phoenix Suns @ Detroit Pistons",
+        "start_time": "2026-07-15T22:00:00Z",
+        "market": "h2h",
+        "pick": "Detroit Pistons",
+        "point": null,
+        "price": 2.08,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Phoenix Suns @ Detroit Pistons",
+        "start_time": "2026-07-15T22:00:00Z",
+        "market": "h2h",
+        "pick": "Phoenix Suns",
+        "point": null,
+        "price": 1.76,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "Phoenix Suns @ Detroit Pistons",
+        "start_time": "2026-07-15T22:00:00Z",
+        "market": "spreads",
+        "pick": "Detroit Pistons",
+        "point": 2.5,
+        "price": 1.88,
+        "book": "FanDuel"
+      }
+    ],
+    "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，僅供參考觀察，不計入 Kelly 資金配置。"
   }
 }
