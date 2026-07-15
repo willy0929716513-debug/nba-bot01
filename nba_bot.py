@@ -413,7 +413,7 @@ def predict_margin(home, away, injury_data, live_ratings):
     margin = (h_net - a_net) / 2 + HOME_ADVANTAGE
 
     def fmt(lst):
-        return ["%s(%s)" % (p.capitalize(), "缺" if s == "out" else "限") for p, s in lst]
+        return ["%s(%s)" % (display_player_name(p), "缺" if s == "out" else "限") for p, s in lst]
 
     return margin, fmt(h_missing), fmt(a_missing)
 
@@ -532,6 +532,37 @@ def fetch_summer_league_scores():
     return []
 
 
+GAME_STATUS_ZH = {
+    "final":       "已完賽",
+    "scheduled":   "未開始",
+    "in progress": "進行中",
+    "halftime":    "中場休息",
+    "postponed":   "延期",
+    "canceled":    "取消",
+    "cancelled":   "取消",
+}
+
+MARKET_ZH = {
+    "h2h":     "獨贏",
+    "spreads": "讓分",
+    "totals":  "大小分",
+}
+
+
+def zh_team_name(name):
+    """Best-effort English->Chinese team name translation, reusing the
+    regular-season TEAM_CN map via normalize_team's substring match (handles
+    ESPN's shorter Summer League display names like "Lakers" too). Falls
+    back to the original string when nothing matches."""
+    if not name:
+        return name
+    return TEAM_CN.get(normalize_team(name), name)
+
+
+def zh_game_status(status):
+    return GAME_STATUS_ZH.get((status or "").strip().lower(), status)
+
+
 def analyze_summer_league():
     """Lightweight, informational-only Summer League report.
 
@@ -553,15 +584,15 @@ def analyze_summer_league():
             continue
         home = next((c for c in competitors if c.get("homeAway") == "home"), competitors[0])
         away = next((c for c in competitors if c.get("homeAway") == "away"), competitors[1])
-        h_name = (home.get("team") or {}).get("displayName", "?")
-        a_name = (away.get("team") or {}).get("displayName", "?")
+        h_name = zh_team_name((home.get("team") or {}).get("displayName", "?"))
+        a_name = zh_team_name((away.get("team") or {}).get("displayName", "?"))
         try:
             h_score = int(home.get("score", 0) or 0)
             a_score = int(away.get("score", 0) or 0)
         except (TypeError, ValueError):
             h_score = a_score = 0
         status_type = (ev.get("status") or {}).get("type") or {}
-        status      = status_type.get("description") or "?"
+        status      = zh_game_status(status_type.get("description") or "?")
         is_final    = bool(status_type.get("completed"))
 
         games.append({
@@ -589,8 +620,8 @@ def analyze_summer_league():
             c_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
         except (KeyError, ValueError):
             continue
-        home = g.get("home_team", "")
-        away = g.get("away_team", "")
+        home = zh_team_name(g.get("home_team", ""))
+        away = zh_team_name(g.get("away_team", ""))
         for book in g.get("bookmakers", [])[:1]:
             for market in book.get("markets", []):
                 if market.get("key") not in ("h2h", "spreads"):
@@ -602,8 +633,8 @@ def analyze_summer_league():
                     watchlist.append({
                         "matchup":    "%s @ %s" % (away, home),
                         "start_time": c_time.isoformat() + "Z",
-                        "market":     market.get("key"),
-                        "pick":       outcome.get("name"),
+                        "market":     MARKET_ZH.get(market.get("key"), market.get("key")),
+                        "pick":       zh_team_name(outcome.get("name")),
                         "point":      outcome.get("point"),
                         "price":      price,
                         "book":       book.get("title", "?"),
@@ -675,8 +706,51 @@ def chunked_send(content, webhook):
             log.error("Discord send failed chunk %d: %s", i, e)
 
 
+RESULT_ZH = {"win": "獲勝", "loss": "落敗", "pending": "待開獎"}
+
+# .title() mis-cases the handful of keys with internal capitals or that are
+# better known by an all-caps nickname; everything else title-cases fine.
+PLAYER_DISPLAY_OVERRIDES = {
+    "mccain":    "McCain",
+    "mccollum":  "McCollum",
+    "lamelo":    "LaMelo",
+    "cp3":       "CP3",
+}
+
+
+def display_player_name(key):
+    return PLAYER_DISPLAY_OVERRIDES.get(key, key.title())
+
+
+def build_team_stars():
+    """Reference list of each team's marquee players, for the web dashboard.
+    Pulled straight from IMPACT_PLAYERS (only last names/handles are stored),
+    so display names are title-cased rather than full names."""
+    return [
+        {"team": TEAM_CN.get(team, team), "players": [display_player_name(p) for p in players]}
+        for team, players in IMPACT_PLAYERS.items()
+    ]
+
+
+def build_history_list(history, limit=30):
+    items = sorted(history.values(), key=lambda h: h.get("date", ""), reverse=True)
+    return [
+        {
+            "date":        h.get("date", ""),
+            "bet":         h.get("bet", ""),
+            "book":        h.get("book", ""),
+            "price":       h.get("price"),
+            "prob":        round(h.get("prob", 0) * 100, 1),
+            "edge":        round(h.get("edge", 0) * 100, 1),
+            "kelly_stake": h.get("kelly_stake"),
+            "result":      RESULT_ZH.get(h.get("result", "pending"), h.get("result", "pending")),
+        }
+        for h in items[:limit]
+    ]
+
+
 def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
-                      total_rec, wins, win_rate, profit, summer_league):
+                      total_rec, wins, win_rate, profit, summer_league, history):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     days = []
     for date in sorted(daily_picks):
@@ -726,6 +800,8 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
             "profit":                round(profit, 1),
         },
         "summer_league": summer_league,
+        "history":       build_history_list(history),
+        "team_stars":    build_team_stars(),
     }
 
     try:
@@ -950,7 +1026,7 @@ def run():
         now_tw=now_tw, data_source=data_source, is_official_run=is_official_run,
         daily_picks=daily_picks, today_s=today_s,
         total_rec=total_rec, wins=wins, win_rate=win_rate, profit=profit,
-        summer_league=summer_league,
+        summer_league=summer_league, history=history,
     )
 
     log.info("Sending to Discord, length: %d", len(output))
