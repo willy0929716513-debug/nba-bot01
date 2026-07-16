@@ -1015,12 +1015,14 @@
         var badgeCls = passes ? "badge-tier-strong" : "badge-status";
         var badgeTxt = passes ? "🎯 推薦" : "👀 觀察中";
         var edgeSign = r.edge >= 0 ? "+" : "";
+        var formNote = r.has_form ? "" : '<div class="row-sub" style="opacity:.65;">雙方尚無夏聯戰績數據，僅依盤口計算</div>';
         html += '<div class="row">' +
           '<div class="row-top">' +
             '<span class="row-title">' + matchupWithLogos(r.matchup) + '</span>' +
             '<span class="row-time">' + esc(fmtTaiwanTime(r.start_time)) + '（台灣時間）</span>' +
           '</div>' +
           '<div class="row-sub"><span class="badge ' + badgeCls + '" style="margin-right:6px;">' + badgeTxt + '</span>投注 <b>' + esc(r.bet) + '</b> @ <b>' + Number(r.price).toFixed(2) + '</b>（' + esc(r.book) + '）</div>' +
+          formNote +
           '<div class="row-stats">' +
             '<span class="stat">勝率 <b>' + Number(r.prob).toFixed(1) + '%</b></span>' +
             '<span class="stat">Edge <b>' + edgeSign + Number(r.edge).toFixed(1) + '%</b></span>' +

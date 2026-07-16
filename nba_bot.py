@@ -595,19 +595,27 @@ def summer_recommendations(odds_games, team_power):
     """Same edge-vs-market-consensus approach as the regular-season model
     (predict_margin's role is played by team_power, a simple avg-margin
     proxy from completed Summer League games), gated harder than regular
-    season:
-      - both teams need at least one completed game already on record --
-        no team_power entry means the game is skipped entirely
-      - wider simulated variance (rosters/rotations are far less settled)
-    No Kelly stake is computed -- this is a probability/edge lean only,
+    season: wider simulated variance (rosters/rotations are far less
+    settled), and no Kelly stake -- this is a probability/edge lean only,
     not a bankroll-sizing recommendation, given how thin the sample is.
 
+    A team with no completed games yet falls back to a neutral (0) form
+    estimate rather than skipping the game outright -- early in the
+    tournament the teams with an upcoming line on the board and the teams
+    that have already played often barely overlap, and gating on "both
+    teams already have data" made this come back empty most of the time.
+    has_form tracks whether the model actually had real form data to add
+    beyond the market line, so a recommendation is only tagged as meeting
+    the edge bar when there's real signal behind it -- a "good" edge that
+    comes purely from finding a better-than-consensus line, with no team
+    strength data at all, is a weaker claim than one backed by form and
+    shouldn't be badged the same way.
+
     Unlike the regular-season model, this does NOT drop evaluated games
-    that fall short of the edge bar -- every game with enough data to
-    evaluate is returned (best line per game), tagged with whether it
-    clears SUMMER_EDGE_THRESHOLD, so the "we looked and found nothing"
-    case is visibly distinguishable from "we couldn't evaluate this at
-    all" instead of both looking identically empty.
+    that fall short of the edge bar -- every game with enough market data
+    to evaluate is returned (best line per game), tagged with whether it
+    clears SUMMER_EDGE_THRESHOLD, so "we looked and found nothing" is
+    visibly distinguishable from "we couldn't evaluate this at all".
     """
     picks = {}
     for g in odds_games:
@@ -617,9 +625,10 @@ def summer_recommendations(odds_games, team_power):
             continue
         home = zh_team_name(g.get("home_team", ""))
         away = zh_team_name(g.get("away_team", ""))
-        if home not in team_power or away not in team_power:
-            continue
-        margin_est = team_power[home] - team_power[away]
+        home_power = team_power.get(home)
+        away_power = team_power.get(away)
+        has_form   = home_power is not None and away_power is not None
+        margin_est = (home_power or 0.0) - (away_power or 0.0)
         bookmakers = g.get("bookmakers", [])
         game_id    = "%s@%s_%s" % (away, home, c_time.date())
 
@@ -659,7 +668,8 @@ def summer_recommendations(odds_games, team_power):
                             "book":           book.get("title", "?"),
                             "prob":           round(prob * 100, 1),
                             "edge":           round(edge * 100, 1),
-                            "meets_threshold": edge >= SUMMER_EDGE_THRESHOLD,
+                            "has_form":       has_form,
+                            "meets_threshold": edge >= SUMMER_EDGE_THRESHOLD and has_form,
                         }
 
     return sorted(picks.values(), key=lambda x: x["edge"], reverse=True)
