@@ -582,14 +582,20 @@ SUMMER_STD_MULTIPLIER  = 1.3    # exhibition-game scoring swings more than real-
 def summer_recommendations(odds_games, team_power):
     """Same edge-vs-market-consensus approach as the regular-season model
     (predict_margin's role is played by team_power, a simple avg-margin
-    proxy from completed Summer League games), gated much harder than
-    regular season:
+    proxy from completed Summer League games), gated harder than regular
+    season:
       - both teams need at least one completed game already on record --
-        no team_power entry means no recommendation for that side at all
-      - a higher edge bar (10% vs 6%)
+        no team_power entry means the game is skipped entirely
       - wider simulated variance (rosters/rotations are far less settled)
     No Kelly stake is computed -- this is a probability/edge lean only,
     not a bankroll-sizing recommendation, given how thin the sample is.
+
+    Unlike the regular-season model, this does NOT drop evaluated games
+    that fall short of the edge bar -- every game with enough data to
+    evaluate is returned (best line per game), tagged with whether it
+    clears SUMMER_EDGE_THRESHOLD, so the "we looked and found nothing"
+    case is visibly distinguishable from "we couldn't evaluate this at
+    all" instead of both looking identically empty.
     """
     picks = {}
     for g in odds_games:
@@ -630,19 +636,18 @@ def summer_recommendations(odds_games, team_power):
                     blended = target * SUMMER_MODEL_WEIGHT + (-consensus) * SUMMER_MARKET_WEIGHT
                     prob    = simulate_cover(blended, line, std=DYNAMIC_STD_BASE * SUMMER_STD_MULTIPLIER)
                     edge    = prob - (1 / price)
-                    if edge < SUMMER_EDGE_THRESHOLD:
-                        continue
 
                     existing = picks.get(game_id)
                     if existing is None or edge > existing["edge"]:
                         picks[game_id] = {
-                            "matchup":    "%s @ %s" % (away, home),
-                            "start_time": c_time.isoformat() + "Z",
-                            "bet":        "%s %+.1f" % (zh_team_name(raw_name), line),
-                            "price":      price,
-                            "book":       book.get("title", "?"),
-                            "prob":       round(prob * 100, 1),
-                            "edge":       round(edge * 100, 1),
+                            "matchup":        "%s @ %s" % (away, home),
+                            "start_time":     c_time.isoformat() + "Z",
+                            "bet":            "%s %+.1f" % (zh_team_name(raw_name), line),
+                            "price":          price,
+                            "book":           book.get("title", "?"),
+                            "prob":           round(prob * 100, 1),
+                            "edge":           round(edge * 100, 1),
+                            "meets_threshold": edge >= SUMMER_EDGE_THRESHOLD,
                         }
 
     return sorted(picks.values(), key=lambda x: x["edge"], reverse=True)
@@ -769,7 +774,7 @@ def analyze_summer_league():
         "summary":         summary,
         "recommendations": recommendations[:8],
         "watchlist":       watchlist[:15],
-        "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，推薦門檻拉高至 Edge ≥ 10%，但不提供 Kelly 資金配置建議，下注金額請自行斟酌。",
+        "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小；下方列出所有已可評估的賽事，Edge ≥ 10% 才標記為推薦，未達門檻的也照樣顯示數字供參考，且一律不提供 Kelly 資金配置建議，下注金額請自行斟酌。",
     }
 
 
@@ -797,10 +802,11 @@ def format_summer_league_section(sl):
             ))
 
     if sl.get("recommendations"):
-        lines.append("\n🎯 夏聯推薦 (Edge ≥ 10%，無 Kelly 建議):")
-        for r in sl["recommendations"][:6]:
-            lines.append("> %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge +%.1f%%" % (
-                r["matchup"], r["bet"], r["price"], r["book"], r["prob"], r["edge"]
+        lines.append("\n🎯 夏聯推薦與觀察 (Edge ≥ 10% 才算正式推薦，無 Kelly 建議):")
+        for r in sl["recommendations"][:8]:
+            tag = "🎯推薦" if r.get("meets_threshold") else "👀觀察中"
+            lines.append("> [%s] %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge %+.1f%%" % (
+                tag, r["matchup"], r["bet"], r["price"], r["book"], r["prob"], r["edge"]
             ))
 
     if sl["watchlist"]:
