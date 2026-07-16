@@ -428,12 +428,6 @@
   .sk-tile-value { height: 26px; width: 60%; margin-top: 8px; }
   .sk-tile-label { height: 11px; width: 80%; }
 
-  /* ---------- star chips ---------- */
-  .stars-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--gap-card); }
-  .star-card { padding: 16px; }
-  .star-card .team-name { font-weight: 700; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-  .chip { display: inline-flex; font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--hairline); color: var(--ink-2); margin: 0 5px 5px 0; }
-
   /* ---------- team logos ---------- */
   .team-logo, .team-logo-fallback {
     border-radius: 50%;
@@ -505,7 +499,6 @@
       <a class="seg-btn" href="#regular-season-section" data-target="regular-season-section" id="ic-tab-cal"><span></span>推薦</a>
       <a class="seg-btn" href="#summer-league-section" data-target="summer-league-section" id="ic-tab-sun"><span></span>夏季聯賽</a>
       <a class="seg-btn" href="#history-section" data-target="history-section" id="ic-tab-hist"><span></span>歷史紀錄</a>
-      <a class="seg-btn" href="#team-stars-section" data-target="team-stars-section" id="ic-tab-star"><span></span>當家球星</a>
     </div>
   </nav>
 
@@ -566,15 +559,6 @@
       <span class="chev" id="icon-chev-hist"></span>
     </div>
     <div id="history-body"></div>
-  </section>
-
-  <section id="team-stars-section" class="reveal">
-    <div class="section-head">
-      <span class="ic" id="icon-sec-star"></span>
-      <div class="head-text"><h2>當家球星</h2><p>傷兵影響最大的核心球員（模型判斷用主力名單，非完整陣容）</p></div>
-      <span class="chev" id="icon-chev-star"></span>
-    </div>
-    <div id="team-stars-body"></div>
   </section>
 
   <div class="status-row fade-in" id="status-row">
@@ -646,15 +630,12 @@
   mount("icon-sec-cal", "calendar");
   mount("icon-sec-sun", "sun");
   mount("icon-sec-hist", "history");
-  mount("icon-sec-star", "star");
   mount("icon-chev-cal", "chevronright");
   mount("icon-chev-sun", "chevronright");
   mount("icon-chev-hist", "chevronright");
-  mount("icon-chev-star", "chevronright");
   document.querySelector("#ic-tab-cal span").innerHTML = svg("calendar");
   document.querySelector("#ic-tab-sun span").innerHTML = svg("sun");
   document.querySelector("#ic-tab-hist span").innerHTML = svg("history");
-  document.querySelector("#ic-tab-star span").innerHTML = svg("star");
 
   /* ============ theme ============ */
   var root = document.documentElement;
@@ -1027,18 +1008,22 @@
     }
 
     if (sl.recommendations && sl.recommendations.length) {
-      html += '<div class="subhead">夏聯推薦（Edge ≥ 10%，無 Kelly 建議）</div>';
+      html += '<div class="subhead">夏聯推薦與觀察（Edge ≥ 10% 才算推薦，無 Kelly 建議）</div>';
       html += '<div class="card row-list hoverable">';
       sl.recommendations.forEach(function (r) {
+        var passes = !!r.meets_threshold;
+        var badgeCls = passes ? "badge-tier-strong" : "badge-status";
+        var badgeTxt = passes ? "🎯 推薦" : "👀 觀察中";
+        var edgeSign = r.edge >= 0 ? "+" : "";
         html += '<div class="row">' +
           '<div class="row-top">' +
             '<span class="row-title">' + matchupWithLogos(r.matchup) + '</span>' +
             '<span class="row-time">' + esc(fmtTaiwanTime(r.start_time)) + '（台灣時間）</span>' +
           '</div>' +
-          '<div class="row-sub"><span class="badge badge-tier-strong" style="margin-right:6px;">🎯 夏聯推薦</span>投注 <b>' + esc(r.bet) + '</b> @ <b>' + Number(r.price).toFixed(2) + '</b>（' + esc(r.book) + '）</div>' +
+          '<div class="row-sub"><span class="badge ' + badgeCls + '" style="margin-right:6px;">' + badgeTxt + '</span>投注 <b>' + esc(r.bet) + '</b> @ <b>' + Number(r.price).toFixed(2) + '</b>（' + esc(r.book) + '）</div>' +
           '<div class="row-stats">' +
             '<span class="stat">勝率 <b>' + Number(r.prob).toFixed(1) + '%</b></span>' +
-            '<span class="stat">Edge <b>+' + Number(r.edge).toFixed(1) + '%</b></span>' +
+            '<span class="stat">Edge <b>' + edgeSign + Number(r.edge).toFixed(1) + '%</b></span>' +
           '</div>' +
         '</div>';
       });
@@ -1099,23 +1084,6 @@
     body.innerHTML = html;
   }
 
-  function renderTeamStars(data) {
-    var stars = data.team_stars || [];
-    var body = document.getElementById("team-stars-body");
-    if (!stars.length) {
-      body.innerHTML = emptyState("star", "暫無資料", "稍後重新整理查看。");
-      return;
-    }
-    var html = '<div class="stars-grid">';
-    stars.forEach(function (s) {
-      html += '<div class="card star-card hoverable"><div class="team-name">' + teamLogo(s.team, 24) + esc(s.team) + '</div>';
-      (s.players || []).forEach(function (p) { html += '<span class="chip">' + esc(p) + '</span>'; });
-      html += '</div>';
-    });
-    html += '</div>';
-    body.innerHTML = html;
-  }
-
   function render(data) {
     var meta = document.getElementById("meta-line");
     var updated = data.generated_at ? esc(data.generated_at) + "（台灣時間）" : "尚未產生資料";
@@ -1131,7 +1099,6 @@
     renderRegularSeason(data);
     renderSummerLeague(data);
     renderHistory(data);
-    renderTeamStars(data);
   }
 
   var TIER_GRADE = { "頂級": "SS", "強力": "S", "穩定": "A" };
@@ -1174,7 +1141,6 @@
     skeletonRows("regular-season-body", 2);
     skeletonRows("summer-league-body", 3);
     skeletonRows("history-body", 3);
-    skeletonRows("team-stars-body", 3);
     document.getElementById("regular-season-trio").innerHTML = "";
   }
 
@@ -1187,7 +1153,7 @@
       .catch(function (err) {
         document.getElementById("meta-line").innerHTML = '<span class="pill">資料載入失敗</span>';
         var msg = emptyState("alertcircle", "無法載入資料", "請檢查網路連線後重新整理。", true);
-        ["regular-season-body", "summer-league-body", "history-body", "team-stars-body"].forEach(function (id) {
+        ["regular-season-body", "summer-league-body", "history-body"].forEach(function (id) {
           document.getElementById(id).innerHTML = msg;
         });
         console.error(err);
