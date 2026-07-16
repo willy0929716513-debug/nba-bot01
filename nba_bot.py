@@ -705,7 +705,7 @@ def summer_recommendations(odds_games, team_power):
                             "meets_threshold": edge >= SUMMER_EDGE_THRESHOLD and has_form,
                         }
 
-    return sorted(picks.values(), key=lambda x: x["edge"], reverse=True)
+    return sorted(picks.values(), key=lambda x: (x["start_time"][:10], -x["edge"]))
 
 
 def build_summer_league_summary(power_ranking):
