@@ -590,6 +590,35 @@ SUMMER_MODEL_WEIGHT    = 0.30
 SUMMER_MARKET_WEIGHT   = 0.70
 SUMMER_STD_MULTIPLIER  = 1.3    # exhibition-game scoring swings more than real-season ball
 
+# Pre-tournament prior for teams that haven't played a Summer League game yet,
+# so the model has something better than a flat 0 to work with before results
+# exist. Deliberately limited to 2026 lottery picks (1-14) only -- these are
+# public, structured draft results (not day-to-day roster/lineup guesses),
+# confirmed by AJ Dybantsa/Washington at #1, Cameron Boozer/Memphis at #3
+# (matches the Grizzlies' IMPACT_PLAYERS entry), and the Pacers->Clippers
+# pick-5 trade, all cross-checked against multiple independent sources.
+# Magnitude tapers with pick order and stays well inside the range real
+# avg_margin values take on, since a lottery pick is a much weaker signal
+# than actual measured Summer League performance -- this only nudges the
+# probability/edge estimate, it does NOT count toward has_form, so it can
+# never by itself earn a game the confident "meets threshold" badge.
+SUMMER_ROOKIE_PRIOR = {
+    "巫師":   4.0,   # AJ Dybantsa, #1
+    "爵士":   3.5,   # Darryn Peterson, #2
+    "灰熊":   3.5,   # Cameron Boozer, #3
+    "公牛":   3.0,   # Caleb Wilson, #4
+    "快艇":   3.0,   # via Pacers trade, #5
+    "籃網":   2.5,   # Mikel Brown Jr., #6
+    "國王":   2.5,   # Darius Acuff Jr., #7
+    "老鷹":   2.0,   # Kingston Flemings, #8
+    "獨行俠": 2.0,   # Morez Johnson Jr., #9
+    "公鹿":   2.0,   # Brayden Burries, #10
+    "勇士":   1.5,   # Yaxel Lendeborg, #11
+    "雷霆":   1.5,   # Aday Mara, #12
+    "熱火":   1.5,   # Nate Ament, #13
+    "黃蜂":   1.5,   # Hannes Steinbach, #14
+}
+
 
 def summer_recommendations(odds_games, team_power):
     """Same edge-vs-market-consensus approach as the regular-season model
@@ -599,17 +628,19 @@ def summer_recommendations(odds_games, team_power):
     settled), and no Kelly stake -- this is a probability/edge lean only,
     not a bankroll-sizing recommendation, given how thin the sample is.
 
-    A team with no completed games yet falls back to a neutral (0) form
-    estimate rather than skipping the game outright -- early in the
-    tournament the teams with an upcoming line on the board and the teams
-    that have already played often barely overlap, and gating on "both
-    teams already have data" made this come back empty most of the time.
-    has_form tracks whether the model actually had real form data to add
-    beyond the market line, so a recommendation is only tagged as meeting
-    the edge bar when there's real signal behind it -- a "good" edge that
-    comes purely from finding a better-than-consensus line, with no team
-    strength data at all, is a weaker claim than one backed by form and
-    shouldn't be badged the same way.
+    A team with no completed games yet falls back first to SUMMER_ROOKIE_PRIOR
+    (a lottery-pick-based estimate) and only then to a neutral 0, rather than
+    skipping the game outright -- early in the tournament the teams with an
+    upcoming line on the board and the teams that have already played often
+    barely overlap, and gating on "both teams already have data" made this
+    come back empty most of the time. has_form tracks whether the model
+    actually had *real, played* form data to add beyond the market line --
+    the draft-pick prior improves the probability/edge estimate but is a
+    guess, not a measurement, so it does not set has_form on its own. A
+    recommendation is only tagged as meeting the edge bar when there's real
+    signal behind it -- a "good" edge that comes purely from finding a
+    better-than-consensus line, with no team strength data at all, is a
+    weaker claim than one backed by form and shouldn't be badged the same way.
 
     Unlike the regular-season model, this does NOT drop evaluated games
     that fall short of the edge bar -- every game with enough market data
@@ -628,7 +659,9 @@ def summer_recommendations(odds_games, team_power):
         home_power = team_power.get(home)
         away_power = team_power.get(away)
         has_form   = home_power is not None and away_power is not None
-        margin_est = (home_power or 0.0) - (away_power or 0.0)
+        home_est   = home_power if home_power is not None else SUMMER_ROOKIE_PRIOR.get(home, 0.0)
+        away_est   = away_power if away_power is not None else SUMMER_ROOKIE_PRIOR.get(away, 0.0)
+        margin_est = home_est - away_est
         bookmakers = g.get("bookmakers", [])
         game_id    = "%s@%s_%s" % (away, home, c_time.date())
 
