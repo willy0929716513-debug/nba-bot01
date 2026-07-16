@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-16 22:40",
+  "generated_at": "2026-07-16 23:19",
   "data_source": "即時數據",
   "run_type": "test",
   "regular_season": {
@@ -18,163 +18,64 @@
     "available": true,
     "games": [
       {
-        "status": "已完賽",
-        "home": "灰狼",
-        "away": "溜馬",
-        "home_score": 114,
-        "away_score": 98,
-        "start_time": "2026-07-15T19:30Z"
+        "status": "未開始",
+        "home": "雷霆",
+        "away": "獨行俠",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T20:00Z"
       },
       {
-        "status": "已完賽",
-        "home": "七六人",
-        "away": "魔術",
-        "home_score": 92,
-        "away_score": 99,
-        "start_time": "2026-07-15T20:00Z"
+        "status": "未開始",
+        "home": "火箭",
+        "away": "籃網",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T20:30Z"
       },
       {
-        "status": "已完賽",
-        "home": "騎士",
-        "away": "鵜鶘",
-        "home_score": 82,
-        "away_score": 77,
-        "start_time": "2026-07-15T21:30Z"
+        "status": "未開始",
+        "home": "公牛",
+        "away": "湖人",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T22:00Z"
       },
       {
-        "status": "已完賽",
-        "home": "活塞",
-        "away": "太陽",
-        "home_score": 88,
-        "away_score": 100,
-        "start_time": "2026-07-15T22:00Z"
+        "status": "未開始",
+        "home": "尼克",
+        "away": "勇士",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-16T23:00Z"
       },
       {
-        "status": "已完賽",
-        "home": "黃蜂",
-        "away": "公鹿",
-        "home_score": 91,
-        "away_score": 110,
-        "start_time": "2026-07-15T23:30Z"
+        "status": "未開始",
+        "home": "老鷹",
+        "away": "灰熊",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-17T00:00Z"
       },
       {
-        "status": "已完賽",
-        "home": "國王",
-        "away": "塞爾提克",
-        "home_score": 76,
-        "away_score": 82,
-        "start_time": "2026-07-16T00:00Z"
+        "status": "未開始",
+        "home": "熱火",
+        "away": "暴龍",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-17T01:00Z"
       },
       {
-        "status": "已完賽",
-        "home": "馬刺",
-        "away": "爵士",
-        "home_score": 94,
-        "away_score": 82,
-        "start_time": "2026-07-16T01:30Z"
-      },
-      {
-        "status": "已完賽",
-        "home": "快艇",
-        "away": "巫師",
-        "home_score": 108,
-        "away_score": 94,
-        "start_time": "2026-07-16T02:30Z"
+        "status": "未開始",
+        "home": "金塊",
+        "away": "拓荒者",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-17T02:00Z"
       }
     ],
-    "power_ranking": [
-      {
-        "team": "公鹿",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 19.0,
-        "avg_pf": 110.0,
-        "avg_pa": 91.0
-      },
-      {
-        "team": "灰狼",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 16.0,
-        "avg_pf": 114.0,
-        "avg_pa": 98.0
-      },
-      {
-        "team": "快艇",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 14.0,
-        "avg_pf": 108.0,
-        "avg_pa": 94.0
-      },
-      {
-        "team": "太陽",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 12.0,
-        "avg_pf": 100.0,
-        "avg_pa": 88.0
-      },
-      {
-        "team": "馬刺",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 12.0,
-        "avg_pf": 94.0,
-        "avg_pa": 82.0
-      },
-      {
-        "team": "魔術",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 7.0,
-        "avg_pf": 99.0,
-        "avg_pa": 92.0
-      },
-      {
-        "team": "塞爾提克",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 6.0,
-        "avg_pf": 82.0,
-        "avg_pa": 76.0
-      },
-      {
-        "team": "騎士",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 5.0,
-        "avg_pf": 82.0,
-        "avg_pa": 77.0
-      },
-      {
-        "team": "鵜鶘",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -5.0,
-        "avg_pf": 77.0,
-        "avg_pa": 82.0
-      },
-      {
-        "team": "國王",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -6.0,
-        "avg_pf": 76.0,
-        "avg_pa": 82.0
-      }
-    ],
-    "summary": "戰績最佳：公鹿（1勝0敗，場均淨勝 +19.0）。目前墊底：黃蜂（0勝1敗，場均淨勝 -19.0）。進攻火力最猛：灰狼（場均 114.0 分）。防守最穩：塞爾提克（場均僅失 76.0 分）。",
+    "power_ranking": [],
+    "summary": "",
     "recommendations": [],
     "watchlist": [
       {
@@ -228,7 +129,7 @@
         "market": "獨贏",
         "pick": "火箭",
         "point": null,
-        "price": 2.32,
+        "price": 2.3,
         "book": "FanDuel"
       },
       {
@@ -255,7 +156,7 @@
         "market": "獨贏",
         "pick": "公牛",
         "point": null,
-        "price": 2.54,
+        "price": 2.68,
         "book": "FanDuel"
       },
       {
@@ -264,7 +165,7 @@
         "market": "獨贏",
         "pick": "湖人",
         "point": null,
-        "price": 1.52,
+        "price": 1.48,
         "book": "FanDuel"
       },
       {
@@ -273,7 +174,7 @@
         "market": "讓分",
         "pick": "公牛",
         "point": 4.5,
-        "price": 1.91,
+        "price": 1.94,
         "book": "FanDuel"
       },
       {
@@ -282,7 +183,7 @@
         "market": "讓分",
         "pick": "湖人",
         "point": -4.5,
-        "price": 1.91,
+        "price": 1.88,
         "book": "FanDuel"
       },
       {
@@ -291,7 +192,7 @@
         "market": "獨贏",
         "pick": "勇士",
         "point": null,
-        "price": 1.34,
+        "price": 1.38,
         "book": "FanDuel"
       },
       {
@@ -300,7 +201,7 @@
         "market": "獨贏",
         "pick": "尼克",
         "point": null,
-        "price": 3.25,
+        "price": 3.1,
         "book": "FanDuel"
       },
       {
@@ -308,12 +209,12 @@
         "start_time": "2026-07-16T23:00:00Z",
         "market": "讓分",
         "pick": "勇士",
-        "point": -7.5,
-        "price": 1.94,
+        "point": -6.5,
+        "price": 1.88,
         "book": "FanDuel"
       }
     ],
-    "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，推薦門檻拉高至 Edge ≥ 10%，但不提供 Kelly 資金配置建議，下注金額請自行斟酌。"
+    "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小；下方列出所有已可評估的賽事，Edge ≥ 10% 才標記為推薦，未達門檻的也照樣顯示數字供參考，且一律不提供 Kelly 資金配置建議，下注金額請自行斟酌。"
   },
   "history": [
     {
@@ -542,14 +443,14 @@
       "team": "湖人",
       "players": [
         "Doncic",
-        "James",
+        "Kessler",
         "Reaves"
       ]
     },
     {
       "team": "巫師",
       "players": [
-        "McCollum",
+        "Young",
         "Davis",
         "Sarr"
       ]
@@ -575,7 +476,7 @@
       "players": [
         "Leonard",
         "Garland",
-        "Brown"
+        "Hachimura"
       ]
     },
     {
@@ -589,9 +490,9 @@
     {
       "team": "塞爾提克",
       "players": [
-        "Brown",
+        "George",
         "White",
-        "Vucevic"
+        "Queta"
       ]
     },
     {
@@ -615,13 +516,13 @@
       "players": [
         "Wembanyama",
         "Fox",
-        "CP3"
+        "Castle"
       ]
     },
     {
       "team": "公鹿",
       "players": [
-        "Giannis",
+        "Herro",
         "Turner",
         "Dieng"
       ]
@@ -631,7 +532,7 @@
       "players": [
         "Brunson",
         "Towns",
-        "Alvarado"
+        "Bridges"
       ]
     },
     {
@@ -655,13 +556,13 @@
       "players": [
         "Maxey",
         "Embiid",
-        "Oubre"
+        "Brown"
       ]
     },
     {
       "team": "灰狼",
       "players": [
-        "Randle",
+        "Ball",
         "Edwards",
         "Gobert"
       ]
@@ -670,8 +571,8 @@
       "team": "熱火",
       "players": [
         "Adebayo",
-        "Herro",
-        "Collins"
+        "Giannis",
+        "Wiggins"
       ]
     },
     {
@@ -679,7 +580,7 @@
       "players": [
         "Avdija",
         "Clingan",
-        "Grant"
+        "Morant"
       ]
     },
     {
@@ -687,13 +588,13 @@
       "players": [
         "Cunningham",
         "Duren",
-        "Jenkins"
+        "Thompson"
       ]
     },
     {
       "team": "國王",
       "players": [
-        "Fox",
+        "Sabonis",
         "Monk",
         "Keegan"
       ]
@@ -701,25 +602,25 @@
     {
       "team": "老鷹",
       "players": [
-        "Young",
-        "Hunter",
+        "Johnson",
+        "Daniels",
         "Okongwu"
       ]
     },
     {
       "team": "公牛",
       "players": [
-        "White",
-        "Drummond",
-        "Dosunmu"
+        "Giddey",
+        "Claxton",
+        "Powell"
       ]
     },
     {
       "team": "黃蜂",
       "players": [
-        "LaMelo",
-        "Bridges",
-        "Miles"
+        "White",
+        "Miller",
+        "Reid"
       ]
     },
     {
@@ -735,15 +636,15 @@
       "players": [
         "Ingram",
         "Quickley",
-        "Boucher"
+        "Barnes"
       ]
     },
     {
       "team": "灰熊",
       "players": [
-        "Morant",
-        "Jackson",
-        "Aldama"
+        "Boozer",
+        "Edey",
+        "Coward"
       ]
     },
     {
@@ -751,7 +652,7 @@
       "players": [
         "Zion",
         "Murphy",
-        "Daniels"
+        "Murray"
       ]
     },
     {
@@ -759,15 +660,15 @@
       "players": [
         "Markkanen",
         "George",
-        "Kessler"
+        "Jackson"
       ]
     },
     {
       "team": "籃網",
       "players": [
         "Porter",
-        "Claxton",
-        "Thomas"
+        "Randle",
+        "Sharpe"
       ]
     },
     {
