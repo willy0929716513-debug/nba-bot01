@@ -360,6 +360,20 @@
   }
   .note-box svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 2px; }
 
+  .insight-card {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    border-left: 3px solid var(--brand);
+  }
+  .insight-card .ic { width: 30px; height: 30px; flex: 0 0 auto; border-radius: 9px; background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); display: flex; align-items: center; justify-content: center; }
+  .insight-card .ic svg { width: 15px; height: 15px; }
+  .insight-card .txt { font-size: 13px; color: var(--ink-2); line-height: 1.7; padding-top: 5px; }
+  .insight-card .txt b { color: var(--ink); }
+
+  .team-record { color: var(--ink-3); font-weight: 400; font-size: 11.5px; }
+  .team-stats-line { color: var(--ink-2); font-size: 11.5px; margin-top: 2px; }
+
   /* ---------- empty state ---------- */
   .empty { padding: 20px; display: flex; align-items: center; gap: 18px; text-align: left; }
   .empty .ic-cluster { position: relative; flex: 0 0 auto; width: 68px; height: 68px; }
@@ -939,6 +953,11 @@
 
     var html = "";
 
+    if (sl.summary) {
+      html += '<div class="card insight-card"><span class="ic">' + svg("activity") + '</span>' +
+        '<span class="txt">' + esc(sl.summary) + '</span></div>';
+    }
+
     if (sl.games && sl.games.length) {
       html += '<div class="card row-list hoverable">';
       sl.games.forEach(function (g) {
@@ -957,12 +976,16 @@
     }
 
     if (sl.power_ranking && sl.power_ranking.length) {
-      html += '<div class="subhead">戰力排行（依已完賽場次平均分差）</div>';
+      html += '<div class="subhead">戰力排行（依場均淨勝分）</div>';
       html += '<div class="card row-list hoverable">';
       sl.power_ranking.forEach(function (r) {
-        html += '<div class="row row-top">' +
-          '<span class="row-title matchup-line">' + teamLogo(r.team) + esc(r.team) + ' <span style="color:var(--ink-3);font-weight:400;font-size:11.5px;">' + r.games + ' 場</span></span>' +
-          marginBar(r.avg_margin) +
+        var record = (r.wins != null) ? (r.wins + "勝" + r.losses + "敗") : (r.games + " 場");
+        html += '<div class="row">' +
+          '<div class="row-top">' +
+            '<span class="row-title matchup-line">' + teamLogo(r.team) + esc(r.team) + ' <span class="team-record">' + esc(record) + '</span></span>' +
+            marginBar(r.avg_margin) +
+          '</div>' +
+          (r.avg_pf != null ? '<div class="team-stats-line">攻 <b style="color:var(--ink);">' + r.avg_pf.toFixed(1) + '</b> ｜ 防 <b style="color:var(--ink);">' + r.avg_pa.toFixed(1) + '</b>（場均）</div>' : '') +
         '</div>';
       });
       html += '</div>';
