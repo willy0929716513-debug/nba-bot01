@@ -313,6 +313,23 @@
   .trigger-status.err { color: var(--danger); }
   .token-badge { font-size: 12px; color: var(--success); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
   .token-badge svg { width: 13px; height: 13px; }
+  .token-ready-row {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--success) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+    font-size: 13px;
+    color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .token-ready-badge { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); display: flex; align-items: center; justify-content: center; }
+  .token-ready-badge svg { width: 12px; height: 12px; }
+  .token-ready-row span:nth-child(2) { flex: 1; font-weight: 600; }
+  .token-ready-row .btn-ghost { padding: 4px 0; }
+  @media (max-width: 640px) { .token-ready-row { flex-wrap: wrap; } }
   .hint { font-size: 12px; color: var(--ink-3); margin-top: 14px; line-height: 1.75; }
   .hint svg { width: 12px; height: 12px; }
   .hint a { color: var(--ink-3); }
@@ -501,11 +518,15 @@
     </div>
     <div class="trigger-body"><div>
       <div class="trigger-inner">
-        <div class="field-row">
-          <input type="password" class="input" id="gh-token-input" placeholder="貼上你的 GitHub Token（僅存於此瀏覽器）" autocomplete="off">
-          <button class="btn btn-primary" id="trigger-btn" type="button"><span id="icon-btn-zap"></span>立即執行分析</button>
+        <div class="token-ready-row" id="token-ready-row">
+          <span class="token-ready-badge" id="token-ready-badge-icon"></span>
+          <span>已儲存 Token，隨時可以直接執行</span>
+          <button class="btn btn-ghost" id="change-token-btn" type="button">更換</button>
         </div>
-        <div id="token-saved-badge"></div>
+        <div class="field-row" id="token-field-row">
+          <input type="password" class="input" id="gh-token-input" placeholder="貼上你的 GitHub Token（僅存於此瀏覽器）" autocomplete="off">
+        </div>
+        <button class="btn btn-primary" id="trigger-btn" type="button" style="width:100%;"><span id="icon-btn-zap"></span>立即執行分析</button>
         <div class="trigger-status" id="trigger-status"></div>
         <div class="hint">
           <span id="icon-hint-info" style="display:inline-flex;vertical-align:-2px;"></span>
@@ -815,21 +836,27 @@
     var input = document.getElementById("gh-token-input");
     var btn = document.getElementById("trigger-btn");
     var status = document.getElementById("trigger-status");
-    var badge = document.getElementById("token-saved-badge");
-    var clearBtn = document.getElementById("clear-token-btn");
+    var readyRow = document.getElementById("token-ready-row");
+    var fieldRow = document.getElementById("token-field-row");
+    var changeBtn = document.getElementById("change-token-btn");
 
-    function refreshBadge() {
-      badge.innerHTML = localStorage.getItem(TOKEN_KEY)
-        ? '<div class="token-badge">' + svg("shield") + '已儲存 Token（僅存於此瀏覽器）</div>' : "";
+    mount("token-ready-badge-icon", "shield");
+
+    // Once a token is saved, hide the paste box and show a "ready" state
+    // instead -- the token already survives reloads via localStorage, but
+    // an always-empty input field made that easy to miss, so people kept
+    // re-pasting it thinking it hadn't been remembered.
+    function refreshReadyState() {
+      var saved = !!localStorage.getItem(TOKEN_KEY);
+      readyRow.style.display = saved ? "flex" : "none";
+      fieldRow.style.display = saved ? "none" : "flex";
     }
-    refreshBadge();
+    refreshReadyState();
 
-    clearBtn.addEventListener("click", function () {
-      localStorage.removeItem(TOKEN_KEY);
-      input.value = "";
-      refreshBadge();
-      status.innerHTML = "已清除。";
-      status.className = "trigger-status";
+    changeBtn.addEventListener("click", function () {
+      fieldRow.style.display = "flex";
+      readyRow.style.display = "none";
+      input.focus();
     });
 
     btn.addEventListener("click", function () {
@@ -841,7 +868,7 @@
       }
       localStorage.setItem(TOKEN_KEY, token);
       input.value = "";
-      refreshBadge();
+      refreshReadyState();
       btn.disabled = true;
       status.innerHTML = "觸發中…";
       status.className = "trigger-status";
@@ -869,6 +896,14 @@
         status.innerHTML = svg("alertcircle") + "觸發失敗：" + esc(err.message) + "（請確認 Token 是否正確、是否有此 repo 的 Actions 讀寫權限）";
         status.className = "trigger-status err";
       });
+    });
+
+    document.getElementById("clear-token-btn").addEventListener("click", function () {
+      localStorage.removeItem(TOKEN_KEY);
+      input.value = "";
+      refreshReadyState();
+      status.innerHTML = "已清除。";
+      status.className = "trigger-status";
     });
   })();
 
