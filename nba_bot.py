@@ -573,6 +573,29 @@ def zh_game_status(status):
     return GAME_STATUS_ZH.get((status or "").strip().lower(), status)
 
 
+def build_summer_league_summary(power_ranking):
+    """Short auto-generated narrative highlighting notable teams so the
+    Summer League section reads as an analysis, not just raw tables.
+    Comparisons are only added when they'd point at a different team than
+    the previous one already mentioned, to avoid repeating "X leads in
+    everything" when the sample is this small (often 1-3 games/team)."""
+    if not power_ranking:
+        return ""
+    top    = power_ranking[0]
+    bottom = power_ranking[-1]
+    best_off = max(power_ranking, key=lambda x: x["avg_pf"])
+    best_def = min(power_ranking, key=lambda x: x["avg_pa"])
+
+    parts = ["戰績最佳：%s（%d勝%d敗，場均淨勝 %+.1f）。" % (top["team"], top["wins"], top["losses"], top["avg_margin"])]
+    if bottom["team"] != top["team"]:
+        parts.append("目前墊底：%s（%d勝%d敗，場均淨勝 %+.1f）。" % (bottom["team"], bottom["wins"], bottom["losses"], bottom["avg_margin"]))
+    if best_off["team"] not in (top["team"], bottom["team"]):
+        parts.append("進攻火力最猛：%s（場均 %.1f 分）。" % (best_off["team"], best_off["avg_pf"]))
+    if best_def["team"] not in (top["team"], bottom["team"], best_off["team"]):
+        parts.append("防守最穩：%s（場均僅失 %.1f 分）。" % (best_def["team"], best_def["avg_pa"]))
+    return "".join(parts)
+
+
 def analyze_summer_league():
     """Lightweight, informational-only Summer League report.
 
@@ -585,8 +608,8 @@ def analyze_summer_league():
     events     = fetch_summer_league_scores()
     odds_games = fetch_summer_league_odds()
 
-    games   = []
-    margins = {}
+    games      = []
+    team_games = {}
     for ev in events:
         comp = (ev.get("competitions") or [{}])[0]
         competitors = comp.get("competitors", [])
@@ -615,14 +638,26 @@ def analyze_summer_league():
         })
 
         if is_final and (h_score or a_score):
-            margins.setdefault(h_name, []).append(h_score - a_score)
-            margins.setdefault(a_name, []).append(a_score - h_score)
+            team_games.setdefault(h_name, []).append({"pf": h_score, "pa": a_score, "win": h_score > a_score})
+            team_games.setdefault(a_name, []).append({"pf": a_score, "pa": h_score, "win": a_score > h_score})
 
-    power_ranking = [
-        {"team": t, "games": len(v), "avg_margin": round(sum(v) / len(v), 1)}
-        for t, v in margins.items()
-    ]
+    power_ranking = []
+    for t, glist in team_games.items():
+        n     = len(glist)
+        wins  = sum(1 for g in glist if g["win"])
+        avg_pf = sum(g["pf"] for g in glist) / n
+        avg_pa = sum(g["pa"] for g in glist) / n
+        power_ranking.append({
+            "team":       t,
+            "games":      n,
+            "wins":       wins,
+            "losses":     n - wins,
+            "avg_margin": round(avg_pf - avg_pa, 1),
+            "avg_pf":     round(avg_pf, 1),
+            "avg_pa":     round(avg_pa, 1),
+        })
     power_ranking.sort(key=lambda x: x["avg_margin"], reverse=True)
+    summary = build_summer_league_summary(power_ranking)
 
     watchlist = []
     for g in odds_games:
@@ -654,6 +689,7 @@ def analyze_summer_league():
         "available":     bool(events or odds_games),
         "games":         games,
         "power_ranking": power_ranking[:10],
+        "summary":       summary,
         "watchlist":     watchlist[:15],
         "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，僅供參考觀察，不計入 Kelly 資金配置。",
     }
@@ -665,17 +701,22 @@ def format_summer_league_section(sl):
 
     lines = ["\n🏖️ **NBA 夏季聯賽觀察**\n"]
 
+    if sl.get("summary"):
+        lines.append("🔎 %s" % sl["summary"])
+
     if sl["games"]:
-        lines.append("📋 賽事:")
+        lines.append("\n📋 賽事:")
         for g in sl["games"][:10]:
             lines.append("> %s %d - %d %s (%s)" % (
                 g["away"], g["away_score"], g["home_score"], g["home"], g["status"]
             ))
 
     if sl["power_ranking"]:
-        lines.append("\n📈 戰力排行 (依已完賽場次平均分差):")
+        lines.append("\n📈 戰力排行 (戰績 / 場均淨勝分 / 攻防):")
         for r in sl["power_ranking"][:8]:
-            lines.append("> %s: %+.1f (%d 場)" % (r["team"], r["avg_margin"], r["games"]))
+            lines.append("> %s: %d勝%d敗 | 淨勝 %+.1f | 攻 %.1f 防 %.1f" % (
+                r["team"], r["wins"], r["losses"], r["avg_margin"], r["avg_pf"], r["avg_pa"]
+            ))
 
     if sl["watchlist"]:
         lines.append("\n👀 盤口觀察 (僅供參考，非資金建議):")
