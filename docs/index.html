@@ -85,22 +85,24 @@
   /* ---------- header ---------- */
   header.top {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: 10px;
     margin-bottom: 18px;
   }
-  .brand { display: flex; align-items: center; gap: 12px; }
+  .header-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .brand-mark {
     width: 40px; height: 40px; flex: 0 0 auto;
-    border-radius: 12px;
+    border-radius: 999px;
     background: linear-gradient(140deg, var(--brand), #8B5CF6);
     display: flex; align-items: center; justify-content: center;
     color: #fff;
     box-shadow: var(--shadow-card);
   }
-  .brand-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.25; }
-  .brand-meta { color: var(--ink-2); font-size: 12.5px; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+  .brand-text { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  .brand-title { font-size: 17px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-sub { font-size: 11.5px; color: var(--ink-3); font-weight: 500; letter-spacing: .01em; margin-top: 1px; }
 
   .pill {
     display: inline-flex; align-items: center; gap: 4px;
@@ -112,6 +114,7 @@
     background: var(--surface);
     color: var(--ink-2);
   }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin-bottom: 18px; color: var(--ink-3); font-size: 12px; }
 
   .icon-btn {
     width: 40px; height: 40px;
@@ -126,6 +129,8 @@
   }
   .icon-btn:hover { background: var(--card-hover); color: var(--ink); }
   .icon-btn:active { transform: scale(.94); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .icon-btn.spinning svg { animation: spin .8s linear infinite; }
 
   /* ---------- segmented control ---------- */
   .seg-wrap {
@@ -154,9 +159,9 @@
     position: absolute;
     top: 4px; bottom: 4px; left: 4px;
     width: 0;
-    background: var(--card);
+    background: var(--brand);
     border-radius: 999px;
-    box-shadow: var(--shadow-card);
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--brand) 55%, transparent);
     transition: transform .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1);
     z-index: 0;
   }
@@ -175,7 +180,7 @@
     transition: color .2s ease;
     text-decoration: none;
   }
-  .seg-btn.active { color: var(--ink); }
+  .seg-btn.active { color: var(--brand-ink); }
   .seg-btn svg { width: 15px; height: 15px; flex: 0 0 auto; }
 
   /* ---------- stat grid ---------- */
@@ -216,8 +221,33 @@
     color: var(--brand);
   }
   .section-head .ic svg { width: 18px; height: 18px; }
+  .section-head .head-text { flex: 1; min-width: 0; }
   .section-head h2 { font-size: 19px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
   .section-head p { font-size: 12.5px; color: var(--ink-3); margin: 2px 0 0; }
+  .section-head .chev { color: var(--ink-3); flex: 0 0 auto; margin-top: 7px; }
+  .section-head .chev svg { width: 17px; height: 17px; }
+
+  /* ---------- stat trio (recommendation summary strip) ---------- */
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .trio-tile { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 14px 10px; text-align: center; }
+  .trio-tile .v { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--brand); font-variant-numeric: tabular-nums; }
+  .trio-tile .v small { font-size: 13px; font-weight: 700; color: var(--ink-2); margin-left: 1px; }
+  .trio-tile .l { font-size: 11.5px; color: var(--ink-2); font-weight: 600; margin-top: 4px; }
+  .trio-tile .s { font-size: 10.5px; color: var(--ink-3); margin-top: 1px; }
+  @media (max-width: 640px) { .trio-tile { padding: 12px 8px; } .trio-tile .v { font-size: 20px; } }
+
+  /* ---------- data-updated status row ---------- */
+  .status-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 12px 18px;
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+    font-size: 12.5px; color: var(--ink-2);
+    margin: 8px 0 20px;
+  }
+  .status-row .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex: 0 0 auto; box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent); }
+  .status-row .left { display: flex; align-items: center; gap: 8px; }
+  .status-row .left svg { width: 14px; height: 14px; color: var(--ink-3); }
+  .status-row .right { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 
   /* ---------- trigger card ---------- */
   .trigger-card { padding: var(--gap-card); margin-bottom: var(--gap-section); }
@@ -329,12 +359,28 @@
   .note-box svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 2px; }
 
   /* ---------- empty state ---------- */
-  .empty { padding: 44px 24px; text-align: center; }
-  .empty .ic { width: 44px; height: 44px; margin: 0 auto 14px; border-radius: 14px; background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--ink-3); }
-  .empty .ic svg { width: 22px; height: 22px; }
-  .empty .title { font-weight: 700; font-size: 14.5px; color: var(--ink); margin-bottom: 6px; }
-  .empty .desc { color: var(--ink-2); font-size: 13px; line-height: 1.7; max-width: 380px; margin: 0 auto; }
-  .empty .btn { margin-top: 16px; }
+  .empty { padding: 20px; display: flex; align-items: center; gap: 18px; text-align: left; }
+  .empty .ic-cluster { position: relative; flex: 0 0 auto; width: 68px; height: 68px; }
+  .empty .ic-cluster .ic {
+    position: absolute;
+    width: 46px; height: 46px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--surface); border: 1px solid var(--hairline);
+    color: var(--brand);
+  }
+  .empty .ic-cluster .ic svg { width: 22px; height: 22px; }
+  .empty .ic-cluster .ic.ic-1 { top: 0; left: 0; z-index: 1; }
+  .empty .ic-cluster .ic.ic-2 { bottom: 0; right: 0; width: 36px; height: 36px; color: var(--ink-2); background: var(--card); z-index: 2; }
+  .empty .ic-cluster .ic.ic-2 svg { width: 17px; height: 17px; }
+  .empty .body { flex: 1; min-width: 0; }
+  .empty .title { font-weight: 700; font-size: 14.5px; color: var(--ink); margin-bottom: 4px; }
+  .empty .desc { color: var(--ink-2); font-size: 12.5px; line-height: 1.65; }
+  .empty .btn { margin-top: 12px; height: 36px; padding: 0 14px; font-size: 12.5px; }
+  .empty .btn svg { width: 13px; height: 13px; }
+  @media (max-width: 340px) {
+    .empty { flex-direction: column; text-align: center; align-items: center; padding: 24px 18px; }
+  }
 
   /* ---------- skeletons ---------- */
   @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
@@ -371,15 +417,17 @@
   .matchup-vs { color: var(--ink-3); font-weight: 400; font-size: 12px; margin: 0 1px; }
 
   /* ---------- footer ---------- */
-  footer { margin-top: 40px; border-top: 1px solid var(--hairline); padding-top: 20px; text-align: center; }
+  footer { margin-top: 32px; text-align: center; }
   .footer-toggle {
     background: none; border: none; cursor: pointer;
-    color: var(--ink-3); font-size: 12px; font-weight: 600;
-    display: inline-flex; align-items: center; gap: 5px;
+    color: var(--ink-3); font-size: 11.5px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 6px;
     padding: 6px 12px;
+    line-height: 1.6;
   }
-  .footer-toggle svg { width: 13px; height: 13px; transition: transform .25s ease; }
-  .footer-toggle.open svg { transform: rotate(180deg); }
+  .footer-toggle svg.shield { width: 13px; height: 13px; flex: 0 0 auto; color: var(--ink-3); }
+  .footer-toggle .chev-sm { width: 11px; height: 11px; transition: transform .25s ease; flex: 0 0 auto; }
+  .footer-toggle.open .chev-sm { transform: rotate(180deg); }
   .footer-body {
     display: grid; grid-template-rows: 0fr;
     transition: grid-template-rows .3s ease;
@@ -392,7 +440,7 @@
     .btn, .icon-btn, .input { min-height: 48px; }
     .field-row { flex-direction: column; align-items: stretch; }
     .field-row .btn { width: 100%; }
-    .brand-title { font-size: 19px; }
+    .brand-title { font-size: 15.5px; }
     .row-list { padding: 4px 14px; }
     .subhead, .note-box { padding-left: 14px; padding-right: 14px; }
   }
@@ -401,16 +449,22 @@
 <div class="wrap">
   <header class="top fade-in">
     <div class="brand">
+      <button class="icon-btn" id="menu-toggle" type="button" aria-label="選單"></button>
       <div class="brand-mark" id="icon-brand"></div>
-      <div>
+      <div class="brand-text">
         <div class="brand-title">NBA 賽事分析儀表板</div>
-        <div class="brand-meta" id="meta-line">
-          <span class="pill">載入中…</span>
-        </div>
+        <div class="brand-sub">NBA Analytics</div>
       </div>
     </div>
-    <button class="icon-btn" id="theme-toggle" type="button" aria-label="切換深色/淺色"></button>
+    <div class="header-actions">
+      <button class="icon-btn" id="refresh-btn" type="button" aria-label="重新整理資料"></button>
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="切換深色/淺色"></button>
+    </div>
   </header>
+
+  <div class="meta-row fade-in" id="meta-line">
+    <span class="pill">載入中…</span>
+  </div>
 
   <nav class="seg-wrap fade-in" aria-label="區塊導覽">
     <div class="seg" id="seg" role="tablist">
@@ -452,15 +506,18 @@
   <section id="regular-season-section" class="reveal">
     <div class="section-head">
       <span class="ic" id="icon-sec-cal"></span>
-      <div><h2>今日推薦</h2><p>模型綜合分析出的最佳投注方向</p></div>
+      <div class="head-text"><h2>今日推薦</h2><p>模型綜合分析出的最佳投注方向</p></div>
+      <span class="chev" id="icon-chev-cal"></span>
     </div>
+    <div id="regular-season-trio"></div>
     <div id="regular-season-body"></div>
   </section>
 
   <section id="summer-league-section" class="reveal">
     <div class="section-head">
       <span class="ic" id="icon-sec-sun"></span>
-      <div><h2>夏季聯賽</h2><p>最新夏聯數據與模型觀察</p></div>
+      <div class="head-text"><h2>夏季聯賽</h2><p>最新夏聯數據與模型觀察</p></div>
+      <span class="chev" id="icon-chev-sun"></span>
     </div>
     <div id="summer-league-body"></div>
   </section>
@@ -468,7 +525,8 @@
   <section id="history-section" class="reveal">
     <div class="section-head">
       <span class="ic" id="icon-sec-hist"></span>
-      <div><h2>歷史紀錄</h2><p>正式執行後自動累積</p></div>
+      <div class="head-text"><h2>歷史紀錄</h2><p>正式執行後自動累積</p></div>
+      <span class="chev" id="icon-chev-hist"></span>
     </div>
     <div id="history-body"></div>
   </section>
@@ -476,18 +534,25 @@
   <section id="team-stars-section" class="reveal">
     <div class="section-head">
       <span class="ic" id="icon-sec-star"></span>
-      <div><h2>當家球星</h2><p>傷兵影響最大的核心球員（模型判斷用主力名單，非完整陣容）</p></div>
+      <div class="head-text"><h2>當家球星</h2><p>傷兵影響最大的核心球員（模型判斷用主力名單，非完整陣容）</p></div>
+      <span class="chev" id="icon-chev-star"></span>
     </div>
     <div id="team-stars-body"></div>
   </section>
 
+  <div class="status-row fade-in" id="status-row">
+    <span class="left"><span id="icon-status-clock"></span>資料更新時間</span>
+    <span class="right"><span class="live-dot" id="status-dot"></span><span id="status-time">--</span></span>
+  </div>
+
   <footer>
     <button class="footer-toggle" id="footer-toggle" type="button">
-      免責聲明 <span id="icon-footer-chevron"></span>
+      <span id="icon-footer-shield"></span>
+      本網站內容僅供研究參考，不構成投注建議。請自負風險並遵守當地法規。
+      <span class="chev-sm" id="icon-footer-chevron"></span>
     </button>
     <div class="footer-body" id="footer-body"><div>
       <p>
-        本頁面資料由自動化模型每日更新，僅供研究與參考，不構成投注建議；請自負風險並遵守當地法規。<br>
         夏季聯賽陣容多為菜鳥／雙向合約球員，樣本數極小，波動大，不納入資金配置建議。
       </p>
     </div></div>
@@ -515,7 +580,10 @@
     barchart:   '<path d="M3 3v18h18"/><rect x="7" y="12" width="3.2" height="6"/><rect x="12.4" y="8" width="3.2" height="10"/><rect x="17.8" y="5" width="3.2" height="13"/>',
     trophy:     '<path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 5H4a3 3 0 0 0 3 5M17 5h3a3 3 0 0 1-3 5"/>',
     checkcircle:'<circle cx="12" cy="12" r="9.5"/><path d="M8 12.5l2.5 2.5 5.5-6"/>',
-    alertcircle:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5M12 16h.01"/>'
+    alertcircle:'<circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5M12 16h.01"/>',
+    menu:       '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    chevronright:'<path d="M9 6l6 6-6 6"/>',
+    clock:      '<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3.5 2"/>'
   };
   function svg(name, cls) {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="' + (cls || "") + '">' + ICONS[name] + '</svg>';
@@ -527,15 +595,25 @@
 
   mount("icon-brand", "activity");
   document.getElementById("icon-brand").querySelector("svg").setAttribute("style", "width:20px;height:20px;");
+  mount("menu-toggle", "menu");
+  mount("refresh-btn", "refresh");
   mount("icon-trigger-zap", "zap");
   mount("icon-btn-zap", "zap");
   mount("icon-hint-info", "info");
   mount("icon-chevron-trigger", "chevron");
   mount("icon-footer-chevron", "chevron");
+  mount("icon-footer-shield", "shield");
+  document.getElementById("icon-footer-shield").querySelector("svg").setAttribute("class", "shield");
+  document.getElementById("icon-footer-chevron").querySelector("svg").setAttribute("class", "chev-sm");
+  mount("icon-status-clock", "clock");
   mount("icon-sec-cal", "calendar");
   mount("icon-sec-sun", "sun");
   mount("icon-sec-hist", "history");
   mount("icon-sec-star", "star");
+  mount("icon-chev-cal", "chevronright");
+  mount("icon-chev-sun", "chevronright");
+  mount("icon-chev-hist", "chevronright");
+  mount("icon-chev-star", "chevronright");
   document.querySelector("#ic-tab-cal span").innerHTML = svg("calendar");
   document.querySelector("#ic-tab-sun span").innerHTML = svg("sun");
   document.querySelector("#ic-tab-hist span").innerHTML = svg("history");
@@ -685,12 +763,18 @@
 
   function emptyState(icon, title, desc, showRefresh) {
     return '<div class="card empty">' +
-      '<div class="ic">' + svg(icon) + '</div>' +
-      '<div class="title">' + esc(title) + '</div>' +
-      '<div class="desc">' + esc(desc) + '</div>' +
-      (showRefresh ? '<button class="btn btn-primary" onclick="location.reload()">' + svg("refresh") + '重新整理</button>' : '') +
+      '<div class="ic-cluster">' +
+        '<span class="ic ic-1">' + svg(icon) + '</span>' +
+        '<span class="ic ic-2">' + svg("barchart") + '</span>' +
+      '</div>' +
+      '<div class="body">' +
+        '<div class="title">' + esc(title) + '</div>' +
+        '<div class="desc">' + esc(desc) + '</div>' +
+        (showRefresh ? '<button class="btn btn-primary" onclick="__reloadData()">' + svg("refresh") + '重新整理</button>' : '') +
+      '</div>' +
       '</div>';
   }
+  window.__reloadData = function () { showSkeletons(); loadData(); };
 
   /* ============ GitHub workflow_dispatch trigger ============ */
   (function setupTrigger() {
@@ -945,11 +1029,33 @@
       '<span class="pill">' + (data.run_type === "official" ? "正式紀錄" : "測試") + '</span>' +
       '<span class="pill">來源: ' + esc(data.data_source || "-") + '</span>' +
       '<span>更新於 ' + updated + '</span>';
+    document.getElementById("status-time").textContent = data.generated_at ? data.generated_at : "尚未執行";
+    document.getElementById("status-dot").style.background = data.generated_at ? "var(--success)" : "var(--ink-3)";
     renderStats(data);
+    renderRegularSeasonTrio(data);
     renderRegularSeason(data);
     renderSummerLeague(data);
     renderHistory(data);
     renderTeamStars(data);
+  }
+
+  var TIER_GRADE = { "頂級": "SS", "強力": "S", "穩定": "A" };
+  function tierGrade(tier) {
+    for (var k in TIER_GRADE) { if (tier && tier.indexOf(k) !== -1) return TIER_GRADE[k]; }
+    return "-";
+  }
+  function renderRegularSeasonTrio(data) {
+    var days = (data.regular_season || {}).days || [];
+    var allPicks = [];
+    days.forEach(function (d) { (d.picks || []).forEach(function (p) { allPicks.push(p); }); });
+    var el = document.getElementById("regular-season-trio");
+    if (!allPicks.length) { el.innerHTML = ""; return; }
+    var best = allPicks.reduce(function (a, b) { return b.edge > a.edge ? b : a; }, allPicks[0]);
+    el.innerHTML = '<div class="trio">' +
+      '<div class="trio-tile"><div class="v">' + esc(tierGrade(best.tier)) + '</div><div class="l">推薦等級</div><div class="s">' + esc(best.tier) + '</div></div>' +
+      '<div class="trio-tile"><div class="v">' + allPicks.length + '<small>場</small></div><div class="l">今日精選</div><div class="s">符合門檻賽事</div></div>' +
+      '<div class="trio-tile"><div class="v">' + Number(best.prob).toFixed(0) + '<small>%</small></div><div class="l">勝率預估</div><div class="s">最高 Edge 之推薦</div></div>' +
+      '</div>';
   }
 
   function skeletonTiles() {
@@ -968,22 +1074,45 @@
     out += "</div>";
     document.getElementById(id).innerHTML = out;
   }
-  skeletonTiles();
-  skeletonRows("regular-season-body", 2);
-  skeletonRows("summer-league-body", 3);
-  skeletonRows("history-body", 3);
-  skeletonRows("team-stars-body", 3);
+  function showSkeletons() {
+    skeletonTiles();
+    skeletonRows("regular-season-body", 2);
+    skeletonRows("summer-league-body", 3);
+    skeletonRows("history-body", 3);
+    skeletonRows("team-stars-body", 3);
+    document.getElementById("regular-season-trio").innerHTML = "";
+  }
 
-  fetch("data/latest.json?t=" + Date.now())
-    .then(function (r) { return r.json(); })
-    .then(render)
-    .catch(function (err) {
-      document.getElementById("meta-line").innerHTML = '<span class="pill">資料載入失敗</span>';
-      var msg = emptyState("alertcircle", "無法載入資料", "請檢查網路連線後重新整理。", true);
-      ["regular-season-body", "summer-league-body", "history-body", "team-stars-body"].forEach(function (id) {
-        document.getElementById(id).innerHTML = msg;
+  function loadData() {
+    var refreshIcon = document.getElementById("refresh-btn");
+    if (refreshIcon) refreshIcon.classList.add("spinning");
+    return fetch("data/latest.json?t=" + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function (err) {
+        document.getElementById("meta-line").innerHTML = '<span class="pill">資料載入失敗</span>';
+        var msg = emptyState("alertcircle", "無法載入資料", "請檢查網路連線後重新整理。", true);
+        ["regular-season-body", "summer-league-body", "history-body", "team-stars-body"].forEach(function (id) {
+          document.getElementById(id).innerHTML = msg;
+        });
+        console.error(err);
+      })
+      .finally(function () {
+        if (refreshIcon) refreshIcon.classList.remove("spinning");
       });
-      console.error(err);
-    });
+  }
+
+  document.getElementById("refresh-btn").addEventListener("click", function () {
+    showSkeletons();
+    loadData();
+  });
+  document.getElementById("menu-toggle").addEventListener("click", function () {
+    var card = document.getElementById("trigger-card");
+    card.classList.add("open");
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  showSkeletons();
+  loadData();
 })();
 </script>
