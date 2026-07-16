@@ -1,8 +1,8 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-17 06:53",
+  "generated_at": "2026-07-17 06:59",
   "data_source": "即時數據",
-  "run_type": "official",
+  "run_type": "test",
   "regular_season": {
     "total_picks": 0,
     "avg_edge": 0,
@@ -37,8 +37,8 @@
         "status": "進行中",
         "home": "公牛",
         "away": "湖人",
-        "home_score": 37,
-        "away_score": 54,
+        "home_score": 40,
+        "away_score": 56,
         "start_time": "2026-07-16T22:00Z"
       },
       {
@@ -117,22 +117,33 @@
       {
         "matchup": "湖人 @ 公牛",
         "start_time": "2026-07-16T22:00:00Z",
-        "bet": "公牛 +15.5",
-        "price": 1.83,
+        "bet": "公牛 +14.5",
+        "price": 1.91,
+        "book": "FanDuel",
+        "prob": 62.5,
+        "edge": 10.2,
+        "has_form": false,
+        "meets_threshold": false
+      },
+      {
+        "matchup": "暴龍 @ 熱火",
+        "start_time": "2026-07-17T01:00:00Z",
+        "bet": "熱火 +4.5",
+        "price": 1.91,
         "book": "DraftKings",
-        "prob": 63.7,
-        "edge": 9.0,
+        "prob": 55.2,
+        "edge": 2.8,
         "has_form": false,
         "meets_threshold": false
       },
       {
         "matchup": "勇士 @ 尼克",
         "start_time": "2026-07-16T23:00:00Z",
-        "bet": "尼克 +8.5",
-        "price": 1.85,
-        "book": "BetRivers",
-        "prob": 56.2,
-        "edge": 2.1,
+        "bet": "尼克 +7.5",
+        "price": 1.89,
+        "book": "DraftKings",
+        "prob": 54.6,
+        "edge": 1.7,
         "has_form": false,
         "meets_threshold": false
       },
@@ -142,8 +153,8 @@
         "bet": "公牛 +1.5",
         "price": 1.93,
         "book": "FanDuel",
-        "prob": 53.5,
-        "edge": 1.7,
+        "prob": 53.3,
+        "edge": 1.5,
         "has_form": false,
         "meets_threshold": false
       },
@@ -153,30 +164,8 @@
         "bet": "獨行俠 -3.5",
         "price": 1.88,
         "book": "FanDuel",
-        "prob": 54.6,
-        "edge": 1.4,
-        "has_form": false,
-        "meets_threshold": false
-      },
-      {
-        "matchup": "暴龍 @ 熱火",
-        "start_time": "2026-07-17T01:00:00Z",
-        "bet": "熱火 +3.5",
-        "price": 1.91,
-        "book": "FanDuel",
-        "prob": 53.6,
-        "edge": 1.2,
-        "has_form": false,
-        "meets_threshold": false
-      },
-      {
-        "matchup": "灰熊 @ 老鷹",
-        "start_time": "2026-07-17T00:00:00Z",
-        "bet": "老鷹 +3.5",
-        "price": 1.92,
-        "book": "BetRivers",
-        "prob": 52.7,
-        "edge": 0.6,
+        "prob": 54.3,
+        "edge": 1.1,
         "has_form": false,
         "meets_threshold": false
       },
@@ -186,8 +175,19 @@
         "bet": "熱火 +1.5",
         "price": 1.93,
         "book": "FanDuel",
+        "prob": 52.2,
+        "edge": 0.4,
+        "has_form": false,
+        "meets_threshold": false
+      },
+      {
+        "matchup": "灰熊 @ 老鷹",
+        "start_time": "2026-07-17T00:00:00Z",
+        "bet": "老鷹 +3.5",
+        "price": 1.92,
+        "book": "BetRivers",
         "prob": 52.4,
-        "edge": 0.5,
+        "edge": 0.3,
         "has_form": false,
         "meets_threshold": false
       },
@@ -197,38 +197,20 @@
         "bet": "金塊 +1.5",
         "price": 1.91,
         "book": "BetUS",
-        "prob": 51.4,
-        "edge": -0.9,
+        "prob": 51.2,
+        "edge": -1.2,
         "has_form": false,
         "meets_threshold": false
       }
     ],
     "watchlist": [
       {
-        "matchup": "籃網 @ 火箭",
-        "start_time": "2026-07-16T20:30:00Z",
-        "market": "讓分",
-        "pick": "籃網",
-        "point": 16.5,
-        "price": 2.36,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "籃網 @ 火箭",
-        "start_time": "2026-07-16T20:30:00Z",
-        "market": "讓分",
-        "pick": "火箭",
-        "point": -16.5,
-        "price": 1.56,
-        "book": "FanDuel"
-      },
-      {
         "matchup": "湖人 @ 公牛",
         "start_time": "2026-07-16T22:00:00Z",
         "market": "獨贏",
         "pick": "公牛",
         "point": null,
-        "price": 10.0,
+        "price": 11.0,
         "book": "FanDuel"
       },
       {
@@ -237,7 +219,7 @@
         "market": "獨贏",
         "pick": "湖人",
         "point": null,
-        "price": 1.04,
+        "price": 1.03,
         "book": "FanDuel"
       },
       {
@@ -246,7 +228,7 @@
         "market": "讓分",
         "pick": "公牛",
         "point": 14.5,
-        "price": 1.88,
+        "price": 1.91,
         "book": "FanDuel"
       },
       {
@@ -255,43 +237,43 @@
         "market": "讓分",
         "pick": "湖人",
         "point": -14.5,
-        "price": 1.88,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "勇士 @ 尼克",
-        "start_time": "2026-07-16T23:00:00Z",
-        "market": "獨贏",
-        "pick": "勇士",
-        "point": null,
-        "price": 1.4,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "勇士 @ 尼克",
-        "start_time": "2026-07-16T23:00:00Z",
-        "market": "獨贏",
-        "pick": "尼克",
-        "point": null,
-        "price": 2.98,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "勇士 @ 尼克",
-        "start_time": "2026-07-16T23:00:00Z",
-        "market": "讓分",
-        "pick": "勇士",
-        "point": -7.5,
-        "price": 1.96,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "勇士 @ 尼克",
-        "start_time": "2026-07-16T23:00:00Z",
-        "market": "讓分",
-        "pick": "尼克",
-        "point": 7.5,
         "price": 1.85,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "勇士 @ 尼克",
+        "start_time": "2026-07-16T23:00:00Z",
+        "market": "獨贏",
+        "pick": "勇士",
+        "point": null,
+        "price": 1.43,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "勇士 @ 尼克",
+        "start_time": "2026-07-16T23:00:00Z",
+        "market": "獨贏",
+        "pick": "尼克",
+        "point": null,
+        "price": 2.86,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "勇士 @ 尼克",
+        "start_time": "2026-07-16T23:00:00Z",
+        "market": "讓分",
+        "pick": "勇士",
+        "point": -6.5,
+        "price": 1.91,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "勇士 @ 尼克",
+        "start_time": "2026-07-16T23:00:00Z",
+        "market": "讓分",
+        "pick": "尼克",
+        "point": 6.5,
+        "price": 1.91,
         "book": "FanDuel"
       },
       {
@@ -337,6 +319,24 @@
         "pick": "熱火",
         "point": null,
         "price": 2.38,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "暴龍 @ 熱火",
+        "start_time": "2026-07-17T01:00:00Z",
+        "market": "獨贏",
+        "pick": "暴龍",
+        "point": null,
+        "price": 1.59,
+        "book": "FanDuel"
+      },
+      {
+        "matchup": "暴龍 @ 熱火",
+        "start_time": "2026-07-17T01:00:00Z",
+        "market": "讓分",
+        "pick": "熱火",
+        "point": 3.5,
+        "price": 1.91,
         "book": "FanDuel"
       }
     ],
