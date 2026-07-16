@@ -129,6 +129,7 @@
   }
   .icon-btn:hover { background: var(--card-hover); color: var(--ink); }
   .icon-btn:active { transform: scale(.94); }
+  .icon-btn svg { width: 18px; height: 18px; flex: 0 0 auto; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .icon-btn.spinning svg { animation: spin .8s linear infinite; }
 
@@ -313,6 +314,7 @@
   .token-badge { font-size: 12px; color: var(--success); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
   .token-badge svg { width: 13px; height: 13px; }
   .hint { font-size: 12px; color: var(--ink-3); margin-top: 14px; line-height: 1.75; }
+  .hint svg { width: 12px; height: 12px; }
   .hint a { color: var(--ink-3); }
   .hint code { background: var(--bg); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; font-size: 11.5px; }
 
@@ -700,6 +702,18 @@
     });
   })();
 
+  // Summer League timestamps come through as raw UTC ISO strings (unlike
+  // regular-season picks, which are pre-formatted server-side), so convert
+  // to Taiwan time (UTC+8) for display here.
+  function fmtTaiwanTime(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var tw = new Date(d.getTime() + 8 * 3600 * 1000);
+    var pad = function (n) { return String(n).length < 2 ? "0" + n : String(n); };
+    return pad(tw.getUTCMonth() + 1) + "/" + pad(tw.getUTCDate()) + " " + pad(tw.getUTCHours()) + ":" + pad(tw.getUTCMinutes());
+  }
+
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -933,7 +947,10 @@
             '<span class="row-title matchup-line">' + teamLogo(g.away) + esc(g.away) + '<span class="matchup-vs">@</span>' + teamLogo(g.home) + esc(g.home) + '</span>' +
             '<span class="badge badge-status">' + esc(g.status) + '</span>' +
           '</div>' +
-          '<div class="row-score">' + g.away_score + ' : ' + g.home_score + '</div>' +
+          '<div class="row-top">' +
+            '<span class="row-score">' + g.away_score + ' : ' + g.home_score + '</span>' +
+            '<span class="row-time">' + esc(fmtTaiwanTime(g.start_time)) + '（台灣時間）</span>' +
+          '</div>' +
         '</div>';
       });
       html += '</div>';
@@ -962,6 +979,7 @@
             '<span class="badge badge-status">' + esc(w.market) + '</span>' +
           '</div>' +
           '<div class="row-sub">' + esc(pick) + ' @ <b style="color:var(--ink);">' + Number(w.price).toFixed(2) + '</b>（' + esc(w.book) + '）</div>' +
+          '<div class="row-sub">開賽 ' + esc(fmtTaiwanTime(w.start_time)) + '（台灣時間）</div>' +
         '</div>';
       });
       html += '</div>';
