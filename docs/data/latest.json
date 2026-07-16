@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-16 21:38",
+  "generated_at": "2026-07-16 22:19",
   "data_source": "即時數據",
   "run_type": "test",
   "regular_season": {
@@ -86,54 +86,95 @@
       {
         "team": "公鹿",
         "games": 1,
-        "avg_margin": 19.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 19.0,
+        "avg_pf": 110.0,
+        "avg_pa": 91.0
       },
       {
         "team": "灰狼",
         "games": 1,
-        "avg_margin": 16.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 16.0,
+        "avg_pf": 114.0,
+        "avg_pa": 98.0
       },
       {
         "team": "快艇",
         "games": 1,
-        "avg_margin": 14.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 14.0,
+        "avg_pf": 108.0,
+        "avg_pa": 94.0
       },
       {
         "team": "太陽",
         "games": 1,
-        "avg_margin": 12.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 12.0,
+        "avg_pf": 100.0,
+        "avg_pa": 88.0
       },
       {
         "team": "馬刺",
         "games": 1,
-        "avg_margin": 12.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 12.0,
+        "avg_pf": 94.0,
+        "avg_pa": 82.0
       },
       {
         "team": "魔術",
         "games": 1,
-        "avg_margin": 7.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 7.0,
+        "avg_pf": 99.0,
+        "avg_pa": 92.0
       },
       {
         "team": "塞爾提克",
         "games": 1,
-        "avg_margin": 6.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 6.0,
+        "avg_pf": 82.0,
+        "avg_pa": 76.0
       },
       {
         "team": "騎士",
         "games": 1,
-        "avg_margin": 5.0
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 5.0,
+        "avg_pf": 82.0,
+        "avg_pa": 77.0
       },
       {
         "team": "鵜鶘",
         "games": 1,
-        "avg_margin": -5.0
+        "wins": 0,
+        "losses": 1,
+        "avg_margin": -5.0,
+        "avg_pf": 77.0,
+        "avg_pa": 82.0
       },
       {
         "team": "國王",
         "games": 1,
-        "avg_margin": -6.0
+        "wins": 0,
+        "losses": 1,
+        "avg_margin": -6.0,
+        "avg_pf": 76.0,
+        "avg_pa": 82.0
       }
     ],
+    "summary": "戰績最佳：公鹿（1勝0敗，場均淨勝 +19.0）。目前墊底：黃蜂（0勝1敗，場均淨勝 -19.0）。進攻火力最猛：灰狼（場均 114.0 分）。防守最穩：塞爾提克（場均僅失 76.0 分）。",
     "watchlist": [
       {
         "matchup": "獨行俠 @ 雷霆",
@@ -141,7 +182,7 @@
         "market": "獨贏",
         "pick": "獨行俠",
         "point": null,
-        "price": 1.95,
+        "price": 2.1,
         "book": "FanDuel"
       },
       {
@@ -150,7 +191,7 @@
         "market": "獨贏",
         "pick": "雷霆",
         "point": null,
-        "price": 1.87,
+        "price": 1.75,
         "book": "FanDuel"
       },
       {
@@ -158,7 +199,7 @@
         "start_time": "2026-07-16T20:00:00Z",
         "market": "讓分",
         "pick": "獨行俠",
-        "point": 1.5,
+        "point": 2.5,
         "price": 1.85,
         "book": "FanDuel"
       },
@@ -167,7 +208,7 @@
         "start_time": "2026-07-16T20:00:00Z",
         "market": "讓分",
         "pick": "雷霆",
-        "point": -1.5,
+        "point": -2.5,
         "price": 1.96,
         "book": "FanDuel"
       },
@@ -177,7 +218,7 @@
         "market": "獨贏",
         "pick": "籃網",
         "point": null,
-        "price": 1.66,
+        "price": 1.62,
         "book": "FanDuel"
       },
       {
@@ -186,7 +227,7 @@
         "market": "獨贏",
         "pick": "火箭",
         "point": null,
-        "price": 2.24,
+        "price": 2.32,
         "book": "FanDuel"
       },
       {
@@ -194,8 +235,8 @@
         "start_time": "2026-07-16T20:30:00Z",
         "market": "讓分",
         "pick": "籃網",
-        "point": -2.5,
-        "price": 1.88,
+        "point": -3.5,
+        "price": 1.94,
         "book": "FanDuel"
       },
       {
@@ -203,8 +244,8 @@
         "start_time": "2026-07-16T20:30:00Z",
         "market": "讓分",
         "pick": "火箭",
-        "point": 2.5,
-        "price": 1.94,
+        "point": 3.5,
+        "price": 1.88,
         "book": "FanDuel"
       },
       {
@@ -213,7 +254,7 @@
         "market": "獨贏",
         "pick": "公牛",
         "point": null,
-        "price": 2.36,
+        "price": 2.54,
         "book": "FanDuel"
       },
       {
@@ -222,7 +263,7 @@
         "market": "獨贏",
         "pick": "湖人",
         "point": null,
-        "price": 1.6,
+        "price": 1.52,
         "book": "FanDuel"
       },
       {
@@ -230,7 +271,7 @@
         "start_time": "2026-07-16T22:00:00Z",
         "market": "讓分",
         "pick": "公牛",
-        "point": 3.5,
+        "point": 4.5,
         "price": 1.91,
         "book": "FanDuel"
       },
@@ -239,7 +280,7 @@
         "start_time": "2026-07-16T22:00:00Z",
         "market": "讓分",
         "pick": "湖人",
-        "point": -3.5,
+        "point": -4.5,
         "price": 1.91,
         "book": "FanDuel"
       },
