@@ -352,8 +352,23 @@
   /* ---------- star chips ---------- */
   .stars-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--gap-card); }
   .star-card { padding: 16px; }
-  .star-card .team-name { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+  .star-card .team-name { font-weight: 700; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
   .chip { display: inline-flex; font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--hairline); color: var(--ink-2); margin: 0 5px 5px 0; }
+
+  /* ---------- team logos ---------- */
+  .team-logo, .team-logo-fallback {
+    border-radius: 50%;
+    flex: 0 0 auto;
+    vertical-align: middle;
+  }
+  .team-logo { object-fit: contain; background: var(--surface); border: 1px solid var(--hairline); padding: 3px; }
+  .team-logo-fallback {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--surface); border: 1px solid var(--hairline);
+    color: var(--ink-2); font-weight: 800;
+  }
+  .matchup-line { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .matchup-vs { color: var(--ink-3); font-weight: 400; font-size: 12px; margin: 0 1px; }
 
   /* ---------- footer ---------- */
   footer { margin-top: 40px; border-top: 1px solid var(--hairline); padding-top: 20px; text-align: center; }
@@ -613,6 +628,49 @@
     });
   }
 
+  /* ============ team logos ============ */
+  var TEAM_LOGO_CODE = {
+    "塞爾提克": "bos", "公鹿": "mil", "金塊": "den", "勇士": "gs", "湖人": "lal",
+    "太陽": "phx", "獨行俠": "dal", "快艇": "lac", "熱火": "mia", "七六人": "phi",
+    "尼克": "ny", "暴龍": "tor", "公牛": "chi", "老鷹": "atl", "籃網": "bkn",
+    "騎士": "cle", "溜馬": "ind", "活塞": "det", "魔術": "orl", "黃蜂": "cha",
+    "巫師": "wsh", "火箭": "hou", "馬刺": "sa", "灰熊": "mem", "鵜鶘": "no",
+    "灰狼": "min", "雷霆": "okc", "爵士": "utah", "國王": "sac", "拓荒者": "por"
+  };
+  // Global (not IIFE-scoped) since it's invoked from an inline onerror= attribute.
+  window.__teamLogoFallback = function (img) {
+    var name = img.getAttribute("data-name") || "?";
+    var size = img.getAttribute("width") || 22;
+    var span = document.createElement("span");
+    span.className = "team-logo-fallback";
+    span.style.width = size + "px";
+    span.style.height = size + "px";
+    span.style.fontSize = Math.round(size * 0.48) + "px";
+    span.textContent = name.charAt(0);
+    img.replaceWith(span);
+  };
+  function teamLogo(name, size) {
+    size = size || 22;
+    var code = TEAM_LOGO_CODE[name];
+    var safeName = esc(name || "?");
+    if (!code) {
+      return '<span class="team-logo-fallback" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.48) + 'px;">' + safeName.charAt(0) + '</span>';
+    }
+    var url = "https://a.espncdn.com/i/teamlogos/nba/500/" + code + ".png";
+    return '<img class="team-logo" src="' + url + '" alt="" loading="lazy" width="' + size + '" height="' + size +
+      '" data-name="' + safeName + '" onerror="__teamLogoFallback(this)">';
+  }
+  function matchupWithLogos(matchup, size) {
+    var parts = String(matchup || "").split(" @ ");
+    if (parts.length !== 2) return esc(matchup);
+    return '<span class="matchup-line">' + teamLogo(parts[0], size) + esc(parts[0]) +
+      '<span class="matchup-vs">@</span>' + teamLogo(parts[1], size) + esc(parts[1]) + '</span>';
+  }
+  function teamNameFromBet(bet) {
+    var m = String(bet || "").match(/^(.*?)\s[+-]?\d/);
+    return m ? m[1] : bet;
+  }
+
   function tierBadgeClass(tier) {
     if (!tier) return "badge-status";
     if (tier.indexOf("頂級") !== -1) return "badge-tier-top";
@@ -743,7 +801,7 @@
       day.picks.forEach(function (p) {
         html += '<div class="row">' +
           '<div class="row-top">' +
-            '<span class="row-title">' + esc(p.matchup) + '</span>' +
+            '<span class="row-title">' + matchupWithLogos(p.matchup) + '</span>' +
             '<span class="row-time">' + esc(p.start_time) + '</span>' +
           '</div>' +
           '<div class="row-sub">' +
@@ -788,7 +846,7 @@
       sl.games.forEach(function (g) {
         html += '<div class="row">' +
           '<div class="row-top">' +
-            '<span class="row-title">' + esc(g.away) + ' <span style="color:var(--ink-3);font-weight:400;">@</span> ' + esc(g.home) + '</span>' +
+            '<span class="row-title matchup-line">' + teamLogo(g.away) + esc(g.away) + '<span class="matchup-vs">@</span>' + teamLogo(g.home) + esc(g.home) + '</span>' +
             '<span class="badge badge-status">' + esc(g.status) + '</span>' +
           '</div>' +
           '<div class="row-score">' + g.away_score + ' : ' + g.home_score + '</div>' +
@@ -802,7 +860,7 @@
       html += '<div class="card row-list hoverable">';
       sl.power_ranking.forEach(function (r) {
         html += '<div class="row row-top">' +
-          '<span class="row-title">' + esc(r.team) + ' <span style="color:var(--ink-3);font-weight:400;font-size:11.5px;">' + r.games + ' 場</span></span>' +
+          '<span class="row-title matchup-line">' + teamLogo(r.team) + esc(r.team) + ' <span style="color:var(--ink-3);font-weight:400;font-size:11.5px;">' + r.games + ' 場</span></span>' +
           marginBar(r.avg_margin) +
         '</div>';
       });
@@ -816,7 +874,7 @@
         var pick = w.pick + (w.point != null ? " " + (w.point >= 0 ? "+" : "") + w.point : "");
         html += '<div class="row">' +
           '<div class="row-top">' +
-            '<span class="row-title">' + esc(w.matchup) + '</span>' +
+            '<span class="row-title">' + matchupWithLogos(w.matchup, 18) + '</span>' +
             '<span class="badge badge-status">' + esc(w.market) + '</span>' +
           '</div>' +
           '<div class="row-sub">' + esc(pick) + ' @ <b style="color:var(--ink);">' + Number(w.price).toFixed(2) + '</b>（' + esc(w.book) + '）</div>' +
@@ -847,7 +905,7 @@
     history.forEach(function (h) {
       html += '<div class="row">' +
         '<div class="row-top">' +
-          '<span class="row-title">' + esc(h.bet) + '</span>' +
+          '<span class="row-title matchup-line">' + teamLogo(teamNameFromBet(h.bet), 18) + esc(h.bet) + '</span>' +
           '<span class="badge ' + resultBadgeClass(h.result) + '">' + esc(h.result) + '</span>' +
         '</div>' +
         '<div class="row-sub">' + esc(h.date) + ' ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) + '</div>' +
@@ -871,7 +929,7 @@
     }
     var html = '<div class="stars-grid">';
     stars.forEach(function (s) {
-      html += '<div class="card star-card hoverable"><div class="team-name">' + esc(s.team) + '</div>';
+      html += '<div class="card star-card hoverable"><div class="team-name">' + teamLogo(s.team, 24) + esc(s.team) + '</div>';
       (s.players || []).forEach(function (p) { html += '<span class="chip">' + esc(p) + '</span>'; });
       html += '</div>';
     });
