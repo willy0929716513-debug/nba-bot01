@@ -462,10 +462,10 @@ def get_consensus_total(bookmakers):
     return (sum(totals) / len(totals)) if totals else None
 
 
-def simulate_cover(blended, line):
+def simulate_cover(blended, line, std=DYNAMIC_STD_BASE):
     wins = sum(
         1 for _ in range(SIMS)
-        if blended + random.gauss(0, DYNAMIC_STD_BASE) + line > 0
+        if blended + random.gauss(0, std) + line > 0
     )
     return wins / SIMS
 
@@ -573,6 +573,81 @@ def zh_game_status(status):
     return GAME_STATUS_ZH.get((status or "").strip().lower(), status)
 
 
+SUMMER_EDGE_THRESHOLD  = 0.10   # regular season is 0.06 -- demand more edge given the noisier signal
+SUMMER_MODEL_WEIGHT    = 0.30
+SUMMER_MARKET_WEIGHT   = 0.70
+SUMMER_STD_MULTIPLIER  = 1.3    # exhibition-game scoring swings more than real-season ball
+
+
+def summer_recommendations(odds_games, team_power):
+    """Same edge-vs-market-consensus approach as the regular-season model
+    (predict_margin's role is played by team_power, a simple avg-margin
+    proxy from completed Summer League games), gated much harder than
+    regular season:
+      - both teams need at least one completed game already on record --
+        no team_power entry means no recommendation for that side at all
+      - a higher edge bar (10% vs 6%)
+      - wider simulated variance (rosters/rotations are far less settled)
+    No Kelly stake is computed -- this is a probability/edge lean only,
+    not a bankroll-sizing recommendation, given how thin the sample is.
+    """
+    picks = {}
+    for g in odds_games:
+        try:
+            c_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        home = zh_team_name(g.get("home_team", ""))
+        away = zh_team_name(g.get("away_team", ""))
+        if home not in team_power or away not in team_power:
+            continue
+        margin_est = team_power[home] - team_power[away]
+        bookmakers = g.get("bookmakers", [])
+        game_id    = "%s@%s_%s" % (away, home, c_time.date())
+
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "spreads":
+                    continue
+                for outcome in market.get("outcomes", []):
+                    raw_name = outcome.get("name", "")
+                    name     = normalize_team(raw_name)
+                    line     = outcome.get("point")
+                    price    = outcome.get("price")
+                    if line is None or not price:
+                        continue
+                    if not (MIN_PRICE < price <= MAX_PRICE):
+                        continue
+
+                    consensus = get_consensus_line(bookmakers, name)
+                    if consensus is None:
+                        consensus = line
+                    if line - consensus < 0:
+                        continue
+
+                    is_home = zh_team_name(raw_name) == home
+                    target  = margin_est if is_home else -margin_est
+                    blended = target * SUMMER_MODEL_WEIGHT + (-consensus) * SUMMER_MARKET_WEIGHT
+                    prob    = simulate_cover(blended, line, std=DYNAMIC_STD_BASE * SUMMER_STD_MULTIPLIER)
+                    edge    = prob - (1 / price)
+                    if edge < SUMMER_EDGE_THRESHOLD:
+                        continue
+
+                    existing = picks.get(game_id)
+                    if existing is None or edge > existing["edge"]:
+                        picks[game_id] = {
+                            "matchup":    "%s @ %s" % (away, home),
+                            "start_time": c_time.isoformat() + "Z",
+                            "bet":        "%s %+.1f" % (zh_team_name(raw_name), line),
+                            "price":      price,
+                            "book":       book.get("title", "?"),
+                            "prob":       round(prob * 100, 1),
+                            "edge":       round(edge * 100, 1),
+                        }
+
+    return sorted(picks.values(), key=lambda x: x["edge"], reverse=True)
+
+
 def build_summer_league_summary(power_ranking):
     """Short auto-generated narrative highlighting notable teams so the
     Summer League section reads as an analysis, not just raw tables.
@@ -658,6 +733,8 @@ def analyze_summer_league():
         })
     power_ranking.sort(key=lambda x: x["avg_margin"], reverse=True)
     summary = build_summer_league_summary(power_ranking)
+    team_power      = {r["team"]: r["avg_margin"] for r in power_ranking}
+    recommendations = summer_recommendations(odds_games, team_power)
 
     watchlist = []
     for g in odds_games:
@@ -686,12 +763,13 @@ def analyze_summer_league():
                     })
 
     return {
-        "available":     bool(events or odds_games),
-        "games":         games,
-        "power_ranking": power_ranking[:10],
-        "summary":       summary,
-        "watchlist":     watchlist[:15],
-        "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，僅供參考觀察，不計入 Kelly 資金配置。",
+        "available":       bool(events or odds_games),
+        "games":           games,
+        "power_ranking":   power_ranking[:10],
+        "summary":         summary,
+        "recommendations": recommendations[:8],
+        "watchlist":       watchlist[:15],
+        "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小，推薦門檻拉高至 Edge ≥ 10%，但不提供 Kelly 資金配置建議，下注金額請自行斟酌。",
     }
 
 
@@ -716,6 +794,13 @@ def format_summer_league_section(sl):
         for r in sl["power_ranking"][:8]:
             lines.append("> %s: %d勝%d敗 | 淨勝 %+.1f | 攻 %.1f 防 %.1f" % (
                 r["team"], r["wins"], r["losses"], r["avg_margin"], r["avg_pf"], r["avg_pa"]
+            ))
+
+    if sl.get("recommendations"):
+        lines.append("\n🎯 夏聯推薦 (Edge ≥ 10%，無 Kelly 建議):")
+        for r in sl["recommendations"][:6]:
+            lines.append("> %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge +%.1f%%" % (
+                r["matchup"], r["bet"], r["price"], r["book"], r["prob"], r["edge"]
             ))
 
     if sl["watchlist"]:

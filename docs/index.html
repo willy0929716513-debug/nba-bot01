@@ -1026,6 +1026,25 @@
       html += '</div>';
     }
 
+    if (sl.recommendations && sl.recommendations.length) {
+      html += '<div class="subhead">夏聯推薦（Edge ≥ 10%，無 Kelly 建議）</div>';
+      html += '<div class="card row-list hoverable">';
+      sl.recommendations.forEach(function (r) {
+        html += '<div class="row">' +
+          '<div class="row-top">' +
+            '<span class="row-title">' + matchupWithLogos(r.matchup) + '</span>' +
+            '<span class="row-time">' + esc(fmtTaiwanTime(r.start_time)) + '（台灣時間）</span>' +
+          '</div>' +
+          '<div class="row-sub"><span class="badge badge-tier-strong" style="margin-right:6px;">🎯 夏聯推薦</span>投注 <b>' + esc(r.bet) + '</b> @ <b>' + Number(r.price).toFixed(2) + '</b>（' + esc(r.book) + '）</div>' +
+          '<div class="row-stats">' +
+            '<span class="stat">勝率 <b>' + Number(r.prob).toFixed(1) + '%</b></span>' +
+            '<span class="stat">Edge <b>+' + Number(r.edge).toFixed(1) + '%</b></span>' +
+          '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
     if (sl.watchlist && sl.watchlist.length) {
       html += '<div class="subhead">盤口觀察（僅供參考，非資金建議）</div>';
       html += '<div class="card row-list hoverable">';
