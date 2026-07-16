@@ -54,36 +54,48 @@ DISCORD_CHAR_LIMIT = 1900
 BANKROLL         = 1000.0
 KELLY_FRACTION   = 0.20
 
+# Re-verified against the 2026 offseason trade/free-agency wave (last
+# checked 2026-07) after a wrong-team report (De'Aaron Fox was listed on
+# both Sacramento and San Antonio -- he was traded to San Antonio back in
+# Feb 2025, Sacramento's entry was stale). Notable moves reflected below:
+# Giannis Bucks->Heat, Jaylen Brown<->Paul George (Celtics/76ers), Ja Morant
+# Grizzlies->Blazers, Jaren Jackson Jr. Grizzlies->Jazz, Santi Aldama
+# Grizzlies->Mavericks, LaMelo Ball Hornets->Timberwolves, Julius Randle
+# Timberwolves->Nets, Miles Bridges Hornets->Suns, Kawhi Leonard/Brandon
+# Ingram trade agreed but on hold pending an NBA investigation (both still
+# shown on their original teams until it's actually executed), Chris Paul
+# retired, LeBron James left the Lakers as an unsigned free agent (no
+# team to attribute him to yet -- removed rather than guessed).
 IMPACT_PLAYERS = {
-    "Los Angeles Lakers":     ["doncic", "james", "reaves"],
-    "Washington Wizards":     ["mccollum", "davis", "sarr"],
+    "Los Angeles Lakers":     ["doncic", "kessler", "reaves"],
+    "Washington Wizards":     ["young", "davis", "sarr"],
     "Golden State Warriors":  ["podziemski", "porzingis", "green"],
     "Cleveland Cavaliers":    ["harden", "mitchell", "mobley"],
-    "Los Angeles Clippers":   ["leonard", "garland", "brown"],
+    "Los Angeles Clippers":   ["leonard", "garland", "hachimura"],
     "Dallas Mavericks":       ["flagg", "thompson", "jones"],
-    "Boston Celtics":         ["brown", "white", "vucevic"],
+    "Boston Celtics":         ["george", "white", "queta"],
     "Denver Nuggets":         ["jokic", "murray", "gordon"],
     "Oklahoma City Thunder":  ["shai", "holmgren", "mccain"],
-    "San Antonio Spurs":      ["wembanyama", "fox", "cp3"],
-    "Milwaukee Bucks":        ["giannis", "turner", "dieng"],
-    "New York Knicks":        ["brunson", "towns", "alvarado"],
+    "San Antonio Spurs":      ["wembanyama", "fox", "castle"],
+    "Milwaukee Bucks":        ["herro", "turner", "dieng"],
+    "New York Knicks":        ["brunson", "towns", "bridges"],
     "Houston Rockets":        ["durant", "sengun", "sheppard"],
     "Indiana Pacers":         ["siakam", "zubac", "nembhard"],
-    "Philadelphia 76ers":     ["maxey", "embiid", "oubre"],
-    "Minnesota Timberwolves": ["randle", "edwards", "gobert"],
-    "Miami Heat":             ["adebayo", "herro", "collins"],
-    "Portland Trail Blazers": ["avdija", "clingan", "grant"],
-    "Detroit Pistons":        ["cunningham", "duren", "jenkins"],
-    "Sacramento Kings":       ["fox", "monk", "keegan"],
-    "Atlanta Hawks":          ["young", "hunter", "okongwu"],
-    "Chicago Bulls":          ["white", "drummond", "dosunmu"],
-    "Charlotte Hornets":      ["lamelo", "bridges", "miles"],
+    "Philadelphia 76ers":     ["maxey", "embiid", "brown"],
+    "Minnesota Timberwolves": ["ball", "edwards", "gobert"],
+    "Miami Heat":             ["adebayo", "giannis", "wiggins"],
+    "Portland Trail Blazers": ["avdija", "clingan", "morant"],
+    "Detroit Pistons":        ["cunningham", "duren", "thompson"],
+    "Sacramento Kings":       ["sabonis", "monk", "keegan"],
+    "Atlanta Hawks":          ["johnson", "daniels", "okongwu"],
+    "Chicago Bulls":          ["giddey", "claxton", "powell"],
+    "Charlotte Hornets":      ["white", "miller", "reid"],
     "Orlando Magic":          ["banchero", "suggs", "wagner"],
-    "Toronto Raptors":        ["ingram", "quickley", "boucher"],
-    "Memphis Grizzlies":      ["morant", "jackson", "aldama"],
-    "New Orleans Pelicans":   ["zion", "murphy", "daniels"],
-    "Utah Jazz":              ["markkanen", "george", "kessler"],
-    "Brooklyn Nets":          ["porter", "claxton", "thomas"],
+    "Toronto Raptors":        ["ingram", "quickley", "barnes"],
+    "Memphis Grizzlies":      ["boozer", "edey", "coward"],
+    "New Orleans Pelicans":   ["zion", "murphy", "murray"],
+    "Utah Jazz":              ["markkanen", "george", "jackson"],
+    "Brooklyn Nets":          ["porter", "randle", "sharpe"],
     "Phoenix Suns":           ["booker", "green", "brooks"],
 }
 
@@ -100,7 +112,7 @@ LIMITED_PLAYERS = set()
 
 SUPERSTARS = {
     "doncic", "jokic", "shai", "giannis", "durant",
-    "james", "harden", "embiid", "randle", "edwards",
+    "harden", "embiid", "randle", "edwards",
     "wembanyama", "morant", "banchero", "young", "fox",
 }
 
