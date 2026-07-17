@@ -1213,7 +1213,7 @@ def run():
                             "ou_note":     ou_note,
                         }
 
-                    if edge > 0.12 and is_official_run and g_date == today_s:
+                    if edge >= EDGE_THRESHOLD and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
@@ -1230,7 +1230,7 @@ def run():
     total_rec, wins, win_rate, profit = calc_performance(history, league="regular")
     regular_history_count = sum(1 for r in history.values() if r.get("league", "regular") == "regular")
     perf_msg = (
-        "\n📊 **歷史績效報告** (僅統計💎頂級)\n"
+        "\n📊 **歷史績效報告** (統計所有 Edge ≥ 6%% 推薦)\n"
         "總推薦: %d 場 | 已結算: %d 場\n"
         "勝率: %.1f%% | 損益: %+.1f 元\n"
         "（以每場 Kelly 建議金額計算）\n"
