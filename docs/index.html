@@ -187,7 +187,7 @@
   /* ---------- stat grid ---------- */
   .stat-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: var(--gap-card);
     margin-bottom: var(--gap-section);
   }
@@ -892,6 +892,7 @@
   function renderStats(data) {
     var rs = data.regular_season || {};
     var perf = data.performance || {};
+    var slPerf = (data.summer_league && data.summer_league.performance) || {};
     var tiles = [
       { label: "今日/近期推薦場次", icon: "calendar", value: rs.total_picks || 0 },
       { label: "平均 Edge", icon: "activity", value: (rs.avg_edge != null ? rs.avg_edge.toFixed(1) : "0.0") + "%" },
@@ -902,6 +903,10 @@
       {
         label: "歷史損益", icon: "barchart", value: (perf.profit > 0 ? "+" : "") + (perf.profit != null ? perf.profit.toFixed(1) : "0.0"),
         cls: perf.profit > 0 ? "good" : (perf.profit < 0 ? "bad" : "")
+      },
+      {
+        label: "夏聯歷史勝率", icon: "star", value: (slPerf.win_rate != null ? slPerf.win_rate.toFixed(1) : "0.0") + "%",
+        cls: slPerf.win_rate >= 55 ? "good" : (slPerf.win_rate > 0 && slPerf.win_rate < 45 ? "bad" : "")
       }
     ];
     document.getElementById("stat-grid").innerHTML = tiles.map(function (t) {
