@@ -374,14 +374,22 @@ def save_history(history):
         log.error("Failed to save history: %s", e)
 
 
-def calc_performance(history):
+def calc_performance(history, league="regular"):
+    """Entries carry a "league" tag ("regular" or "summer") so the two can be
+    tracked side by side in one Gist without a regular-season Kelly-based
+    profit figure ever getting diluted by summer-league reference-only picks
+    that were never actually staked. Untagged entries (written before the
+    "league" field existed) default to "regular" for backward compatibility.
+    """
     total = win = 0
     profit = 0.0
     for record in history.values():
+        if record.get("league", "regular") != league:
+            continue
         if record.get("result") not in ["win", "loss"]:
             continue
         total += 1
-        stake = record.get("kelly_stake", 10.0)
+        stake = record.get("kelly_stake") or 10.0
         if record["result"] == "win":
             win    += 1
             profit += stake * (record.get("price", 1.9) - 1)
@@ -833,6 +841,46 @@ def analyze_summer_league():
     }
 
 
+# Separate, deliberately lower bar than SUMMER_EDGE_THRESHOLD (10%, which only
+# gates the confident "🎯推薦" badge) -- this just decides what's worth writing
+# to history for later win/loss tracking, same cutoff as the regular-season
+# recommendation bar (EDGE_THRESHOLD).
+SUMMER_HISTORY_EDGE_THRESHOLD = 0.06
+
+
+def record_summer_history(history, summer_league, is_official_run):
+    """Track Summer League picks with edge >= 6% in the same history dict as
+    regular-season picks (tagged "league": "summer" so calc_performance can
+    keep the two separate -- see its docstring), so the manual win/loss
+    correction workflow already used for regular-season history also covers
+    Summer League. No kelly_stake: this model deliberately never sizes a
+    bankroll bet, so there's nothing to record there.
+    """
+    if not is_official_run:
+        return
+    for r in summer_league.get("recommendations", []):
+        if r["edge"] < SUMMER_HISTORY_EDGE_THRESHOLD * 100:
+            continue
+        date = r.get("start_time", "")[:10]
+        if not date:
+            continue
+        game_id  = "summer_%s_%s" % (r["matchup"], date)
+        existing = history.get(game_id)
+        if existing is not None and r["edge"] <= existing.get("edge", 0) * 100:
+            continue
+        history[game_id] = {
+            "date":        date,
+            "bet":         r["bet"],
+            "book":        r["book"],
+            "price":       r["price"],
+            "prob":        round(r["prob"] / 100, 4),
+            "edge":        round(r["edge"] / 100, 4),
+            "kelly_stake": None,
+            "result":      existing.get("result", "pending") if existing else "pending",
+            "league":      "summer",
+        }
+
+
 def format_summer_league_section(sl):
     if not sl.get("available"):
         return "\n🏖️ **夏季聯賽**\n目前查無夏季聯賽賽事或盤口資料（可能尚未開打或資料源未提供）。\n"
@@ -941,6 +989,7 @@ def build_history_list(history, limit=30):
             "edge":        round(h.get("edge", 0) * 100, 1),
             "kelly_stake": h.get("kelly_stake"),
             "result":      RESULT_ZH.get(h.get("result", "pending"), h.get("result", "pending")),
+            "league":      h.get("league", "regular"),
         }
         for h in items[:limit]
     ]
@@ -1038,6 +1087,7 @@ def run():
     games        = fetch_odds()
     history      = load_history()
     summer_league = analyze_summer_league()
+    record_summer_history(history, summer_league, is_official_run)
 
     if not games and not summer_league.get("available"):
         log.info("No regular-season games and no Summer League data; nothing to report")
@@ -1163,7 +1213,7 @@ def run():
                             "ou_note":     ou_note,
                         }
 
-                    if edge >= EDGE_THRESHOLD and is_official_run and g_date == today_s:
+                    if edge > 0.12 and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
@@ -1177,13 +1227,22 @@ def run():
                                 "result":      existing_h.get("result", "pending") if existing_h else "pending",
                             }
 
-    total_rec, wins, win_rate, profit = calc_performance(history)
+    total_rec, wins, win_rate, profit = calc_performance(history, league="regular")
+    regular_history_count = sum(1 for r in history.values() if r.get("league", "regular") == "regular")
     perf_msg = (
-        "\n📊 **歷史績效報告** (統計所有 Edge ≥ 6%% 推薦)\n"
+        "\n📊 **歷史績效報告** (僅統計💎頂級)\n"
         "總推薦: %d 場 | 已結算: %d 場\n"
         "勝率: %.1f%% | 損益: %+.1f 元\n"
         "（以每場 Kelly 建議金額計算）\n"
-    ) % (len(history), total_rec, win_rate, profit)
+    ) % (regular_history_count, total_rec, win_rate, profit)
+
+    summer_total, summer_wins, summer_win_rate, _ = calc_performance(history, league="summer")
+    if summer_total or any(r.get("league") == "summer" for r in history.values()):
+        summer_recorded = sum(1 for r in history.values() if r.get("league") == "summer")
+        perf_msg += (
+            "\n🏖️ **夏季聯賽歷史績效** (Edge ≥ 6%% 推薦，無 Kelly 資金配置)\n"
+            "總推薦: %d 場 | 已結算: %d 場 | 勝率: %.1f%%\n"
+        ) % (summer_recorded, summer_total, summer_win_rate)
 
     total_picks = sum(len(v) for v in daily_picks.values())
     avg_edge    = (
@@ -1210,12 +1269,18 @@ def run():
                 output += p["msg"]
             output += "-" * 30 + "\n"
 
+    summer_league["performance"] = {
+        "total_recommendations": summer_total,
+        "wins":                  summer_wins,
+        "win_rate":              round(summer_win_rate, 1),
+    }
+
     output += perf_msg
     output += format_summer_league_section(summer_league)
 
     if is_official_run:
         save_history(history)
-        log.info("History saved (official run, edge >= %.0f%% only)" % (EDGE_THRESHOLD * 100))
+        log.info("History saved (official run, regular top tier + summer edge >= 6%)")
     else:
         log.info("History NOT saved (test run)")
 
