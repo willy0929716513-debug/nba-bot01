@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-17 18:30",
+  "generated_at": "2026-07-17 20:39",
   "data_source": "即時數據",
   "run_type": "test",
   "regular_season": {
@@ -171,11 +171,11 @@
       {
         "matchup": "公牛 @ 騎士",
         "start_time": "2026-07-17T23:00:00Z",
-        "bet": "騎士 -1.5",
-        "price": 1.88,
-        "book": "BetRivers",
-        "prob": 66.2,
-        "edge": 13.0,
+        "bet": "騎士 -2.5",
+        "price": 1.85,
+        "book": "FanDuel",
+        "prob": 64.8,
+        "edge": 10.7,
         "has_form": false,
         "meets_threshold": false
       },
@@ -183,10 +183,10 @@
         "matchup": "國王 @ 黃蜂",
         "start_time": "2026-07-17T22:30:00Z",
         "bet": "國王 -2.5",
-        "price": 1.91,
-        "book": "BetRivers",
-        "prob": 48.8,
-        "edge": -3.6,
+        "price": 2.0,
+        "book": "BetUS",
+        "prob": 48.5,
+        "edge": -1.5,
         "has_form": false,
         "meets_threshold": false
       },
@@ -196,8 +196,8 @@
         "bet": "巫師 +1.5",
         "price": 1.85,
         "book": "FanDuel",
-        "prob": 74.8,
-        "edge": 20.7,
+        "prob": 74.9,
+        "edge": 20.8,
         "has_form": false,
         "meets_threshold": false
       },
@@ -205,10 +205,10 @@
         "matchup": "獨行俠 @ 尼克",
         "start_time": "2026-07-18T00:30:00Z",
         "bet": "獨行俠 -3.5",
-        "price": 1.89,
-        "book": "BetRivers",
-        "prob": 62.5,
-        "edge": 9.6,
+        "price": 1.91,
+        "book": "DraftKings",
+        "prob": 61.8,
+        "edge": 9.5,
         "has_form": true,
         "meets_threshold": false
       },
@@ -218,8 +218,8 @@
         "bet": "灰熊 -4.5",
         "price": 1.89,
         "book": "DraftKings",
-        "prob": 58.3,
-        "edge": 5.4,
+        "prob": 57.9,
+        "edge": 5.0,
         "has_form": true,
         "meets_threshold": false
       },
@@ -229,8 +229,8 @@
         "bet": "活塞 -1.5",
         "price": 1.89,
         "book": "FanDuel",
-        "prob": 55.5,
-        "edge": 2.6,
+        "prob": 55.4,
+        "edge": 2.5,
         "has_form": false,
         "meets_threshold": false
       },
@@ -240,8 +240,8 @@
         "bet": "拓荒者 +2.5",
         "price": 1.91,
         "book": "FanDuel",
-        "prob": 54.6,
-        "edge": 2.3,
+        "prob": 54.8,
+        "edge": 2.4,
         "has_form": false,
         "meets_threshold": false
       },
@@ -251,8 +251,8 @@
         "bet": "七六人 +2.5",
         "price": 1.91,
         "book": "FanDuel",
-        "prob": 50.7,
-        "edge": -1.7,
+        "prob": 50.0,
+        "edge": -2.3,
         "has_form": false,
         "meets_threshold": false
       }
@@ -394,7 +394,12 @@
         "book": "FanDuel"
       }
     ],
-    "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小；下方列出所有已可評估的賽事，Edge ≥ 10% 才標記為推薦，未達門檻的也照樣顯示數字供參考，且一律不提供 Kelly 資金配置建議，下注金額請自行斟酌。"
+    "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小；下方列出所有已可評估的賽事，Edge ≥ 10% 才標記為推薦，未達門檻的也照樣顯示數字供參考，且一律不提供 Kelly 資金配置建議，下注金額請自行斟酌。",
+    "performance": {
+      "total_recommendations": 0,
+      "wins": 0,
+      "win_rate": 0
+    }
   },
   "history": [
     {
@@ -405,7 +410,8 @@
       "prob": 68.0,
       "edge": 15.1,
       "kelly_stake": 64.3,
-      "result": "待開獎"
+      "result": "待開獎",
+      "league": "regular"
     },
     {
       "date": "2026-04-08",
@@ -415,7 +421,8 @@
       "prob": 65.6,
       "edge": 13.2,
       "kelly_stake": 55.4,
-      "result": "待開獎"
+      "result": "待開獎",
+      "league": "regular"
     },
     {
       "date": "2026-04-08",
@@ -425,7 +432,8 @@
       "prob": 71.1,
       "edge": 18.8,
       "kelly_stake": 78.7,
-      "result": "待開獎"
+      "result": "待開獎",
+      "league": "regular"
     },
     {
       "date": "2026-04-06",
@@ -435,7 +443,8 @@
       "prob": 68.4,
       "edge": 16.8,
       "kelly_stake": 69.5,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-04-04",
@@ -445,7 +454,8 @@
       "prob": 67.9,
       "edge": 15.5,
       "kelly_stake": 65.2,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-04-04",
@@ -455,7 +465,8 @@
       "prob": 67.8,
       "edge": 15.5,
       "kelly_stake": 64.9,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-04-04",
@@ -465,7 +476,8 @@
       "prob": 69.2,
       "edge": 15.2,
       "kelly_stake": 66.0,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-04-02",
@@ -475,7 +487,8 @@
       "prob": 64.7,
       "edge": 12.3,
       "kelly_stake": 51.8,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-31",
@@ -485,7 +498,8 @@
       "prob": 64.7,
       "edge": 14.2,
       "kelly_stake": 57.2,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-03-24",
@@ -495,7 +509,8 @@
       "prob": 65.8,
       "edge": 14.2,
       "kelly_stake": 58.7,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-24",
@@ -505,7 +520,8 @@
       "prob": 64.6,
       "edge": 12.8,
       "kelly_stake": 53.0,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-03-23",
@@ -515,7 +531,8 @@
       "prob": 61.3,
       "edge": 9.4,
       "kelly_stake": 39.2,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-22",
@@ -525,7 +542,8 @@
       "prob": 59.5,
       "edge": 7.1,
       "kelly_stake": 37.4,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-22",
@@ -535,7 +553,8 @@
       "prob": 57.7,
       "edge": 7.4,
       "kelly_stake": 37.4,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-22",
@@ -545,7 +564,8 @@
       "prob": 60.4,
       "edge": 8.0,
       "kelly_stake": 42.0,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-03-22",
@@ -555,7 +575,8 @@
       "prob": 64.9,
       "edge": 14.7,
       "kelly_stake": 73.7,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-03-22",
@@ -565,7 +586,8 @@
       "prob": 62.3,
       "edge": 10.5,
       "kelly_stake": 54.3,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     },
     {
       "date": "2026-03-22",
@@ -575,7 +597,8 @@
       "prob": 66.3,
       "edge": 14.7,
       "kelly_stake": 76.1,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-21",
@@ -585,7 +608,8 @@
       "prob": 62.5,
       "edge": 11.2,
       "kelly_stake": 57.6,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-21",
@@ -595,7 +619,8 @@
       "prob": 74.2,
       "edge": 23.9,
       "kelly_stake": 120.3,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-20",
@@ -605,7 +630,8 @@
       "prob": 73.1,
       "edge": 21.8,
       "kelly_stake": 111.8,
-      "result": "獲勝"
+      "result": "獲勝",
+      "league": "regular"
     },
     {
       "date": "2026-03-20",
@@ -615,7 +641,8 @@
       "prob": 59.9,
       "edge": 8.3,
       "kelly_stake": 43.1,
-      "result": "落敗"
+      "result": "落敗",
+      "league": "regular"
     }
   ],
   "team_stars": [
