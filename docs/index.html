@@ -1053,6 +1053,11 @@
       html = emptyState("inbox", "資料源暫無可顯示賽事", "資料源已回應，但目前沒有符合條件的賽事，稍後再回來看看。");
     }
 
+    if (sl.performance && sl.performance.total_recommendations > 0) {
+      html += '<div class="note-box">' + svg("trophy") + '<span>夏聯歷史績效（Edge ≥ 6% 推薦，無 Kelly 資金配置）：已結算 ' +
+        sl.performance.total_recommendations + ' 場，勝率 ' + Number(sl.performance.win_rate).toFixed(1) + '%</span></div>';
+    }
+
     if (sl.note) {
       html += '<div class="note-box">' + svg("info") + '<span>' + esc(sl.note) + '</span></div>';
     }
@@ -1064,21 +1069,23 @@
     var history = data.history || [];
     var body = document.getElementById("history-body");
     if (!history.length) {
-      body.innerHTML = emptyState("history", "目前沒有歷史紀錄", "只有「正式執行」且達到 💎頂級 等級的推薦才會被記錄下來，跑過幾次正式排程後這裡就會累積資料。");
+      body.innerHTML = emptyState("history", "目前沒有歷史紀錄", "只有「正式執行」且達到 💎頂級 等級的例行賽推薦、或 Edge ≥ 6% 的夏季聯賽推薦才會被記錄下來，跑過幾次正式排程後這裡就會累積資料。");
       return;
     }
     var html = '<div class="card row-list hoverable">';
     history.forEach(function (h) {
+      var isSummer = h.league === "summer";
       html += '<div class="row">' +
         '<div class="row-top">' +
-          '<span class="row-title matchup-line">' + teamLogo(teamNameFromBet(h.bet), 18) + esc(h.bet) + '</span>' +
+          '<span class="row-title matchup-line">' + teamLogo(teamNameFromBet(h.bet), 18) + esc(h.bet) +
+            (isSummer ? ' <span class="badge badge-status">夏聯</span>' : '') + '</span>' +
           '<span class="badge ' + resultBadgeClass(h.result) + '">' + esc(h.result) + '</span>' +
         '</div>' +
         '<div class="row-sub">' + esc(h.date) + ' ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) + '</div>' +
         '<div class="row-stats">' +
           '<span class="stat">模型勝率 <b>' + Number(h.prob).toFixed(1) + '%</b></span>' +
           '<span class="stat">Edge <b>+' + Number(h.edge).toFixed(1) + '%</b></span>' +
-          '<span class="stat">Kelly <b>$' + Number(h.kelly_stake).toFixed(1) + '</b></span>' +
+          (h.kelly_stake != null ? '<span class="stat">Kelly <b>$' + Number(h.kelly_stake).toFixed(1) + '</b></span>' : '') +
         '</div>' +
       '</div>';
     });
