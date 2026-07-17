@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-17 20:39",
+  "generated_at": "2026-07-18 00:50",
   "data_source": "即時數據",
   "run_type": "test",
   "regular_season": {
@@ -18,175 +18,109 @@
     "available": true,
     "games": [
       {
-        "status": "已完賽",
-        "home": "雷霆",
-        "away": "獨行俠",
-        "home_score": 87,
-        "away_score": 97,
-        "start_time": "2026-07-16T20:00Z"
+        "status": "未開始",
+        "home": "黃蜂",
+        "away": "國王",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-17T22:30Z"
       },
       {
-        "status": "已完賽",
-        "home": "火箭",
-        "away": "籃網",
-        "home_score": 100,
-        "away_score": 83,
-        "start_time": "2026-07-16T20:30Z"
+        "status": "未開始",
+        "home": "騎士",
+        "away": "公牛",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-17T23:00Z"
       },
       {
-        "status": "已完賽",
-        "home": "公牛",
-        "away": "湖人",
-        "home_score": 82,
-        "away_score": 105,
-        "start_time": "2026-07-16T22:00Z"
-      },
-      {
-        "status": "已完賽",
+        "status": "未開始",
         "home": "尼克",
-        "away": "勇士",
-        "home_score": 77,
-        "away_score": 87,
-        "start_time": "2026-07-16T23:00Z"
+        "away": "獨行俠",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-18T00:30Z"
       },
       {
-        "status": "已完賽",
-        "home": "老鷹",
-        "away": "灰熊",
-        "home_score": 64,
-        "away_score": 96,
-        "start_time": "2026-07-17T00:00Z"
-      },
-      {
-        "status": "已完賽",
+        "status": "未開始",
         "home": "熱火",
-        "away": "暴龍",
-        "home_score": 90,
-        "away_score": 99,
-        "start_time": "2026-07-17T01:00Z"
+        "away": "活塞",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-18T01:00Z"
       },
       {
-        "status": "已完賽",
-        "home": "金塊",
+        "status": "未開始",
+        "home": "爵士",
         "away": "拓荒者",
-        "home_score": 101,
-        "away_score": 108,
-        "start_time": "2026-07-17T02:00Z"
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-18T02:30Z"
+      },
+      {
+        "status": "未開始",
+        "home": "快艇",
+        "away": "灰狼",
+        "home_score": 0,
+        "away_score": 0,
+        "start_time": "2026-07-18T03:00Z"
       }
     ],
-    "power_ranking": [
-      {
-        "team": "灰熊",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 32.0,
-        "avg_pf": 96.0,
-        "avg_pa": 64.0
-      },
-      {
-        "team": "湖人",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 23.0,
-        "avg_pf": 105.0,
-        "avg_pa": 82.0
-      },
-      {
-        "team": "火箭",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 17.0,
-        "avg_pf": 100.0,
-        "avg_pa": 83.0
-      },
-      {
-        "team": "獨行俠",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 10.0,
-        "avg_pf": 97.0,
-        "avg_pa": 87.0
-      },
-      {
-        "team": "勇士",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 10.0,
-        "avg_pf": 87.0,
-        "avg_pa": 77.0
-      },
-      {
-        "team": "暴龍",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 9.0,
-        "avg_pf": 99.0,
-        "avg_pa": 90.0
-      },
-      {
-        "team": "拓荒者",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 7.0,
-        "avg_pf": 108.0,
-        "avg_pa": 101.0
-      },
-      {
-        "team": "金塊",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -7.0,
-        "avg_pf": 101.0,
-        "avg_pa": 108.0
-      },
-      {
-        "team": "熱火",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -9.0,
-        "avg_pf": 90.0,
-        "avg_pa": 99.0
-      },
-      {
-        "team": "雷霆",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -10.0,
-        "avg_pf": 87.0,
-        "avg_pa": 97.0
-      }
-    ],
-    "summary": "戰績最佳：灰熊（1勝0敗，場均淨勝 +32.0）。目前墊底：老鷹（0勝1敗，場均淨勝 -32.0）。進攻火力最猛：拓荒者（場均 108.0 分）。",
+    "power_ranking": [],
+    "summary": "",
     "recommendations": [
       {
         "matchup": "公牛 @ 騎士",
         "start_time": "2026-07-17T23:00:00Z",
-        "bet": "騎士 -2.5",
-        "price": 1.85,
-        "book": "FanDuel",
-        "prob": 64.8,
-        "edge": 10.7,
+        "bet": "公牛 +4.0",
+        "price": 1.95,
+        "book": "Bovada",
+        "prob": 55.4,
+        "edge": 4.1,
         "has_form": false,
         "meets_threshold": false
       },
       {
         "matchup": "國王 @ 黃蜂",
         "start_time": "2026-07-17T22:30:00Z",
-        "bet": "國王 -2.5",
-        "price": 2.0,
-        "book": "BetUS",
-        "prob": 48.5,
-        "edge": -1.5,
+        "bet": "黃蜂 +1.5",
+        "price": 1.91,
+        "book": "BetMGM",
+        "prob": 50.1,
+        "edge": -2.2,
+        "has_form": false,
+        "meets_threshold": false
+      },
+      {
+        "matchup": "活塞 @ 熱火",
+        "start_time": "2026-07-18T01:00:00Z",
+        "bet": "熱火 +3.5",
+        "price": 1.87,
+        "book": "DraftKings",
+        "prob": 55.0,
+        "edge": 1.5,
+        "has_form": false,
+        "meets_threshold": false
+      },
+      {
+        "matchup": "拓荒者 @ 爵士",
+        "start_time": "2026-07-18T02:30:00Z",
+        "bet": "拓荒者 +4.5",
+        "price": 1.98,
+        "book": "DraftKings",
+        "prob": 50.9,
+        "edge": 0.4,
+        "has_form": false,
+        "meets_threshold": false
+      },
+      {
+        "matchup": "火箭 @ 灰熊",
+        "start_time": "2026-07-18T22:30:00Z",
+        "bet": "火箭 +5.5",
+        "price": 1.89,
+        "book": "FanDuel",
+        "prob": 52.1,
+        "edge": -0.9,
         "has_form": false,
         "meets_threshold": false
       },
@@ -195,53 +129,9 @@
         "start_time": "2026-07-18T23:00:00Z",
         "bet": "巫師 +1.5",
         "price": 1.85,
-        "book": "FanDuel",
-        "prob": 74.9,
-        "edge": 20.8,
-        "has_form": false,
-        "meets_threshold": false
-      },
-      {
-        "matchup": "獨行俠 @ 尼克",
-        "start_time": "2026-07-18T00:30:00Z",
-        "bet": "獨行俠 -3.5",
-        "price": 1.91,
         "book": "DraftKings",
-        "prob": 61.8,
-        "edge": 9.5,
-        "has_form": true,
-        "meets_threshold": false
-      },
-      {
-        "matchup": "火箭 @ 灰熊",
-        "start_time": "2026-07-18T22:30:00Z",
-        "bet": "灰熊 -4.5",
-        "price": 1.89,
-        "book": "DraftKings",
-        "prob": 57.9,
-        "edge": 5.0,
-        "has_form": true,
-        "meets_threshold": false
-      },
-      {
-        "matchup": "活塞 @ 熱火",
-        "start_time": "2026-07-18T01:00:00Z",
-        "bet": "活塞 -1.5",
-        "price": 1.89,
-        "book": "FanDuel",
-        "prob": 55.4,
-        "edge": 2.5,
-        "has_form": false,
-        "meets_threshold": false
-      },
-      {
-        "matchup": "拓荒者 @ 爵士",
-        "start_time": "2026-07-18T02:30:00Z",
-        "bet": "拓荒者 +2.5",
-        "price": 1.91,
-        "book": "FanDuel",
-        "prob": 54.8,
-        "edge": 2.4,
+        "prob": 52.6,
+        "edge": -1.5,
         "has_form": false,
         "meets_threshold": false
       },
@@ -250,9 +140,20 @@
         "start_time": "2026-07-18T21:00:00Z",
         "bet": "七六人 +2.5",
         "price": 1.91,
-        "book": "FanDuel",
-        "prob": 50.0,
-        "edge": -2.3,
+        "book": "DraftKings",
+        "prob": 50.6,
+        "edge": -1.8,
+        "has_form": false,
+        "meets_threshold": false
+      },
+      {
+        "matchup": "獨行俠 @ 尼克",
+        "start_time": "2026-07-18T00:30:00Z",
+        "bet": "獨行俠 -2.5",
+        "price": 1.91,
+        "book": "BetMGM",
+        "prob": 50.2,
+        "edge": -2.2,
         "has_form": false,
         "meets_threshold": false
       }
@@ -264,7 +165,7 @@
         "market": "獨贏",
         "pick": "黃蜂",
         "point": null,
-        "price": 2.18,
+        "price": 2.08,
         "book": "FanDuel"
       },
       {
@@ -273,7 +174,7 @@
         "market": "獨贏",
         "pick": "國王",
         "point": null,
-        "price": 1.69,
+        "price": 1.77,
         "book": "FanDuel"
       },
       {
@@ -281,8 +182,8 @@
         "start_time": "2026-07-17T22:30:00Z",
         "market": "讓分",
         "pick": "黃蜂",
-        "point": 2.5,
-        "price": 1.91,
+        "point": 1.5,
+        "price": 1.94,
         "book": "FanDuel"
       },
       {
@@ -290,8 +191,8 @@
         "start_time": "2026-07-17T22:30:00Z",
         "market": "讓分",
         "pick": "國王",
-        "point": -2.5,
-        "price": 1.91,
+        "point": -1.5,
+        "price": 1.88,
         "book": "FanDuel"
       },
       {
@@ -300,7 +201,7 @@
         "market": "獨贏",
         "pick": "公牛",
         "point": null,
-        "price": 2.26,
+        "price": 2.38,
         "book": "FanDuel"
       },
       {
@@ -309,7 +210,7 @@
         "market": "獨贏",
         "pick": "騎士",
         "point": null,
-        "price": 1.65,
+        "price": 1.59,
         "book": "FanDuel"
       },
       {
@@ -317,8 +218,8 @@
         "start_time": "2026-07-17T23:00:00Z",
         "market": "讓分",
         "pick": "公牛",
-        "point": 2.5,
-        "price": 1.96,
+        "point": 3.5,
+        "price": 1.94,
         "book": "FanDuel"
       },
       {
@@ -326,8 +227,8 @@
         "start_time": "2026-07-17T23:00:00Z",
         "market": "讓分",
         "pick": "騎士",
-        "point": -2.5,
-        "price": 1.85,
+        "point": -3.5,
+        "price": 1.88,
         "book": "FanDuel"
       },
       {
@@ -336,7 +237,7 @@
         "market": "獨贏",
         "pick": "獨行俠",
         "point": null,
-        "price": 1.52,
+        "price": 1.61,
         "book": "FanDuel"
       },
       {
@@ -345,7 +246,7 @@
         "market": "獨贏",
         "pick": "尼克",
         "point": null,
-        "price": 2.54,
+        "price": 2.34,
         "book": "FanDuel"
       },
       {
@@ -353,8 +254,8 @@
         "start_time": "2026-07-18T00:30:00Z",
         "market": "讓分",
         "pick": "獨行俠",
-        "point": -4.5,
-        "price": 1.91,
+        "point": -3.5,
+        "price": 1.94,
         "book": "FanDuel"
       },
       {
@@ -362,8 +263,8 @@
         "start_time": "2026-07-18T00:30:00Z",
         "market": "讓分",
         "pick": "尼克",
-        "point": 4.5,
-        "price": 1.91,
+        "point": 3.5,
+        "price": 1.88,
         "book": "FanDuel"
       },
       {
@@ -372,7 +273,7 @@
         "market": "獨贏",
         "pick": "活塞",
         "point": null,
-        "price": 1.81,
+        "price": 1.7,
         "book": "FanDuel"
       },
       {
@@ -381,7 +282,7 @@
         "market": "獨贏",
         "pick": "熱火",
         "point": null,
-        "price": 2.02,
+        "price": 2.16,
         "book": "FanDuel"
       },
       {
@@ -389,8 +290,8 @@
         "start_time": "2026-07-18T01:00:00Z",
         "market": "讓分",
         "pick": "活塞",
-        "point": -1.5,
-        "price": 1.89,
+        "point": -2.5,
+        "price": 1.91,
         "book": "FanDuel"
       }
     ],
