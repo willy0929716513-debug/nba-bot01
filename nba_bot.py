@@ -285,19 +285,40 @@ def get_injury_report():
 
 
 def fetch_team_stats():
+    """Pull every completed game of the season to build win/loss ratings.
+
+    balldontlie's v1 API caps each response at 100 games and paginates via a
+    `next_cursor` in the response `meta`. A single unpaginated call (as this
+    used to be) only ever sees the first ~100 games of the ~1230-game season
+    -- whatever the API's default ordering returns first, typically the
+    earliest games -- so live_ratings would silently stay frozen at
+    early-season form for the rest of the year regardless of how the season
+    actually progressed. Page through with a generous cap (50 pages / 5000
+    games) as a safety net against an infinite loop, not because a season
+    could ever need that many.
+    """
     if not BALLDONTLIE_KEY:
         return {}
     headers = {"Authorization": BALLDONTLIE_KEY}
-    data = safe_get(
-        "https://api.balldontlie.io/v1/games",
-        headers=headers,
-        params={"seasons[]": SEASON_YEAR, "per_page": 100},
-    )
-    if not data or "data" not in data:
+    games  = []
+    cursor = None
+    for _ in range(50):
+        params = {"seasons[]": SEASON_YEAR, "per_page": 100}
+        if cursor is not None:
+            params["cursor"] = cursor
+        data = safe_get("https://api.balldontlie.io/v1/games", headers=headers, params=params)
+        if not data or "data" not in data:
+            break
+        games.extend(data["data"])
+        cursor = (data.get("meta") or {}).get("next_cursor")
+        if not cursor:
+            break
+
+    if not games:
         return {}
 
     win_loss = {}
-    for game in data["data"]:
+    for game in games:
         if game.get("status") != "Final":
             continue
         home = normalize_team(game["home_team"]["full_name"])
@@ -334,7 +355,12 @@ def load_history():
     if not GITHUB_TOKEN:
         return {}
     headers = {"Authorization": "token %s" % GITHUB_TOKEN}
-    gists   = safe_get("https://api.github.com/gists", headers=headers)
+    # GitHub's gist list defaults to 30/page; since the history gist's
+    # updated_at refreshes on every official run it normally sorts first
+    # anyway, but requesting the max page size costs nothing and removes
+    # the risk entirely if other gists on the account get touched a lot
+    # during an off-season lull.
+    gists = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
     if not gists:
         return {}
     for g in gists:
@@ -353,7 +379,7 @@ def save_history(history):
         "Content-Type":  "application/json",
     }
     content = json.dumps(history, ensure_ascii=False, indent=2)
-    gists   = safe_get("https://api.github.com/gists", headers=headers)
+    gists   = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
     gist_id = None
     if gists:
         for g in gists:
