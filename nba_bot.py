@@ -635,13 +635,22 @@ SUMMER_ROOKIE_PRIOR = {
 }
 
 
-def summer_recommendations(odds_games, team_power):
+def summer_recommendations(odds_games, team_power, now_utc=None):
     """Same edge-vs-market-consensus approach as the regular-season model
     (predict_margin's role is played by team_power, a simple avg-margin
     proxy from completed Summer League games), gated harder than regular
     season: wider simulated variance (rosters/rotations are far less
     settled), and no Kelly stake -- this is a probability/edge lean only,
     not a bankroll-sizing recommendation, given how thin the sample is.
+
+    Games that have already tipped off by `now_utc` are skipped, same as
+    the regular-season loop in run() -- Summer League games are scattered
+    across a wide window (as late as ~11:30pm and as early as ~9am Taiwan
+    time on the same "slate"), so a single daily run can land after some of
+    that slate has already started or finished. Recommending -- and worse,
+    writing to Gist history -- a "pick" for a game whose outcome may already
+    be baked into its odds (or already decided) would be look-ahead bias,
+    not a real forecast.
 
     A team with no completed games yet falls back first to SUMMER_ROOKIE_PRIOR
     (a lottery-pick-based estimate) and only then to a neutral 0, rather than
@@ -663,11 +672,14 @@ def summer_recommendations(odds_games, team_power):
     clears SUMMER_EDGE_THRESHOLD, so "we looked and found nothing" is
     visibly distinguishable from "we couldn't evaluate this at all".
     """
+    now_utc = now_utc or datetime.utcnow()
     picks = {}
     for g in odds_games:
         try:
             c_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
         except (KeyError, ValueError):
+            continue
+        if c_time < now_utc:
             continue
         home = zh_team_name(g.get("home_team", ""))
         away = zh_team_name(g.get("away_team", ""))
@@ -746,7 +758,7 @@ def build_summer_league_summary(power_ranking):
     return "".join(parts)
 
 
-def analyze_summer_league():
+def analyze_summer_league(now_utc=None):
     """Lightweight, informational-only Summer League report.
 
     Summer League rosters are dominated by rookies/two-way/G-League players
@@ -755,6 +767,7 @@ def analyze_summer_league():
     run Kelly staking or bankroll sizing -- only a scoreboard, a simple
     point-margin power ranking, and a market watchlist for reference.
     """
+    now_utc    = now_utc or datetime.utcnow()
     events     = fetch_summer_league_scores()
     odds_games = fetch_summer_league_odds()
 
@@ -809,13 +822,15 @@ def analyze_summer_league():
     power_ranking.sort(key=lambda x: x["avg_margin"], reverse=True)
     summary = build_summer_league_summary(power_ranking)
     team_power      = {r["team"]: r["avg_margin"] for r in power_ranking}
-    recommendations = summer_recommendations(odds_games, team_power)
+    recommendations = summer_recommendations(odds_games, team_power, now_utc=now_utc)
 
     watchlist = []
     for g in odds_games:
         try:
             c_time = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
         except (KeyError, ValueError):
+            continue
+        if c_time < now_utc:
             continue
         home = zh_team_name(g.get("home_team", ""))
         away = zh_team_name(g.get("away_team", ""))
@@ -1094,7 +1109,7 @@ def run():
     injuries     = get_injury_report()
     games        = fetch_odds()
     history      = load_history()
-    summer_league = analyze_summer_league()
+    summer_league = analyze_summer_league(now_utc=now_utc)
     record_summer_history(history, summer_league, is_official_run)
 
     if not games and not summer_league.get("available"):
@@ -1221,7 +1236,7 @@ def run():
                             "ou_note":     ou_note,
                         }
 
-                    if edge >= EDGE_THRESHOLD and is_official_run and g_date == today_s:
+                    if edge > 0.12 and is_official_run and g_date == today_s:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
