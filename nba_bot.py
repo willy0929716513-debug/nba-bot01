@@ -54,6 +54,13 @@ DISCORD_CHAR_LIMIT = 1900
 BANKROLL         = 1000.0
 KELLY_FRACTION   = 0.20
 
+# Below this many settled picks, a win-rate swings wildly on pure variance
+# (e.g. 2/3 vs 1/3 look like a 33-point spread but are both just "one game
+# different"), so any win-rate/edge-tier reporting under this count needs an
+# explicit "too small to mean anything yet" caveat rather than being shown as
+# a clean percentage that implies statistical confidence it doesn't have.
+MIN_HISTORY_SAMPLE = 10
+
 # Re-verified against the 2026 offseason trade/free-agency wave (last
 # checked 2026-07) after a wrong-team report (De'Aaron Fox was listed on
 # both Sacramento and San Antonio -- he was traded to San Antonio back in
@@ -1044,6 +1051,7 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
             "wins":                  wins,
             "win_rate":              round(win_rate, 1),
             "profit":                round(profit, 1),
+            "min_sample":            MIN_HISTORY_SAMPLE,
         },
         "summer_league": summer_league,
         "history":       build_history_list(history),
@@ -1229,12 +1237,15 @@ def run():
 
     total_rec, wins, win_rate, profit = calc_performance(history, league="regular")
     regular_history_count = sum(1 for r in history.values() if r.get("league", "regular") == "regular")
+    small_sample_note = "（樣本數 < %d 場，統計僅供參考，不代表長期表現）\n" % MIN_HISTORY_SAMPLE
     perf_msg = (
-        "\n📊 **歷史績效報告** (統計所有 Edge ≥ 6%% 推薦)\n"
+        "\n📊 **歷史績效報告** (僅統計💎頂級)\n"
         "總推薦: %d 場 | 已結算: %d 場\n"
         "勝率: %.1f%% | 損益: %+.1f 元\n"
         "（以每場 Kelly 建議金額計算）\n"
     ) % (regular_history_count, total_rec, win_rate, profit)
+    if total_rec < MIN_HISTORY_SAMPLE:
+        perf_msg += small_sample_note
 
     summer_total, summer_wins, summer_win_rate, _ = calc_performance(history, league="summer")
     if summer_total or any(r.get("league") == "summer" for r in history.values()):
@@ -1243,6 +1254,8 @@ def run():
             "\n🏖️ **夏季聯賽歷史績效** (Edge ≥ 6%% 推薦，無 Kelly 資金配置)\n"
             "總推薦: %d 場 | 已結算: %d 場 | 勝率: %.1f%%\n"
         ) % (summer_recorded, summer_total, summer_win_rate)
+        if summer_total < MIN_HISTORY_SAMPLE:
+            perf_msg += small_sample_note
 
     total_picks = sum(len(v) for v in daily_picks.values())
     avg_edge    = (
@@ -1273,6 +1286,7 @@ def run():
         "total_recommendations": summer_total,
         "wins":                  summer_wins,
         "win_rate":              round(summer_win_rate, 1),
+        "min_sample":            MIN_HISTORY_SAMPLE,
     }
 
     output += perf_msg
