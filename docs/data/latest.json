@@ -1,8 +1,8 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-19 23:49",
+  "generated_at": "2026-07-20 06:46",
   "data_source": "即時數據",
-  "run_type": "test",
+  "run_type": "official",
   "regular_season": {
     "total_picks": 0,
     "avg_edge": 0,
@@ -19,19 +19,19 @@
     "available": true,
     "games": [
       {
-        "status": "未開始",
+        "status": "已完賽",
         "home": "雷霆",
         "away": "籃網",
-        "home_score": 0,
-        "away_score": 0,
+        "home_score": 90,
+        "away_score": 108,
         "start_time": "2026-07-19T20:30Z"
       },
       {
-        "status": "未開始",
+        "status": "進行中",
         "home": "暴龍",
         "away": "金塊",
-        "home_score": 0,
-        "away_score": 0,
+        "home_score": 22,
+        "away_score": 18,
         "start_time": "2026-07-19T22:30Z"
       },
       {
@@ -43,123 +43,48 @@
         "start_time": "2026-07-20T01:00Z"
       }
     ],
-    "power_ranking": [],
-    "summary": "",
+    "power_ranking": [
+      {
+        "team": "籃網",
+        "games": 1,
+        "wins": 1,
+        "losses": 0,
+        "avg_margin": 18.0,
+        "avg_pf": 108.0,
+        "avg_pa": 90.0
+      },
+      {
+        "team": "雷霆",
+        "games": 1,
+        "wins": 0,
+        "losses": 1,
+        "avg_margin": -18.0,
+        "avg_pf": 90.0,
+        "avg_pa": 108.0
+      }
+    ],
+    "summary": "戰績最佳：籃網（1勝0敗，場均淨勝 +18.0）。目前墊底：雷霆（0勝1敗，場均淨勝 -18.0）。",
     "recommendations": [
-      {
-        "matchup": "籃網 @ 雷霆",
-        "start_time": "2026-07-19T20:30:00Z",
-        "bet": "雷霆 +4.5",
-        "price": 1.87,
-        "book": "DraftKings",
-        "prob": 53.8,
-        "edge": 0.3,
-        "has_form": false,
-        "meets_threshold": false
-      },
-      {
-        "matchup": "金塊 @ 暴龍",
-        "start_time": "2026-07-19T22:30:00Z",
-        "bet": "金塊 +2.5",
-        "price": 1.94,
-        "book": "LowVig.ag",
-        "prob": 51.7,
-        "edge": 0.2,
-        "has_form": false,
-        "meets_threshold": false
-      },
       {
         "matchup": "勇士 @ 灰熊",
         "start_time": "2026-07-20T01:00:00Z",
-        "bet": "勇士 +4.0",
+        "bet": "勇士 +5.5",
         "price": 1.91,
-        "book": "MyBookie.ag",
-        "prob": 52.3,
-        "edge": -0.0,
+        "book": "BetMGM",
+        "prob": 53.5,
+        "edge": 1.2,
         "has_form": false,
         "meets_threshold": false
       }
     ],
     "watchlist": [
       {
-        "matchup": "籃網 @ 雷霆",
-        "start_time": "2026-07-19T20:30:00Z",
-        "market": "獨贏",
-        "pick": "籃網",
-        "point": null,
-        "price": 1.65,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "籃網 @ 雷霆",
-        "start_time": "2026-07-19T20:30:00Z",
-        "market": "獨贏",
-        "pick": "雷霆",
-        "point": null,
-        "price": 2.26,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "籃網 @ 雷霆",
-        "start_time": "2026-07-19T20:30:00Z",
-        "market": "讓分",
-        "pick": "籃網",
-        "point": -3.5,
-        "price": 1.96,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "籃網 @ 雷霆",
-        "start_time": "2026-07-19T20:30:00Z",
-        "market": "讓分",
-        "pick": "雷霆",
-        "point": 3.5,
-        "price": 1.85,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "金塊 @ 暴龍",
-        "start_time": "2026-07-19T22:30:00Z",
-        "market": "獨贏",
-        "pick": "金塊",
-        "point": null,
-        "price": 2.18,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "金塊 @ 暴龍",
-        "start_time": "2026-07-19T22:30:00Z",
-        "market": "獨贏",
-        "pick": "暴龍",
-        "point": null,
-        "price": 1.69,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "金塊 @ 暴龍",
-        "start_time": "2026-07-19T22:30:00Z",
-        "market": "讓分",
-        "pick": "金塊",
-        "point": 2.5,
-        "price": 1.91,
-        "book": "FanDuel"
-      },
-      {
-        "matchup": "金塊 @ 暴龍",
-        "start_time": "2026-07-19T22:30:00Z",
-        "market": "讓分",
-        "pick": "暴龍",
-        "point": -2.5,
-        "price": 1.91,
-        "book": "FanDuel"
-      },
-      {
         "matchup": "勇士 @ 灰熊",
         "start_time": "2026-07-20T01:00:00Z",
         "market": "獨贏",
         "pick": "勇士",
         "point": null,
-        "price": 2.38,
+        "price": 2.64,
         "book": "FanDuel"
       },
       {
@@ -168,7 +93,7 @@
         "market": "獨贏",
         "pick": "灰熊",
         "point": null,
-        "price": 1.59,
+        "price": 1.49,
         "book": "FanDuel"
       },
       {
@@ -176,7 +101,7 @@
         "start_time": "2026-07-20T01:00:00Z",
         "market": "讓分",
         "pick": "勇士",
-        "point": 3.5,
+        "point": 4.5,
         "price": 1.96,
         "book": "FanDuel"
       },
@@ -185,7 +110,7 @@
         "start_time": "2026-07-20T01:00:00Z",
         "market": "讓分",
         "pick": "灰熊",
-        "point": -3.5,
+        "point": -4.5,
         "price": 1.85,
         "book": "FanDuel"
       }
