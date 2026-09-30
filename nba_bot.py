@@ -90,10 +90,10 @@ MIN_HISTORY_SAMPLE = 10
 IMPACT_PLAYERS = {
     "Los Angeles Lakers":     ["doncic", "kessler", "reaves"],
     "Washington Wizards":     ["young", "davis", "sarr"],
-    "Golden State Warriors":  ["podziemski", "porzingis", "green"],
+    "Golden State Warriors":  ["curry", "butler", "porzingis"],
     "Cleveland Cavaliers":    ["harden", "mitchell", "mobley"],
     "Los Angeles Clippers":   ["ingram", "garland", "hachimura"],
-    "Dallas Mavericks":       ["flagg", "thompson", "jones"],
+    "Dallas Mavericks":       ["flagg", "irving", "lively"],
     "Boston Celtics":         ["george", "white", "queta"],
     "Denver Nuggets":         ["jokic", "murray", "gordon"],
     "Oklahoma City Thunder":  ["shai", "holmgren", "mccain"],
@@ -123,11 +123,16 @@ IMPACT_PLAYERS = {
 # NOTE: these two sets are a *manual fallback* only, merged in when the live
 # RotoWire scrape (get_injury_report) can't confirm a status on its own. They
 # go stale every offseason/trade-deadline and must be re-verified against
-# current injury reports before each new season — last reviewed 2026-07,
-# intentionally left empty at the start of a new season since no prior
-# season's season-ending injury still applies and rosters shift heavily in
-# the offseason. Populate as real season-long injuries are confirmed.
-SEASON_OUT = set()
+# current injury reports before each new season. Last reviewed 2026-09-30:
+# Jimmy Butler (Warriors) tore his ACL in Jan 2026 and is confirmed out well
+# into 2026-27 (realistic earliest return Jan/Feb 2027), so he's populated
+# here rather than left to RotoWire, since a scrape confirming an "out" is
+# less reliable months in advance than this season's already-settled news.
+# Kyrie Irving (Mavericks, ACL surgery last March) is NOT added despite also
+# recovering -- unlike Butler, no source confirms he's out for a fixed
+# stretch of 2026-27, so his day-to-day status is left to the live scrape
+# instead of guessing a settled outcome that hasn't actually been decided.
+SEASON_OUT = {"butler"}
 
 LIMITED_PLAYERS = set()
 
@@ -135,7 +140,7 @@ SUPERSTARS = {
     "doncic", "jokic", "shai", "giannis", "durant",
     "harden", "embiid", "randle", "edwards",
     "wembanyama", "morant", "banchero", "young", "fox",
-    "leonard", "james",
+    "leonard", "james", "curry", "butler", "irving",
 }
 
 SUPERSTAR_PENALTY = 11.5
@@ -499,12 +504,21 @@ def predict_margin(home, away, injury_data, live_ratings):
 def predict_total(home, away, live_ratings):
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
-    return round((h_base["off"] + a_base["off"]) / 2 * 2 * 0.97, 1)
+    return round((h_base["off"] + a_base["off"]) * 0.97, 1)
 
 
-def get_consensus_line(bookmakers, team_name):
+def get_consensus_line(bookmakers, team_name, exclude_book=None):
+    """Average posted spread for `team_name` across books, as a baseline to
+    check whether one specific book's line is unusually favorable ("value").
+    Excludes `exclude_book` (the book actually being evaluated as a
+    candidate) so that check isn't circular -- comparing a line against a
+    consensus that already includes that same line waters down how
+    different it really is from the rest of the market, more so the fewer
+    books are posting."""
     lines = []
     for book in bookmakers:
+        if exclude_book is not None and book.get("title") == exclude_book:
+            continue
         for market in book.get("markets", []):
             if market.get("key") != "spreads":
                 continue
@@ -754,7 +768,7 @@ def summer_recommendations(odds_games, team_power, now_utc=None):
                     if not (MIN_PRICE < price <= MAX_PRICE):
                         continue
 
-                    consensus = get_consensus_line(bookmakers, name)
+                    consensus = get_consensus_line(bookmakers, name, exclude_book=book.get("title"))
                     if consensus is None:
                         consensus = line
                     if line - consensus < 0:
@@ -1051,15 +1065,6 @@ def display_player_name(key):
     return PLAYER_DISPLAY_OVERRIDES.get(key, key.title())
 
 
-def build_team_stars():
-    """Reference list of each team's marquee players, for the web dashboard.
-    Pulled straight from IMPACT_PLAYERS (only last names/handles are stored),
-    so display names are title-cased rather than full names."""
-    return [
-        {"team": TEAM_CN.get(team, team), "players": [display_player_name(p) for p in players]}
-        for team, players in IMPACT_PLAYERS.items()
-    ]
-
 
 def build_history_list(history, limit=30):
     items = sorted(history.values(), key=lambda h: h.get("date", ""), reverse=True)
@@ -1132,7 +1137,6 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
         },
         "summer_league": summer_league,
         "history":       build_history_list(history),
-        "team_stars":    build_team_stars(),
     }
 
     try:
@@ -1227,7 +1231,7 @@ def run():
                     if not (MIN_PRICE < price <= MAX_PRICE):
                         continue
 
-                    consensus = get_consensus_line(bookmakers, name)
+                    consensus = get_consensus_line(bookmakers, name, exclude_book=book.get("title"))
                     if consensus is None:
                         consensus = line
 
