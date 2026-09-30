@@ -29,6 +29,18 @@ def current_season_year(now=None):
 
 SEASON_YEAR = current_season_year()
 
+# Manually pinned per season (confirmed 2026-09-30 via the NBA's official
+# schedule release: opening night is 2026-10-20) rather than computed, since
+# the league doesn't tip off on a fixed formula-derivable date. The Odds
+# API's basketball_nba feed does not distinguish preseason exhibition games
+# from real regular-season games -- same sport_key, same field shape -- so
+# without this cutoff, preseason games (wildly unpredictable: heavy rotation
+# experimentation, stars resting, lines that don't mean what they normally
+# mean) would flow straight into the same Kelly-staked, real-money
+# recommendation pipeline as a real game. Must be updated each season ahead
+# of opening night.
+REGULAR_SEASON_START = datetime(2026, 10, 20)
+
 # Neither the-odds-api nor ESPN document a stable Summer League identifier,
 # and the host city (hence the ESPN slug) shifts year to year, so both are
 # discovered/tried defensively at runtime instead of hardcoded to one value.
@@ -61,24 +73,26 @@ KELLY_FRACTION   = 0.20
 # a clean percentage that implies statistical confidence it doesn't have.
 MIN_HISTORY_SAMPLE = 10
 
-# Re-verified against the 2026 offseason trade/free-agency wave (last
-# checked 2026-07) after a wrong-team report (De'Aaron Fox was listed on
-# both Sacramento and San Antonio -- he was traded to San Antonio back in
-# Feb 2025, Sacramento's entry was stale). Notable moves reflected below:
-# Giannis Bucks->Heat, Jaylen Brown<->Paul George (Celtics/76ers), Ja Morant
-# Grizzlies->Blazers, Jaren Jackson Jr. Grizzlies->Jazz, Santi Aldama
-# Grizzlies->Mavericks, LaMelo Ball Hornets->Timberwolves, Julius Randle
-# Timberwolves->Nets, Miles Bridges Hornets->Suns, Kawhi Leonard/Brandon
-# Ingram trade agreed but on hold pending an NBA investigation (both still
-# shown on their original teams until it's actually executed), Chris Paul
-# retired, LeBron James left the Lakers as an unsigned free agent (no
-# team to attribute him to yet -- removed rather than guessed).
+# Re-verified ahead of the 2026-27 season tipoff (Oct 20, 2026; last checked
+# 2026-09-30) after the 2026-07 pass. Two moves resolved since then, both
+# confirmed via multiple independent sources: the Kawhi Leonard/Brandon
+# Ingram trade (agreed in June, held up by an NBA investigation into
+# Clippers salary-cap violations) finally closed on 2026-09-14 -- Leonard to
+# the Raptors, Ingram (plus Gradey Dick) to the Clippers -- and LeBron James,
+# an unsigned free agent as of the last pass, signed a 2yr/$8M deal with the
+# 76ers, so Philadelphia's third slot moves from Jaylen Brown to James (the
+# bigger injury-report storyline of the two, and IMPACT_PLAYERS is capped at
+# 3 per team). Carrying forward from 2026-07: Giannis Bucks->Heat, Jaylen
+# Brown<->Paul George (Celtics/76ers), Ja Morant Grizzlies->Blazers, Jaren
+# Jackson Jr. Grizzlies->Jazz, Santi Aldama Grizzlies->Mavericks, LaMelo Ball
+# Hornets->Timberwolves, Julius Randle Timberwolves->Nets, Miles Bridges
+# Hornets->Suns, Chris Paul retired.
 IMPACT_PLAYERS = {
     "Los Angeles Lakers":     ["doncic", "kessler", "reaves"],
     "Washington Wizards":     ["young", "davis", "sarr"],
     "Golden State Warriors":  ["podziemski", "porzingis", "green"],
     "Cleveland Cavaliers":    ["harden", "mitchell", "mobley"],
-    "Los Angeles Clippers":   ["leonard", "garland", "hachimura"],
+    "Los Angeles Clippers":   ["ingram", "garland", "hachimura"],
     "Dallas Mavericks":       ["flagg", "thompson", "jones"],
     "Boston Celtics":         ["george", "white", "queta"],
     "Denver Nuggets":         ["jokic", "murray", "gordon"],
@@ -88,7 +102,7 @@ IMPACT_PLAYERS = {
     "New York Knicks":        ["brunson", "towns", "bridges"],
     "Houston Rockets":        ["durant", "sengun", "sheppard"],
     "Indiana Pacers":         ["siakam", "zubac", "nembhard"],
-    "Philadelphia 76ers":     ["maxey", "embiid", "brown"],
+    "Philadelphia 76ers":     ["maxey", "embiid", "james"],
     "Minnesota Timberwolves": ["ball", "edwards", "gobert"],
     "Miami Heat":             ["adebayo", "giannis", "wiggins"],
     "Portland Trail Blazers": ["avdija", "clingan", "morant"],
@@ -98,7 +112,7 @@ IMPACT_PLAYERS = {
     "Chicago Bulls":          ["giddey", "claxton", "powell"],
     "Charlotte Hornets":      ["white", "miller", "reid"],
     "Orlando Magic":          ["banchero", "suggs", "wagner"],
-    "Toronto Raptors":        ["ingram", "quickley", "barnes"],
+    "Toronto Raptors":        ["leonard", "quickley", "barnes"],
     "Memphis Grizzlies":      ["boozer", "edey", "coward"],
     "New Orleans Pelicans":   ["zion", "murphy", "murray"],
     "Utah Jazz":              ["markkanen", "george", "jackson"],
@@ -121,6 +135,7 @@ SUPERSTARS = {
     "doncic", "jokic", "shai", "giannis", "durant",
     "harden", "embiid", "randle", "edwards",
     "wembanyama", "morant", "banchero", "young", "fox",
+    "leonard", "james",
 }
 
 SUPERSTAR_PENALTY = 11.5
@@ -626,6 +641,13 @@ def zh_game_status(status):
     return GAME_STATUS_ZH.get((status or "").strip().lower(), status)
 
 
+# NBA Summer League runs roughly July (occasionally spilling into late June
+# or early August across the various sites -- Vegas, Utah, Sacramento,
+# California). Widened a month on each side of the typical July window
+# rather than pinned exactly, so a year where a site starts a little early
+# or late doesn't fall through the gate.
+SUMMER_LEAGUE_MONTHS = {6, 7, 8}
+
 SUMMER_EDGE_THRESHOLD  = 0.10   # regular season is 0.06 -- demand more edge given the noisier signal
 SUMMER_MODEL_WEIGHT    = 0.30
 SUMMER_MARKET_WEIGHT   = 0.70
@@ -793,7 +815,21 @@ def analyze_summer_league(now_utc=None):
     run Kelly staking or bankroll sizing -- only a scoreboard, a simple
     point-margin power ranking, and a market watchlist for reference.
     """
-    now_utc    = now_utc or datetime.utcnow()
+    now_utc = now_utc or datetime.utcnow()
+    if now_utc.month not in SUMMER_LEAGUE_MONTHS:
+        # Skip the ESPN/Odds API round-trips entirely outside the window --
+        # there is nothing there for ~9 months of the year (this now runs
+        # daily all season, not just in July), and hitting a paid API's rate
+        # limit for a guaranteed-empty result is pure waste.
+        return {
+            "available":       False,
+            "games":           [],
+            "power_ranking":   [],
+            "summary":         "",
+            "recommendations": [],
+            "watchlist":       [],
+            "note":            "現在不是夏季聯賽期間（通常在 6-8 月），暫停抓取以節省 API 額度。",
+        }
     events     = fetch_summer_league_scores()
     odds_games = fetch_summer_league_odds()
 
@@ -1152,6 +1188,8 @@ def run():
             continue
 
         if c_time_utc < now_utc:
+            continue
+        if c_time_utc < REGULAR_SEASON_START:
             continue
 
         g_date     = c_time_tw.strftime("%Y-%m-%d")

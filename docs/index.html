@@ -979,7 +979,8 @@
     var sl = data.summer_league || {};
     var body = document.getElementById("summer-league-body");
     if (!sl.available) {
-      body.innerHTML = emptyState("sun", "尚無夏季聯賽資料", "等待官方公布賽程，或稍後重新整理查看最新狀態。", true);
+      var slDesc = sl.note || "等待官方公布賽程，或稍後重新整理查看最新狀態。";
+      body.innerHTML = emptyState("sun", "尚無夏季聯賽資料", slDesc, true);
       return;
     }
 
