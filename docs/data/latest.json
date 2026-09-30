@@ -1,12 +1,116 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-07-28 06:57",
+  "generated_at": "2026-09-30 13:38",
   "data_source": "即時數據",
-  "run_type": "official",
+  "run_type": "test",
   "regular_season": {
-    "total_picks": 0,
-    "avg_edge": 0,
-    "days": []
+    "total_picks": 3,
+    "avg_edge": 6.4,
+    "days": [
+      {
+        "date": "2026-10-21",
+        "label": "預告 2026-10-21",
+        "picks": []
+      },
+      {
+        "date": "2026-10-22",
+        "label": "預告 2026-10-22",
+        "picks": [
+          {
+            "tier": "⭐ 穩定",
+            "matchup": "溜馬 @ 鵜鶘",
+            "start_time": "10/22 08:10",
+            "bet": "鵜鶘 +4.5",
+            "price": 1.87,
+            "book": "DraftKings",
+            "prob": 60.3,
+            "edge": 6.8,
+            "kelly_stake": 29.3,
+            "missing": "陣容完整",
+            "consensus": "共識線: +3.7",
+            "ou_note": "OU: 模型偏小分 (220.5 vs 市場 242.9) 偏Under"
+          },
+          {
+            "tier": "⭐ 穩定",
+            "matchup": "爵士 @ 灰熊",
+            "start_time": "10/22 08:10",
+            "bet": "灰熊 +3.0",
+            "price": 1.94,
+            "book": "LowVig.ag",
+            "prob": 57.9,
+            "edge": 6.4,
+            "kelly_stake": 26.3,
+            "missing": "陣容完整",
+            "consensus": "共識線: +3.0",
+            "ou_note": "OU: 模型偏小分 (227.9 vs 市場 242.2) 偏Under"
+          },
+          {
+            "tier": "⭐ 穩定",
+            "matchup": "黃蜂 @ 籃網",
+            "start_time": "10/22 07:40",
+            "bet": "籃網 +4.5",
+            "price": 1.94,
+            "book": "LowVig.ag",
+            "prob": 57.6,
+            "edge": 6.0,
+            "kelly_stake": 24.9,
+            "missing": "陣容完整",
+            "consensus": "共識線: +4.5",
+            "ou_note": "OU: 模型 224.8 vs 市場 225.4 (無明顯偏向)"
+          }
+        ]
+      },
+      {
+        "date": "2026-10-23",
+        "label": "預告 2026-10-23",
+        "picks": []
+      },
+      {
+        "date": "2026-10-24",
+        "label": "預告 2026-10-24",
+        "picks": []
+      },
+      {
+        "date": "2026-10-31",
+        "label": "預告 2026-10-31",
+        "picks": []
+      },
+      {
+        "date": "2026-11-07",
+        "label": "預告 2026-11-07",
+        "picks": []
+      },
+      {
+        "date": "2026-11-14",
+        "label": "預告 2026-11-14",
+        "picks": []
+      },
+      {
+        "date": "2026-11-21",
+        "label": "預告 2026-11-21",
+        "picks": []
+      },
+      {
+        "date": "2026-11-25",
+        "label": "預告 2026-11-25",
+        "picks": []
+      },
+      {
+        "date": "2026-11-26",
+        "label": "預告 2026-11-26",
+        "picks": []
+      },
+      {
+        "date": "2026-11-28",
+        "label": "預告 2026-11-28",
+        "picks": []
+      },
+      {
+        "date": "2026-12-26",
+        "label": "預告 2026-12-26",
+        "picks": []
+      }
+    ]
   },
   "performance": {
     "total_recommendations": 19,
@@ -16,93 +120,13 @@
     "min_sample": 10
   },
   "summer_league": {
-    "available": true,
-    "games": [
-      {
-        "status": "已完賽",
-        "home": "雷霆",
-        "away": "籃網",
-        "home_score": 90,
-        "away_score": 108,
-        "start_time": "2026-07-19T20:30Z"
-      },
-      {
-        "status": "已完賽",
-        "home": "暴龍",
-        "away": "金塊",
-        "home_score": 89,
-        "away_score": 96,
-        "start_time": "2026-07-19T22:30Z"
-      },
-      {
-        "status": "已完賽",
-        "home": "灰熊",
-        "away": "勇士",
-        "home_score": 90,
-        "away_score": 94,
-        "start_time": "2026-07-20T01:00Z"
-      }
-    ],
-    "power_ranking": [
-      {
-        "team": "籃網",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 18.0,
-        "avg_pf": 108.0,
-        "avg_pa": 90.0
-      },
-      {
-        "team": "金塊",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 7.0,
-        "avg_pf": 96.0,
-        "avg_pa": 89.0
-      },
-      {
-        "team": "勇士",
-        "games": 1,
-        "wins": 1,
-        "losses": 0,
-        "avg_margin": 4.0,
-        "avg_pf": 94.0,
-        "avg_pa": 90.0
-      },
-      {
-        "team": "灰熊",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -4.0,
-        "avg_pf": 90.0,
-        "avg_pa": 94.0
-      },
-      {
-        "team": "暴龍",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -7.0,
-        "avg_pf": 89.0,
-        "avg_pa": 96.0
-      },
-      {
-        "team": "雷霆",
-        "games": 1,
-        "wins": 0,
-        "losses": 1,
-        "avg_margin": -18.0,
-        "avg_pf": 90.0,
-        "avg_pa": 108.0
-      }
-    ],
-    "summary": "戰績最佳：籃網（1勝0敗，場均淨勝 +18.0）。目前墊底：雷霆（0勝1敗，場均淨勝 -18.0）。防守最穩：金塊（場均僅失 89.0 分）。",
+    "available": false,
+    "games": [],
+    "power_ranking": [],
+    "summary": "",
     "recommendations": [],
     "watchlist": [],
-    "note": "夏季聯賽陣容多為菜鳥/雙向合約球員，樣本數極小；下方列出所有已可評估的賽事，Edge ≥ 10% 才標記為推薦，未達門檻的也照樣顯示數字供參考，且一律不提供 Kelly 資金配置建議，下注金額請自行斟酌。",
+    "note": "現在不是夏季聯賽期間（通常在 6-8 月），暫停抓取以節省 API 額度。",
     "performance": {
       "total_recommendations": 0,
       "wins": 0,
@@ -352,248 +376,6 @@
       "kelly_stake": 43.1,
       "result": "落敗",
       "league": "regular"
-    }
-  ],
-  "team_stars": [
-    {
-      "team": "湖人",
-      "players": [
-        "Doncic",
-        "Kessler",
-        "Reaves"
-      ]
-    },
-    {
-      "team": "巫師",
-      "players": [
-        "Young",
-        "Davis",
-        "Sarr"
-      ]
-    },
-    {
-      "team": "勇士",
-      "players": [
-        "Podziemski",
-        "Porzingis",
-        "Green"
-      ]
-    },
-    {
-      "team": "騎士",
-      "players": [
-        "Harden",
-        "Mitchell",
-        "Mobley"
-      ]
-    },
-    {
-      "team": "快艇",
-      "players": [
-        "Leonard",
-        "Garland",
-        "Hachimura"
-      ]
-    },
-    {
-      "team": "獨行俠",
-      "players": [
-        "Flagg",
-        "Thompson",
-        "Jones"
-      ]
-    },
-    {
-      "team": "塞爾提克",
-      "players": [
-        "George",
-        "White",
-        "Queta"
-      ]
-    },
-    {
-      "team": "金塊",
-      "players": [
-        "Jokic",
-        "Murray",
-        "Gordon"
-      ]
-    },
-    {
-      "team": "雷霆",
-      "players": [
-        "Shai",
-        "Holmgren",
-        "McCain"
-      ]
-    },
-    {
-      "team": "馬刺",
-      "players": [
-        "Wembanyama",
-        "Fox",
-        "Castle"
-      ]
-    },
-    {
-      "team": "公鹿",
-      "players": [
-        "Herro",
-        "Turner",
-        "Dieng"
-      ]
-    },
-    {
-      "team": "尼克",
-      "players": [
-        "Brunson",
-        "Towns",
-        "Bridges"
-      ]
-    },
-    {
-      "team": "火箭",
-      "players": [
-        "Durant",
-        "Sengun",
-        "Sheppard"
-      ]
-    },
-    {
-      "team": "溜馬",
-      "players": [
-        "Siakam",
-        "Zubac",
-        "Nembhard"
-      ]
-    },
-    {
-      "team": "七六人",
-      "players": [
-        "Maxey",
-        "Embiid",
-        "Brown"
-      ]
-    },
-    {
-      "team": "灰狼",
-      "players": [
-        "Ball",
-        "Edwards",
-        "Gobert"
-      ]
-    },
-    {
-      "team": "熱火",
-      "players": [
-        "Adebayo",
-        "Giannis",
-        "Wiggins"
-      ]
-    },
-    {
-      "team": "拓荒者",
-      "players": [
-        "Avdija",
-        "Clingan",
-        "Morant"
-      ]
-    },
-    {
-      "team": "活塞",
-      "players": [
-        "Cunningham",
-        "Duren",
-        "Thompson"
-      ]
-    },
-    {
-      "team": "國王",
-      "players": [
-        "Sabonis",
-        "Monk",
-        "Keegan"
-      ]
-    },
-    {
-      "team": "老鷹",
-      "players": [
-        "Johnson",
-        "Daniels",
-        "Okongwu"
-      ]
-    },
-    {
-      "team": "公牛",
-      "players": [
-        "Giddey",
-        "Claxton",
-        "Powell"
-      ]
-    },
-    {
-      "team": "黃蜂",
-      "players": [
-        "White",
-        "Miller",
-        "Reid"
-      ]
-    },
-    {
-      "team": "魔術",
-      "players": [
-        "Banchero",
-        "Suggs",
-        "Wagner"
-      ]
-    },
-    {
-      "team": "暴龍",
-      "players": [
-        "Ingram",
-        "Quickley",
-        "Barnes"
-      ]
-    },
-    {
-      "team": "灰熊",
-      "players": [
-        "Boozer",
-        "Edey",
-        "Coward"
-      ]
-    },
-    {
-      "team": "鵜鶘",
-      "players": [
-        "Zion",
-        "Murphy",
-        "Murray"
-      ]
-    },
-    {
-      "team": "爵士",
-      "players": [
-        "Markkanen",
-        "George",
-        "Jackson"
-      ]
-    },
-    {
-      "team": "籃網",
-      "players": [
-        "Porter",
-        "Randle",
-        "Sharpe"
-      ]
-    },
-    {
-      "team": "太陽",
-      "players": [
-        "Booker",
-        "Green",
-        "Brooks"
-      ]
     }
   ]
 }
