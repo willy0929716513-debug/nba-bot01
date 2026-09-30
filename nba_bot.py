@@ -87,6 +87,27 @@ MIN_HISTORY_SAMPLE = 10
 # Jackson Jr. Grizzlies->Jazz, Santi Aldama Grizzlies->Mavericks, LaMelo Ball
 # Hornets->Timberwolves, Julius Randle Timberwolves->Nets, Miles Bridges
 # Hornets->Suns, Chris Paul retired.
+#
+# Full 30-team sweep completed 2026-09-30 (on top of the Warriors/Mavericks
+# fixes already folded in above). Also fixed: Thunder ("mccain" -> "williams"
+# -- Jalen Williams is OKC's clearly more central co-star, "totally healthy"
+# for 2026-27 after an injury-limited prior season; McCain, real but a lesser
+# piece, was crowding him out), Pacers (added "haliburton", dropping
+# "nembhard" -- Tyrese Haliburton tore his Achilles in Game 7 of the 2025
+# Finals, missed all of 2025-26, and is expected with no restrictions for
+# the 2026-27 opener; omitting the returning franchise player was the same
+# blind spot the pre-fix Warriors/Curry entry had), Bucks ("dieng" ->
+# "ware" -- Kel'el Ware arrived in the Giannis-to-Miami return package and
+# has a higher ceiling than Ousmane Dieng, a minor rotation piece). Every
+# other team's 3 names were independently verified current and accurate.
+#
+# Flagged but NOT reflected in the data below, since it's a contract
+# standoff rather than an injury and may resolve either way within days:
+# Jalen Duren (Pistons) is holding out of training camp in an RFA
+# extension dispute, with an Oct 1, 2026 deadline to sign his qualifying
+# offer. RotoWire's injury report won't catch a holdout, so if this drags
+# into the season, Duren's IMPACT_PLAYERS entry (once added) would need a
+# manual availability check rather than relying on the usual scrape.
 IMPACT_PLAYERS = {
     "Los Angeles Lakers":     ["doncic", "kessler", "reaves"],
     "Washington Wizards":     ["young", "davis", "sarr"],
@@ -96,12 +117,12 @@ IMPACT_PLAYERS = {
     "Dallas Mavericks":       ["flagg", "irving", "lively"],
     "Boston Celtics":         ["george", "white", "queta"],
     "Denver Nuggets":         ["jokic", "murray", "gordon"],
-    "Oklahoma City Thunder":  ["shai", "holmgren", "mccain"],
+    "Oklahoma City Thunder":  ["shai", "williams", "holmgren"],
     "San Antonio Spurs":      ["wembanyama", "fox", "castle"],
-    "Milwaukee Bucks":        ["herro", "turner", "dieng"],
+    "Milwaukee Bucks":        ["herro", "turner", "ware"],
     "New York Knicks":        ["brunson", "towns", "bridges"],
     "Houston Rockets":        ["durant", "sengun", "sheppard"],
-    "Indiana Pacers":         ["siakam", "zubac", "nembhard"],
+    "Indiana Pacers":         ["haliburton", "siakam", "zubac"],
     "Philadelphia 76ers":     ["maxey", "embiid", "james"],
     "Minnesota Timberwolves": ["ball", "edwards", "gobert"],
     "Miami Heat":             ["adebayo", "giannis", "wiggins"],
@@ -141,6 +162,7 @@ SUPERSTARS = {
     "harden", "embiid", "randle", "edwards",
     "wembanyama", "morant", "banchero", "young", "fox",
     "leonard", "james", "curry", "butler", "irving",
+    "williams", "haliburton",
 }
 
 SUPERSTAR_PENALTY = 11.5
