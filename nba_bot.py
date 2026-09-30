@@ -3,6 +3,7 @@ import os
 import random
 import logging
 import json
+import time
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
@@ -242,6 +243,18 @@ def normalize_team(name):
     return name
 
 
+def _retry_after_seconds(response, attempt):
+    """Respect the server's Retry-After header when present (common on
+    429s); otherwise fall back to a growing backoff."""
+    retry_after = response.headers.get("Retry-After")
+    if retry_after:
+        try:
+            return float(retry_after)
+        except ValueError:
+            pass
+    return 2.0 * attempt
+
+
 def safe_get(url, headers=None, params=None, retries=3, timeout=15):
     for attempt in range(1, retries + 1):
         try:
@@ -251,7 +264,18 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
         except requests.exceptions.Timeout:
             log.warning("Timeout attempt %d/%d: %s", attempt, retries, url)
         except requests.exceptions.HTTPError as e:
-            log.error("HTTP error %s: %s", e.response.status_code, url)
+            status = e.response.status_code
+            # 429 means "slow down", not "this will never work" -- unlike a
+            # genuine 4xx (404/401/403), it's worth waiting out and retrying
+            # rather than giving up on the first hit, which previously left
+            # fetch_team_stats()'s pagination loop stopping after just a
+            # page or two once balldontlie's rate limit kicked in.
+            if status == 429 and attempt < retries:
+                wait = _retry_after_seconds(e.response, attempt)
+                log.warning("Rate limited (429) attempt %d/%d: %s -- waiting %.1fs", attempt, retries, url, wait)
+                time.sleep(wait)
+                continue
+            log.error("HTTP error %s: %s", status, url)
             break
         except Exception as e:
             log.warning("Request failed attempt %d/%d: %s", attempt, retries, e)
@@ -338,17 +362,30 @@ def fetch_team_stats():
     actually progressed. Page through with a generous cap (50 pages / 5000
     games) as a safety net against an infinite loop, not because a season
     could ever need that many.
+
+    A full season needs ~13 pages, and balldontlie's rate limit is tight
+    enough that firing those off back to back reliably draws a 429 a few
+    pages in (confirmed against a real run: the very first page came back
+    429). safe_get() now retries a 429 with backoff instead of giving up
+    immediately, but pace the requests proactively too rather than relying
+    on that alone -- a small delay between pages costs a few seconds on a
+    batch job with no real time pressure, and is cheaper than triggering
+    the rate limit (and its wait) on every single page.
     """
     if not BALLDONTLIE_KEY:
         return {}
     headers = {"Authorization": BALLDONTLIE_KEY}
     games  = []
     cursor = None
-    for _ in range(50):
+    for page in range(50):
         params = {"seasons[]": SEASON_YEAR, "per_page": 100}
         if cursor is not None:
             params["cursor"] = cursor
-        data = safe_get("https://api.balldontlie.io/v1/games", headers=headers, params=params)
+        if page > 0:
+            time.sleep(1.0)
+        data = safe_get(
+            "https://api.balldontlie.io/v1/games", headers=headers, params=params, retries=5,
+        )
         if not data or "data" not in data:
             break
         games.extend(data["data"])
