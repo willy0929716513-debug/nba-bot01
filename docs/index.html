@@ -497,6 +497,7 @@
     <div class="seg" id="seg" role="tablist">
       <div class="seg-indicator" id="seg-indicator"></div>
       <a class="seg-btn" href="#regular-season-section" data-target="regular-season-section" id="ic-tab-cal"><span></span>推薦</a>
+      <a class="seg-btn" href="#schedule-section" data-target="schedule-section" id="ic-tab-schedule"><span></span>賽程</a>
       <a class="seg-btn" href="#summer-league-section" data-target="summer-league-section" id="ic-tab-sun"><span></span>夏季聯賽</a>
       <a class="seg-btn" href="#history-section" data-target="history-section" id="ic-tab-hist"><span></span>歷史紀錄</a>
     </div>
@@ -540,7 +541,17 @@
       <span class="chev" id="icon-chev-cal"></span>
     </div>
     <div id="regular-season-trio"></div>
+    <div id="parlay-body"></div>
     <div id="regular-season-body"></div>
+  </section>
+
+  <section id="schedule-section" class="reveal">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-schedule"></span>
+      <div class="head-text"><h2>今日賽程</h2><p>當天全部場次，比分完場後自動結算</p></div>
+      <span class="chev" id="icon-chev-schedule"></span>
+    </div>
+    <div id="schedule-body"></div>
   </section>
 
   <section id="summer-league-section" class="reveal">
@@ -628,9 +639,11 @@
   document.getElementById("icon-footer-chevron").querySelector("svg").setAttribute("class", "chev-sm");
   mount("icon-status-clock", "clock");
   mount("icon-sec-cal", "calendar");
+  mount("icon-sec-schedule", "clock");
   mount("icon-sec-sun", "sun");
   mount("icon-sec-hist", "history");
   mount("icon-chev-cal", "chevronright");
+  mount("icon-chev-schedule", "chevronright");
   mount("icon-chev-sun", "chevronright");
   mount("icon-chev-hist", "chevronright");
   document.querySelector("#ic-tab-cal span").innerHTML = svg("calendar");
@@ -917,9 +930,14 @@
       {
         label: "歷史損益", icon: "barchart", value: (perf.profit > 0 ? "+" : "") + (perf.profit != null ? perf.profit.toFixed(1) : "0.0"),
         cls: perf.profit > 0 ? "good" : (perf.profit < 0 ? "bad" : "")
-      },
-      winRateTile("夏聯歷史勝率", "star", slPerf)
+      }
     ];
+    // Keep this tile out of the grid entirely during the off-season, same
+    // as the nav tab/section -- a "0.0%" summer-league stat sitting among
+    // the regular-season numbers for ~9 months a year is noise, not signal.
+    if (data.summer_league && data.summer_league.available) {
+      tiles.push(winRateTile("夏聯歷史勝率", "star", slPerf));
+    }
     document.getElementById("stat-grid").innerHTML = tiles.map(function (t) {
       return '<div class="card stat-tile hoverable">' +
         '<div class="label">' + svg(t.icon) + esc(t.label) + '</div>' +
@@ -973,6 +991,53 @@
     return '<div style="display:flex;align-items:center;gap:8px;">' +
       '<div class="bar-track"><div class="bar-fill" style="' + (v >= 0 ? 'left:50%;' : 'right:50%;') + 'width:' + (pct / 2) + '%;background:' + color + ';"></div></div>' +
       '<span class="stat"><b>' + (v >= 0 ? "+" : "") + v.toFixed(1) + '</b></span></div>';
+  }
+
+  function renderParlay(data) {
+    var body = document.getElementById("parlay-body");
+    var p = data.parlay;
+    if (!p || !p.legs || !p.legs.length) { body.innerHTML = ""; return; }
+    var html = '<div class="subhead">🔗 串關推薦（僅取今日💎頂級，最多 ' + p.legs.length + ' 腿，求穩不求大）</div>';
+    html += '<div class="card row-list hoverable">';
+    p.legs.forEach(function (leg) {
+      html += '<div class="row">' +
+        '<div class="row-top"><span class="row-title">' + matchupWithLogos(leg.matchup) + '</span></div>' +
+        '<div class="row-sub">投注 <b>' + esc(leg.bet) + '</b> @ <b>' + Number(leg.price).toFixed(2) + '</b></div>' +
+        '<div class="row-stats"><span class="stat">勝率 <b>' + Number(leg.prob).toFixed(1) + '%</b></span></div>' +
+      '</div>';
+    });
+    html += '</div>';
+    html += '<div class="card insight-card"><span class="ic">' + svg("activity") + '</span>' +
+      '<span class="txt">合計賠率 <b>' + Number(p.combined_price).toFixed(2) + '</b> ｜ 全中機率 <b>' +
+      Number(p.combined_prob).toFixed(1) + '%</b> ｜ ' + esc(p.note) + '</span></div>';
+    body.innerHTML = html;
+  }
+
+  function renderSchedule(data) {
+    var body = document.getElementById("schedule-body");
+    var games = data.schedule || [];
+    if (!games.length) {
+      body.innerHTML = emptyState("clock", "今日暫無賽程", "資料源目前沒有今天的比賽資訊，稍後重新整理查看。", true);
+      return;
+    }
+    var html = '<div class="card row-list hoverable">';
+    games.forEach(function (g) {
+      var hasScore = g.home_score != null && g.away_score != null;
+      var scoreLine = hasScore ? (esc(g.away) + ' ' + g.away_score + ' - ' + g.home_score + ' ' + esc(g.home)) : '';
+      html += '<div class="row">' +
+        '<div class="row-top">' +
+          '<span class="row-title matchup-line">' + teamLogo(g.away) + esc(g.away) + '<span class="matchup-vs">@</span>' + teamLogo(g.home) + esc(g.home) + '</span>' +
+          '<span class="row-time">' + esc(g.start_time) + '（台灣時間）</span>' +
+        '</div>' +
+        '<div class="row-sub">' +
+          '<span class="badge ' + (g.status === "已完賽" ? "badge-tier-strong" : "badge-status") + '">' + esc(g.status) + '</span>' +
+          (g.has_pick ? ' <span class="badge badge-tier-strong" style="margin-left:6px;">⭐ 有推薦</span>' : '') +
+        '</div>' +
+        (scoreLine ? '<div class="row-sub">' + scoreLine + '</div>' : '') +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
   }
 
   function renderSummerLeague(data) {
@@ -1102,6 +1167,7 @@
           '<span class="badge ' + resultBadgeClass(h.result) + '">' + esc(h.result) + '</span>' +
         '</div>' +
         '<div class="row-sub">' + esc(h.date) + ' ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) + '</div>' +
+        (h.final_score ? '<div class="row-sub">實際比分：' + esc(h.final_score) + '</div>' : '') +
         '<div class="row-stats">' +
           '<span class="stat">模型勝率 <b>' + Number(h.prob).toFixed(1) + '%</b></span>' +
           '<span class="stat">Edge <b>+' + Number(h.edge).toFixed(1) + '%</b></span>' +
@@ -1125,9 +1191,20 @@
     document.getElementById("status-dot").style.background = data.generated_at ? "var(--success)" : "var(--ink-3)";
     renderStats(data);
     renderRegularSeasonTrio(data);
+    renderParlay(data);
     renderRegularSeason(data);
+    renderSchedule(data);
     renderSummerLeague(data);
     renderHistory(data);
+    toggleSummerLeagueTab(data);
+  }
+
+  function toggleSummerLeagueTab(data) {
+    var available = !!(data.summer_league && data.summer_league.available);
+    var tab = document.getElementById("ic-tab-sun");
+    var section = document.getElementById("summer-league-section");
+    if (tab) tab.style.display = available ? "" : "none";
+    if (section) section.style.display = available ? "" : "none";
   }
 
   var TIER_GRADE = { "頂級": "SS", "強力": "S", "穩定": "A" };

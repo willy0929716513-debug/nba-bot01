@@ -4,6 +4,7 @@ import random
 import logging
 import json
 import time
+import re
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
@@ -222,6 +223,12 @@ TEAM_CN = {
     "Sacramento Kings": "國王", "Portland Trail Blazers": "拓荒者",
 }
 
+# For turning a stored bet string like "湖人 -5.5" back into an English team
+# name when grading history against real final scores (which come from
+# balldontlie, keyed by English name). Every TEAM_CN value is unique, so
+# this reversal is lossless.
+TEAM_CN_REVERSE = {zh: en for en, zh in TEAM_CN.items()}
+
 
 # Substring matching below only catches full.lower() are literal substrings
 # of one another, which misses common city abbreviations (e.g. "LA Clippers"
@@ -268,7 +275,7 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
             # 429 means "slow down", not "this will never work" -- unlike a
             # genuine 4xx (404/401/403), it's worth waiting out and retrying
             # rather than giving up on the first hit, which previously left
-            # fetch_team_stats()'s pagination loop stopping after just a
+            # fetch_season_games()'s pagination loop stopping after just a
             # page or two once balldontlie's rate limit kicked in.
             if status == 429 and attempt < retries:
                 wait = _retry_after_seconds(e.response, attempt)
@@ -350,8 +357,12 @@ def get_injury_report():
         return fallback
 
 
-def fetch_team_stats():
-    """Pull every completed game of the season to build win/loss ratings.
+def fetch_season_games():
+    """Pull every game of the season (played and upcoming) from balldontlie.
+
+    Reused for three things: building live_ratings, grading pending history
+    entries against real final scores, and the "賽程" schedule view -- one
+    paginated fetch instead of three separate ones.
 
     balldontlie's v1 API caps each response at 100 games and paginates via a
     `next_cursor` in the response `meta`. A single unpaginated call (as this
@@ -373,7 +384,7 @@ def fetch_team_stats():
     the rate limit (and its wait) on every single page.
     """
     if not BALLDONTLIE_KEY:
-        return {}
+        return []
     headers = {"Authorization": BALLDONTLIE_KEY}
     games  = []
     cursor = None
@@ -392,10 +403,14 @@ def fetch_team_stats():
         cursor = (data.get("meta") or {}).get("next_cursor")
         if not cursor:
             break
+    return games
 
-    if not games:
-        return {}
 
+def build_live_ratings(games):
+    """Derive a simple off/def/form rating per team from this season's
+    completed games so far. Separated from fetch_season_games() so the same
+    raw game list can also feed grade_pending_history() and build_schedule()
+    without fetching it three times."""
     win_loss = {}
     for game in games:
         if game.get("status") != "Final":
@@ -509,6 +524,107 @@ def calc_performance(history, league="regular"):
             profit -= stake
     win_rate = (win / total * 100) if total else 0
     return total, win, win_rate, profit
+
+
+def find_final_score(games, home_en, away_en, taiwan_date, window_days=1):
+    """Find a specific matchup's final score in balldontlie's raw game list.
+
+    Matched by team identity, not by an exact date string: the-odds-api's
+    commence_time (already converted to Taiwan dates elsewhere in this
+    file) and balldontlie's own `date` field are on different clocks.
+    Every realistic NBA tip-off time (noon ET through 10:30pm PT, i.e.
+    UTC-4 to UTC-8) lands on "US scheduling date + 1" once converted to
+    Taiwan's fixed UTC+8 -- there's no NBA game time for which that isn't
+    true -- so balldontlie's date is reliably `taiwan_date - 1 day`. Search
+    a small window around that derived date anyway (rather than requiring
+    an exact match) as a safety margin against an edge case this reasoning
+    missed, and let the team-pair match (teams essentially never play each
+    other twice within a couple of days) disambiguate.
+    """
+    try:
+        center = datetime.strptime(taiwan_date, "%Y-%m-%d") - timedelta(days=1)
+    except ValueError:
+        return None
+    for g in games:
+        if g.get("status") != "Final":
+            continue
+        try:
+            g_home = normalize_team(g["home_team"]["full_name"])
+            g_away = normalize_team(g["visitor_team"]["full_name"])
+            g_date = datetime.strptime(str(g.get("date", ""))[:10], "%Y-%m-%d")
+        except (KeyError, TypeError, ValueError):
+            continue
+        if {g_home, g_away} != {home_en, away_en}:
+            continue
+        if abs((g_date - center).days) > window_days:
+            continue
+        hs, vs = g.get("home_team_score"), g.get("visitor_team_score")
+        if hs is None or vs is None:
+            continue
+        return {"home": g_home, "away": g_away, "home_score": hs, "away_score": vs}
+    return None
+
+
+def grade_pending_history(history, games):
+    """Automatically settle pending regular-season history entries against
+    real final scores, replacing the previous manual-Gist-editing workflow.
+    Summer League entries are left alone -- analyze_summer_league() stops
+    fetching outside SUMMER_LEAGUE_MONTHS, so there's no live score source
+    for them once the season's over; any still-pending summer picks just
+    stay pending, which is accurate (we genuinely don't know).
+
+    Besides win/loss/push, records the actual final score alongside the
+    prediction that was made for it (prob/edge were already stored), so
+    the history view doubles as a predicted-vs-actual comparison rather
+    than just a scoreboard.
+    """
+    graded = 0
+    for game_id, record in history.items():
+        if record.get("league", "regular") != "regular":
+            continue
+        if record.get("result") != "pending":
+            continue
+
+        try:
+            teams_part, date_part = game_id.rsplit("_", 1)
+            away_en, home_en = teams_part.split("@", 1)
+        except ValueError:
+            continue
+
+        m = re.match(r"^(.+?)\s+([+-]?\d+(?:\.\d+)?)$", record.get("bet", ""))
+        if not m:
+            continue
+        bet_team_cn, line_str = m.group(1), m.group(2)
+        bet_team_en = TEAM_CN_REVERSE.get(bet_team_cn)
+        if bet_team_en not in (home_en, away_en):
+            continue
+
+        score = find_final_score(games, home_en, away_en, date_part)
+        if score is None:
+            continue
+
+        line = float(line_str)
+        if bet_team_en == home_en:
+            margin_for_bet = score["home_score"] - score["away_score"]
+        else:
+            margin_for_bet = score["away_score"] - score["home_score"]
+        cover_margin = margin_for_bet + line
+
+        if cover_margin > 0:
+            record["result"] = "win"
+        elif cover_margin < 0:
+            record["result"] = "loss"
+        else:
+            record["result"] = "push"
+        record["final_score"] = "%s %d - %d %s" % (
+            TEAM_CN.get(away_en, away_en), score["away_score"],
+            score["home_score"], TEAM_CN.get(home_en, home_en),
+        )
+        graded += 1
+
+    if graded:
+        log.info("Auto-graded %d pending history entries against final scores", graded)
+    return graded
 
 
 def kelly_stake(prob, price, bankroll, fraction=KELLY_FRACTION):
@@ -1038,7 +1154,13 @@ def record_summer_history(history, summer_league, is_official_run):
         }
 
 
-def format_summer_league_section(sl):
+def format_summer_league_section(sl, now_utc):
+    # Off-season: leave it out of the Discord message entirely rather than
+    # showing an empty placeholder every single day for ~9 months of the
+    # year -- the user asked to get Summer League out of the way while the
+    # regular season runs, not just see it reported as perpetually absent.
+    if now_utc.month not in SUMMER_LEAGUE_MONTHS:
+        return ""
     if not sl.get("available"):
         return "\n🏖️ **夏季聯賽**\n目前查無夏季聯賽賽事或盤口資料（可能尚未開打或資料源未提供）。\n"
 
@@ -1108,7 +1230,7 @@ def chunked_send(content, webhook):
             log.error("Discord send failed chunk %d: %s", i, e)
 
 
-RESULT_ZH = {"win": "獲勝", "loss": "落敗", "pending": "待開獎"}
+RESULT_ZH = {"win": "獲勝", "loss": "落敗", "pending": "待開獎", "push": "走盤"}
 
 # .title() mis-cases the handful of keys with internal capitals or that are
 # better known by an all-caps nickname; everything else title-cases fine.
@@ -1125,6 +1247,103 @@ def display_player_name(key):
 
 
 
+def build_schedule(odds_games, balldontlie_games, target_date, now_utc, picks_for_date):
+    """Every regular-season game on `target_date` (Taiwan calendar date),
+    not just the ones with a qualifying recommendation -- a full slate so
+    the dashboard's "賽程" tab answers "what's on today" by itself. Final
+    scores are filled in via find_final_score() once a game's actually
+    finished (relevant when this runs from a manual mid-day/evening
+    trigger rather than the early-morning scheduled run, when none of the
+    day's games have started yet).
+    """
+    out  = []
+    seen = set()
+    for g in odds_games:
+        try:
+            c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        c_time_tw = c_time_utc + timedelta(hours=8)
+        g_date    = c_time_tw.strftime("%Y-%m-%d")
+        if g_date != target_date:
+            continue
+        home_en = normalize_team(g.get("home_team", ""))
+        away_en = normalize_team(g.get("away_team", ""))
+        game_id = "%s@%s_%s" % (away_en, home_en, g_date)
+        if game_id in seen:
+            continue
+        seen.add(game_id)
+
+        score = find_final_score(balldontlie_games, home_en, away_en, g_date)
+        if score:
+            status = "已完賽"
+            home_score, away_score = score["home_score"], score["away_score"]
+        elif c_time_utc < now_utc:
+            status = "進行中/比分未更新"
+            home_score = away_score = None
+        else:
+            status = "未開始"
+            home_score = away_score = None
+
+        out.append({
+            "home":       TEAM_CN.get(home_en, home_en),
+            "away":       TEAM_CN.get(away_en, away_en),
+            "start_time": c_time_tw.strftime("%m/%d %H:%M"),
+            "status":     status,
+            "home_score": home_score,
+            "away_score": away_score,
+            "has_pick":   game_id in picks_for_date,
+        })
+    out.sort(key=lambda x: x["start_time"])
+    return out
+
+
+MAX_PARLAY_LEGS = 3
+
+
+def build_parlay(picks_for_date):
+    """Combine same-day picks into a single parlay (串關) suggestion, built
+    only from the 💎頂級 tier and capped at MAX_PARLAY_LEGS legs, taking the
+    highest-probability ones first. The explicit design goal here is
+    "least likely to blow up", not "biggest possible payout", so this
+    deliberately does NOT throw every top-tier pick of the day into one
+    bet -- more legs means more chances for exactly one of them to miss
+    and sink the whole ticket.
+
+    Every leg must still hit for a parlay to pay out at all, so even one
+    built entirely from individually-confident picks is mechanically less
+    safe than any single leg alone -- that's inherent to what a parlay is,
+    not something leg selection can avoid, so it's spelled out in the
+    output rather than left implied by "most stable."
+    """
+    top_tier = [p for p in picks_for_date if p.get("tier") == "💎 頂級"]
+    if len(top_tier) < 2:
+        return None
+    top_tier.sort(key=lambda p: p["prob"], reverse=True)
+    legs = top_tier[:MAX_PARLAY_LEGS]
+
+    combined_price = 1.0
+    combined_prob  = 1.0
+    for p in legs:
+        combined_price *= p["price"]
+        combined_prob  *= p["prob"]
+
+    return {
+        "legs": [
+            {
+                "matchup": p["matchup"],
+                "bet":     p["bet"],
+                "price":   p["price"],
+                "prob":    round(p["prob"] * 100, 1),
+            }
+            for p in legs
+        ],
+        "combined_price": round(combined_price, 2),
+        "combined_prob":  round(combined_prob * 100, 1),
+        "note": "每一腿都要命中才會中。即使每腿個別勝率都高，串關整體風險仍遠高於單場下注——這是串關機制本身的限制，不是選腿方式能避免的，請自行斟酌風險。",
+    }
+
+
 def build_history_list(history, limit=30):
     items = sorted(history.values(), key=lambda h: h.get("date", ""), reverse=True)
     return [
@@ -1138,13 +1357,15 @@ def build_history_list(history, limit=30):
             "kelly_stake": h.get("kelly_stake"),
             "result":      RESULT_ZH.get(h.get("result", "pending"), h.get("result", "pending")),
             "league":      h.get("league", "regular"),
+            "final_score": h.get("final_score"),
         }
         for h in items[:limit]
     ]
 
 
 def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
-                      total_rec, wins, win_rate, profit, summer_league, history):
+                      total_rec, wins, win_rate, profit, summer_league, history,
+                      schedule, parlay):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     days = []
     for date in sorted(daily_picks):
@@ -1196,6 +1417,8 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
         },
         "summer_league": summer_league,
         "history":       build_history_list(history),
+        "schedule":      schedule,
+        "parlay":        parlay,
     }
 
     try:
@@ -1229,11 +1452,13 @@ def run():
         is_official_run = (now_utc.hour == 22)
     log.info("Official run: %s (event: %s, UTC hour: %d)", is_official_run, github_event or "n/a", now_utc.hour)
 
-    live_ratings = fetch_team_stats()
+    season_games = fetch_season_games()
+    live_ratings = build_live_ratings(season_games)
     data_source  = "即時數據" if live_ratings else "靜態備用"
     injuries     = get_injury_report()
     games        = fetch_odds()
     history      = load_history()
+    grade_pending_history(history, season_games)
     summer_league = analyze_summer_league(now_utc=now_utc)
     record_summer_history(history, summer_league, is_official_run)
 
@@ -1424,6 +1649,19 @@ def run():
                 output += p["msg"]
             output += "-" * 30 + "\n"
 
+    parlay = build_parlay(list(daily_picks.get(today_s, {}).values()))
+    if parlay:
+        output += "\n🔗 **串關推薦**（僅取今日💎頂級，最多 %d 腿，求穩不求大）:\n" % MAX_PARLAY_LEGS
+        for leg in parlay["legs"]:
+            output += "> %s | %s @ %.2f（勝率 %.1f%%）\n" % (
+                leg["matchup"], leg["bet"], leg["price"], leg["prob"]
+            )
+        output += "> 合計賠率 %.2f | 全中機率 %.1f%%\n> %s\n" % (
+            parlay["combined_price"], parlay["combined_prob"], parlay["note"]
+        )
+
+    schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks.get(today_s, {}))
+
     summer_league["performance"] = {
         "total_recommendations": summer_total,
         "wins":                  summer_wins,
@@ -1432,7 +1670,7 @@ def run():
     }
 
     output += perf_msg
-    output += format_summer_league_section(summer_league)
+    output += format_summer_league_section(summer_league, now_utc)
 
     if is_official_run:
         save_history(history)
@@ -1445,6 +1683,7 @@ def run():
         daily_picks=daily_picks, today_s=today_s,
         total_rec=total_rec, wins=wins, win_rate=win_rate, profit=profit,
         summer_league=summer_league, history=history,
+        schedule=schedule, parlay=parlay,
     )
 
     log.info("Sending to Discord, length: %d", len(output))
