@@ -445,6 +445,26 @@ def build_live_ratings(games):
     return ratings
 
 
+def describe_data_source(live_ratings, season_games):
+    """Distinguish *why* live ratings fell back to FALLBACK_RATINGS, since
+    "靜態備用" alone collapses three very different situations into one
+    label: no key configured at all, a key that's configured but the new
+    season's schedule/scores aren't in balldontlie yet (expected and
+    harmless in the pre-season gap before REGULAR_SEASON_START), or a key
+    that's configured but something else went wrong (API down, rate
+    limited past the retry budget, etc.) -- the first is a setup gap worth
+    fixing, the second needs no action at all, and the third is worth
+    knowing is intermittent rather than assuming the setup is broken.
+    """
+    if live_ratings:
+        return "即時數據"
+    if not BALLDONTLIE_KEY:
+        return "靜態備用（未設定 BALLDONTLIE_KEY）"
+    if not season_games:
+        return "靜態備用（暫時連不到 balldontlie，可能是賽季資料還沒上架或 API 異常）"
+    return "靜態備用（賽季尚未開打，還沒有已完賽的比賽）"
+
+
 def load_history():
     if not GITHUB_TOKEN:
         return {}
@@ -1454,7 +1474,7 @@ def run():
 
     season_games = fetch_season_games()
     live_ratings = build_live_ratings(season_games)
-    data_source  = "即時數據" if live_ratings else "靜態備用"
+    data_source  = describe_data_source(live_ratings, season_games)
     injuries     = get_injury_report()
     games        = fetch_odds()
     history      = load_history()
