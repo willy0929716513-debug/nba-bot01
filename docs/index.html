@@ -548,7 +548,7 @@
   <section id="schedule-section" class="reveal">
     <div class="section-head">
       <span class="ic" id="icon-sec-schedule"></span>
-      <div class="head-text"><h2>今日賽程</h2><p>當天全部場次，比分完場後自動結算</p></div>
+      <div class="head-text"><h2>最新賽程</h2><p>下一輪完整賽程，比分完場後自動結算</p></div>
       <span class="chev" id="icon-chev-schedule"></span>
     </div>
     <div id="schedule-body"></div>
@@ -1015,12 +1015,14 @@
 
   function renderSchedule(data) {
     var body = document.getElementById("schedule-body");
-    var games = data.schedule || [];
+    var sched = data.schedule || {};
+    var games = sched.games || [];
     if (!games.length) {
-      body.innerHTML = emptyState("clock", "今日暫無賽程", "資料源目前沒有今天的比賽資訊，稍後重新整理查看。", true);
+      body.innerHTML = emptyState("clock", "暫無賽程資料", "資料源目前沒有即將開打的比賽資訊，稍後重新整理查看。", true);
       return;
     }
-    var html = '<div class="card row-list hoverable">';
+    var html = '<div class="subhead">' + esc(sched.date || "") + ' 賽程</div>';
+    html += '<div class="card row-list hoverable">';
     games.forEach(function (g) {
       var hasScore = g.home_score != null && g.away_score != null;
       var scoreLine = hasScore ? (esc(g.away) + ' ' + g.away_score + ' - ' + g.home_score + ' ' + esc(g.home)) : '';
