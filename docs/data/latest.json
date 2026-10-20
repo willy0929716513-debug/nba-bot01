@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-10-20 21:32",
+  "generated_at": "2026-10-20 21:43",
   "data_source": "靜態備用（賽季尚未開打，還沒有已完賽的比賽）",
   "run_type": "test",
   "regular_season": {
@@ -23,9 +23,9 @@
             "bet": "湖人 -5.5",
             "price": 1.91,
             "book": "MyBookie.ag",
-            "prob": 60.1,
-            "edge": 7.7,
-            "kelly_stake": 32.5,
+            "prob": 59.7,
+            "edge": 7.3,
+            "kelly_stake": 30.6,
             "missing": "狀況: Butler(缺)",
             "consensus": "共識線: -6.1",
             "ou_note": "OU: 模型偏小分 (227.0 vs 市場 234.2) 偏Under"
@@ -37,12 +37,12 @@
             "bet": "公牛 +9.5",
             "price": 1.97,
             "book": "LowVig.ag",
-            "prob": 57.8,
-            "edge": 7.1,
-            "kelly_stake": 28.7,
+            "prob": 58.0,
+            "edge": 7.3,
+            "kelly_stake": 29.6,
             "missing": "陣容完整",
             "consensus": "共識線: +9.3",
-            "ou_note": "OU: 模型偏小分 (219.7 vs 市場 236.3) 偏Under"
+            "ou_note": "OU: 模型偏小分 (219.7 vs 市場 236.4) 偏Under"
           }
         ]
       },
@@ -97,9 +97,9 @@
             "bet": "湖人 +8.5",
             "price": 1.87,
             "book": "DraftKings",
-            "prob": 61.0,
-            "edge": 7.5,
-            "kelly_stake": 32.3,
+            "prob": 61.2,
+            "edge": 7.7,
+            "kelly_stake": 33.1,
             "missing": "陣容完整",
             "consensus": "共識線: +8.5",
             "ou_note": "OU: 模型偏小分 (228.4 vs 市場 232.5) 偏Under"
@@ -401,6 +401,37 @@
       "final_score": null
     }
   ],
-  "schedule": [],
+  "schedule": {
+    "date": "2026-10-21",
+    "games": [
+      {
+        "home": "活塞",
+        "away": "塞爾提克",
+        "start_time": "10/21 03:00",
+        "status": "未開始",
+        "home_score": null,
+        "away_score": null,
+        "has_pick": false
+      },
+      {
+        "home": "尼克",
+        "away": "七六人",
+        "start_time": "10/21 07:00",
+        "status": "未開始",
+        "home_score": null,
+        "away_score": null,
+        "has_pick": false
+      },
+      {
+        "home": "馬刺",
+        "away": "雷霆",
+        "start_time": "10/21 09:30",
+        "status": "未開始",
+        "home_score": null,
+        "away_score": null,
+        "has_pick": false
+      }
+    ]
+  },
   "parlay": null
 }
