@@ -1306,7 +1306,9 @@ def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks)
         dates_present.add((c_time_utc + timedelta(hours=8)).strftime("%Y-%m-%d"))
     candidates  = [d for d in dates_present if d >= today_s]
     target_date = min(candidates) if candidates else today_s
-    picks_for_date = set(daily_picks.get(target_date, {}))
+    picks_for_date = {
+        gid for gid, p in daily_picks.get(target_date, {}).items() if p["meets_threshold"]
+    }
 
     out  = []
     seen = set()
@@ -1427,26 +1429,28 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
             "label": "今日賽事" if date == today_s else ("預告 %s" % date),
             "picks": [
                 {
-                    "tier":       p["tier"],
-                    "matchup":    p["matchup"],
-                    "start_time": p["start_time"],
-                    "bet":        p["bet"],
-                    "price":      p["price"],
-                    "book":       p["book"],
-                    "prob":       round(p["prob"] * 100, 1),
-                    "edge":       round(p["edge"] * 100, 1),
-                    "kelly_stake": p["kelly_stake"],
-                    "missing":    p["missing"],
-                    "consensus":  p["consensus"],
-                    "ou_note":    p["ou_note"],
+                    "tier":             p["tier"],
+                    "meets_threshold":  p["meets_threshold"],
+                    "matchup":          p["matchup"],
+                    "start_time":       p["start_time"],
+                    "bet":              p["bet"],
+                    "price":            p["price"],
+                    "book":             p["book"],
+                    "prob":             round(p["prob"] * 100, 1),
+                    "edge":             round(p["edge"] * 100, 1),
+                    "kelly_stake":      p["kelly_stake"],
+                    "missing":          p["missing"],
+                    "consensus":        p["consensus"],
+                    "ou_note":          p["ou_note"],
                 }
                 for p in picks
             ],
         })
 
-    total_picks = sum(len(v) for v in daily_picks.values())
+    qualifying_picks = [p for d in daily_picks.values() for p in d.values() if p["meets_threshold"]]
+    total_picks = len(qualifying_picks)
     avg_edge    = (
-        sum(p["edge"] for d in daily_picks.values() for p in d.values()) / total_picks
+        sum(p["edge"] for p in qualifying_picks) / total_picks
         if total_picks else 0
     )
 
@@ -1586,15 +1590,16 @@ def run():
                     prob    = simulate_cover(blended, line)
                     edge    = prob - (1 / price)
 
-                    if edge < EDGE_THRESHOLD:
-                        continue
+                    meets_threshold = edge >= EDGE_THRESHOLD
 
                     missing = (h_missing if name == home else a_missing) + \
                               (a_missing if name == home else h_missing)
 
                     stake = kelly_stake(prob, price, BANKROLL)
 
-                    if edge > 0.12:
+                    if not meets_threshold:
+                        tier = "👀 觀察中"
+                    elif edge > 0.12:
                         tier = "💎 頂級"
                     elif edge > 0.09:
                         tier = "🔥 強力"
@@ -1631,6 +1636,7 @@ def run():
                             "kelly_stake": stake,
                             "msg":         msg,
                             "tier":        tier,
+                            "meets_threshold": meets_threshold,
                             "matchup":     "%s @ %s" % (away_cn, home_cn),
                             "start_time":  c_time_tw.strftime("%m/%d %H:%M"),
                             "bet":         "%s %+.1f" % (bet_cn, line),
@@ -1676,9 +1682,10 @@ def run():
         if summer_total < MIN_HISTORY_SAMPLE:
             perf_msg += small_sample_note
 
-    total_picks = sum(len(v) for v in daily_picks.values())
+    qualifying_picks = [p for d in daily_picks.values() for p in d.values() if p["meets_threshold"]]
+    total_picks = len(qualifying_picks)
     avg_edge    = (
-        sum(p["edge"] for d in daily_picks.values() for p in d.values()) / total_picks
+        sum(p["edge"] for p in qualifying_picks) / total_picks
         if total_picks else 0
     )
 
@@ -1692,7 +1699,7 @@ def run():
         output += "🔧 測試版本（不寫入回測）\n"
 
     if not daily_picks:
-        output += "\n今日無符合條件之推薦。\n"
+        output += "\n今日無賽事資料。\n"
     else:
         for date in sorted(daily_picks):
             label = "📅 今日賽事" if date == today_s else ("⏭ 預告 %s" % date)

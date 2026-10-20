@@ -796,6 +796,7 @@
     if (!tier) return "badge-status";
     if (tier.indexOf("頂級") !== -1) return "badge-tier-top";
     if (tier.indexOf("強力") !== -1) return "badge-tier-strong";
+    if (tier.indexOf("觀察") !== -1) return "badge-status";
     return "badge-tier-stable";
   }
   function resultBadgeClass(result) {
@@ -951,8 +952,8 @@
     var body = document.getElementById("regular-season-body");
     var anyPicks = days.some(function (d) { return d.picks && d.picks.length; });
     if (!anyPicks) {
-      body.innerHTML = emptyState("inbox", "目前無符合條件之推薦",
-        "門檻是 Edge ≥ 6%。模型掃過賽事後沒有找到勝率明顯高於賠率隱含機率的盤口，這是正常結果，不是錯誤——寧可不推薦，也不要硬湊一個沒把握的注。");
+      body.innerHTML = emptyState("inbox", "目前沒有賽事資料",
+        "盤口來源目前沒有任何例行賽賽事可供分析，等下一次排程抓到賽程後就會顯示。");
       return;
     }
     var html = "";
@@ -1218,12 +1219,13 @@
     var days = (data.regular_season || {}).days || [];
     var allPicks = [];
     days.forEach(function (d) { (d.picks || []).forEach(function (p) { allPicks.push(p); }); });
+    var qualifying = allPicks.filter(function (p) { return p.meets_threshold; });
     var el = document.getElementById("regular-season-trio");
-    if (!allPicks.length) { el.innerHTML = ""; return; }
-    var best = allPicks.reduce(function (a, b) { return b.edge > a.edge ? b : a; }, allPicks[0]);
+    if (!qualifying.length) { el.innerHTML = ""; return; }
+    var best = qualifying.reduce(function (a, b) { return b.edge > a.edge ? b : a; }, qualifying[0]);
     el.innerHTML = '<div class="trio">' +
       '<div class="trio-tile"><div class="v">' + esc(tierGrade(best.tier)) + '</div><div class="l">推薦等級</div><div class="s">' + esc(best.tier) + '</div></div>' +
-      '<div class="trio-tile"><div class="v">' + allPicks.length + '<small>場</small></div><div class="l">今日精選</div><div class="s">符合門檻賽事</div></div>' +
+      '<div class="trio-tile"><div class="v">' + qualifying.length + '<small>場</small></div><div class="l">今日精選</div><div class="s">符合門檻賽事</div></div>' +
       '<div class="trio-tile"><div class="v">' + Number(best.prob).toFixed(0) + '<small>%</small></div><div class="l">勝率預估</div><div class="s">最高 Edge 之推薦</div></div>' +
       '</div>';
   }
