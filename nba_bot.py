@@ -1267,15 +1267,35 @@ def display_player_name(key):
 
 
 
-def build_schedule(odds_games, balldontlie_games, target_date, now_utc, picks_for_date):
-    """Every regular-season game on `target_date` (Taiwan calendar date),
-    not just the ones with a qualifying recommendation -- a full slate so
-    the dashboard's "賽程" tab answers "what's on today" by itself. Final
-    scores are filled in via find_final_score() once a game's actually
-    finished (relevant when this runs from a manual mid-day/evening
-    trigger rather than the early-morning scheduled run, when none of the
-    day's games have started yet).
+def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks):
+    """Every regular-season game on the next upcoming slate, not just the
+    ones with a qualifying recommendation -- a full card so the dashboard's
+    "賽程" tab answers "what's coming up" by itself. Final scores are filled
+    in via find_final_score() once a game's actually finished (relevant
+    when this runs from a manual mid-day/evening trigger rather than the
+    early-morning scheduled run).
+
+    "Next upcoming slate" is not always literally today_s: the-odds-api
+    only lists current/upcoming games, and a US evening slate converts to
+    *tomorrow's* Taiwan date (see REGULAR_SEASON_START's note on the same
+    ET-to-PT-vs-UTC+8 gap) -- so on a typical early-morning run, today_s
+    itself usually has nothing left to show, and locking the schedule to
+    that exact date made it come back empty on literally the season's
+    opening night. Picks whichever date is nearest at or after today_s
+    that actually has games listed, falling back to today_s itself (an
+    empty result) only if nothing at all is upcoming.
     """
+    dates_present = set()
+    for g in odds_games:
+        try:
+            c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        dates_present.add((c_time_utc + timedelta(hours=8)).strftime("%Y-%m-%d"))
+    candidates  = [d for d in dates_present if d >= today_s]
+    target_date = min(candidates) if candidates else today_s
+    picks_for_date = set(daily_picks.get(target_date, {}))
+
     out  = []
     seen = set()
     for g in odds_games:
@@ -1315,7 +1335,7 @@ def build_schedule(odds_games, balldontlie_games, target_date, now_utc, picks_fo
             "has_pick":   game_id in picks_for_date,
         })
     out.sort(key=lambda x: x["start_time"])
-    return out
+    return {"date": target_date, "games": out}
 
 
 MAX_PARLAY_LEGS = 3
@@ -1680,7 +1700,7 @@ def run():
             parlay["combined_price"], parlay["combined_prob"], parlay["note"]
         )
 
-    schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks.get(today_s, {}))
+    schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks)
 
     summer_league["performance"] = {
         "total_recommendations": summer_total,
