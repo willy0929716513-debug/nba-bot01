@@ -262,7 +262,7 @@ def _retry_after_seconds(response, attempt):
     return 2.0 * attempt
 
 
-def safe_get(url, headers=None, params=None, retries=3, timeout=15):
+def safe_get(url, headers=None, params=None, retries=3, timeout=15, max_wait=None):
     for attempt in range(1, retries + 1):
         try:
             r = requests.get(url, headers=headers, params=params, timeout=timeout)
@@ -276,9 +276,18 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15):
             # genuine 4xx (404/401/403), it's worth waiting out and retrying
             # rather than giving up on the first hit, which previously left
             # fetch_season_games()'s pagination loop stopping after just a
-            # page or two once balldontlie's rate limit kicked in.
+            # page or two once balldontlie's rate limit kicked in. But
+            # blindly honoring whatever Retry-After the server sends can
+            # itself make a caller unacceptably slow -- confirmed against a
+            # real run where balldontlie asked for a 55s wait, twice, for a
+            # fetch that's supposed to be one step in a dashboard update the
+            # user is watching finish. max_wait caps what we're willing to
+            # sit through per attempt; a caller that's fine waiting longer
+            # (nothing currently needs that) can simply leave it unset.
             if status == 429 and attempt < retries:
                 wait = _retry_after_seconds(e.response, attempt)
+                if max_wait is not None:
+                    wait = min(wait, max_wait)
                 log.warning("Rate limited (429) attempt %d/%d: %s -- waiting %.1fs", attempt, retries, url, wait)
                 time.sleep(wait)
                 continue
@@ -376,12 +385,14 @@ def fetch_season_games():
 
     A full season needs ~13 pages, and balldontlie's rate limit is tight
     enough that firing those off back to back reliably draws a 429 a few
-    pages in (confirmed against a real run: the very first page came back
-    429). safe_get() now retries a 429 with backoff instead of giving up
-    immediately, but pace the requests proactively too rather than relying
-    on that alone -- a small delay between pages costs a few seconds on a
-    batch job with no real time pressure, and is cheaper than triggering
-    the rate limit (and its wait) on every single page.
+    pages in. safe_get() retries a 429 instead of giving up immediately --
+    but confirmed against a real run, balldontlie's own Retry-After header
+    asked for a 55-second wait, twice, adding 110+ seconds to a dashboard
+    update the user is actively watching finish. max_wait caps what we're
+    willing to sit through per attempt; if the quota hasn't recovered
+    within that much shorter window either, better to give up for this run
+    (falling back to FALLBACK_RATINGS, same as a missing key) than to sit
+    through the server's full suggested wait on every page that hits it.
     """
     if not BALLDONTLIE_KEY:
         return []
@@ -395,7 +406,8 @@ def fetch_season_games():
         if page > 0:
             time.sleep(1.0)
         data = safe_get(
-            "https://api.balldontlie.io/v1/games", headers=headers, params=params, retries=5,
+            "https://api.balldontlie.io/v1/games", headers=headers, params=params,
+            retries=3, max_wait=8,
         )
         if not data or "data" not in data:
             break
