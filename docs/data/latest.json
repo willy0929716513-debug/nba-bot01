@@ -1,11 +1,11 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-10-04 09:34",
-  "data_source": "靜態備用",
+  "generated_at": "2026-10-20 21:32",
+  "data_source": "靜態備用（賽季尚未開打，還沒有已完賽的比賽）",
   "run_type": "test",
   "regular_season": {
-    "total_picks": 5,
-    "avg_edge": 7.9,
+    "total_picks": 3,
+    "avg_edge": 7.4,
     "days": [
       {
         "date": "2026-10-21",
@@ -17,60 +17,32 @@
         "label": "預告 2026-10-22",
         "picks": [
           {
-            "tier": "🔥 強力",
-            "matchup": "爵士 @ 灰熊",
-            "start_time": "10/22 08:10",
-            "bet": "灰熊 +3.5",
-            "price": 1.91,
-            "book": "Bovada",
-            "prob": 62.1,
-            "edge": 9.7,
-            "kelly_stake": 40.8,
-            "missing": "陣容完整",
-            "consensus": "共識線: +2.8",
-            "ou_note": "OU: 模型偏小分 (222.1 vs 市場 242.2) 偏Under"
-          },
-          {
             "tier": "⭐ 穩定",
             "matchup": "勇士 @ 湖人",
-            "start_time": "10/22 10:10",
-            "bet": "湖人 -4.5",
-            "price": 1.88,
-            "book": "BetRivers",
-            "prob": 61.7,
-            "edge": 8.5,
-            "kelly_stake": 36.4,
-            "missing": "狀況: Butler(缺)",
-            "consensus": "共識線: -5.4",
-            "ou_note": "OU: 模型偏小分 (227.0 vs 市場 236.1) 偏Under"
-          },
-          {
-            "tier": "⭐ 穩定",
-            "matchup": "黃蜂 @ 籃網",
-            "start_time": "10/22 07:30",
-            "bet": "籃網 +4.5",
-            "price": 1.94,
-            "book": "LowVig.ag",
-            "prob": 59.1,
-            "edge": 7.6,
-            "kelly_stake": 31.2,
-            "missing": "陣容完整",
-            "consensus": "共識線: +4.4",
-            "ou_note": "OU: 模型偏小分 (220.2 vs 市場 225.4) 偏Under"
-          },
-          {
-            "tier": "⭐ 穩定",
-            "matchup": "公鹿 @ 巫師",
-            "start_time": "10/22 07:10",
-            "bet": "公鹿 +6.5",
+            "start_time": "10/22 10:00",
+            "bet": "湖人 -5.5",
             "price": 1.91,
-            "book": "BetMGM",
-            "prob": 58.9,
-            "edge": 6.5,
-            "kelly_stake": 27.4,
+            "book": "MyBookie.ag",
+            "prob": 60.1,
+            "edge": 7.7,
+            "kelly_stake": 32.5,
+            "missing": "狀況: Butler(缺)",
+            "consensus": "共識線: -6.1",
+            "ou_note": "OU: 模型偏小分 (227.0 vs 市場 234.2) 偏Under"
+          },
+          {
+            "tier": "⭐ 穩定",
+            "matchup": "公牛 @ 暴龍",
+            "start_time": "10/22 07:40",
+            "bet": "公牛 +9.5",
+            "price": 1.97,
+            "book": "LowVig.ag",
+            "prob": 57.8,
+            "edge": 7.1,
+            "kelly_stake": 28.7,
             "missing": "陣容完整",
-            "consensus": "共識線: +5.9",
-            "ou_note": "OU: 模型偏小分 (222.6 vs 市場 238.4) 偏Under"
+            "consensus": "共識線: +9.3",
+            "ou_note": "OU: 模型偏小分 (219.7 vs 市場 236.3) 偏Under"
           }
         ]
       },
@@ -125,9 +97,9 @@
             "bet": "湖人 +8.5",
             "price": 1.87,
             "book": "DraftKings",
-            "prob": 60.8,
-            "edge": 7.3,
-            "kelly_stake": 31.3,
+            "prob": 61.0,
+            "edge": 7.5,
+            "kelly_stake": 32.3,
             "missing": "陣容完整",
             "consensus": "共識線: +8.5",
             "ou_note": "OU: 模型偏小分 (228.4 vs 市場 232.5) 偏Under"
@@ -173,7 +145,8 @@
       "edge": 15.1,
       "kelly_stake": 64.3,
       "result": "待開獎",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-04-08",
@@ -184,7 +157,8 @@
       "edge": 13.2,
       "kelly_stake": 55.4,
       "result": "待開獎",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-04-08",
@@ -195,7 +169,8 @@
       "edge": 18.8,
       "kelly_stake": 78.7,
       "result": "待開獎",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-04-06",
@@ -206,7 +181,8 @@
       "edge": 16.8,
       "kelly_stake": 69.5,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-04-04",
@@ -217,7 +193,8 @@
       "edge": 15.5,
       "kelly_stake": 65.2,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-04-04",
@@ -228,7 +205,8 @@
       "edge": 15.5,
       "kelly_stake": 64.9,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-04-04",
@@ -239,7 +217,8 @@
       "edge": 15.2,
       "kelly_stake": 66.0,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-04-02",
@@ -250,7 +229,8 @@
       "edge": 12.3,
       "kelly_stake": 51.8,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-31",
@@ -261,7 +241,8 @@
       "edge": 14.2,
       "kelly_stake": 57.2,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-24",
@@ -272,7 +253,8 @@
       "edge": 14.2,
       "kelly_stake": 58.7,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-24",
@@ -283,7 +265,8 @@
       "edge": 12.8,
       "kelly_stake": 53.0,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-23",
@@ -294,7 +277,8 @@
       "edge": 9.4,
       "kelly_stake": 39.2,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-22",
@@ -305,7 +289,8 @@
       "edge": 7.1,
       "kelly_stake": 37.4,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-22",
@@ -316,7 +301,8 @@
       "edge": 7.4,
       "kelly_stake": 37.4,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-22",
@@ -327,7 +313,8 @@
       "edge": 8.0,
       "kelly_stake": 42.0,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-22",
@@ -338,7 +325,8 @@
       "edge": 14.7,
       "kelly_stake": 73.7,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-22",
@@ -349,7 +337,8 @@
       "edge": 10.5,
       "kelly_stake": 54.3,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-22",
@@ -360,7 +349,8 @@
       "edge": 14.7,
       "kelly_stake": 76.1,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-21",
@@ -371,7 +361,8 @@
       "edge": 11.2,
       "kelly_stake": 57.6,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-21",
@@ -382,7 +373,8 @@
       "edge": 23.9,
       "kelly_stake": 120.3,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-20",
@@ -393,7 +385,8 @@
       "edge": 21.8,
       "kelly_stake": 111.8,
       "result": "獲勝",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     },
     {
       "date": "2026-03-20",
@@ -404,7 +397,10 @@
       "edge": 8.3,
       "kelly_stake": 43.1,
       "result": "落敗",
-      "league": "regular"
+      "league": "regular",
+      "final_score": null
     }
-  ]
+  ],
+  "schedule": [],
+  "parlay": null
 }
