@@ -15,7 +15,7 @@ NBA 賠率分析機器人：抓取即時賠率與球隊戰績，套用蒙地卡�
 
 ## 執行方式
 
-由 `.github/workflows/nba_odds_bot.yml` 排程觸發（每日 UTC 22:00），也可用 workflow_dispatch 手動測試執行（測試執行不會寫入歷史紀錄，也會標示為「測試版本」）。
+由 `.github/workflows/nba_odds_bot.yml` 排程觸發（每日台灣時間晚上 22:30，即 UTC 14:30），也可用 workflow_dispatch 手動測試執行（測試執行不會寫入歷史紀錄，也會標示為「測試版本」）。
 
 ## 所需環境變數 / Secrets
 
