@@ -418,43 +418,129 @@ def fetch_season_games():
     return games
 
 
+SRS_ITERATIONS = 10
+FORM_GAMES     = 10
+FORM_SCALE     = 0.5
+FORM_CAP       = 3.0
+
+
 def build_live_ratings(games):
-    """Derive a simple off/def/form rating per team from this season's
-    completed games so far. Separated from fetch_season_games() so the same
-    raw game list can also feed grade_pending_history() and build_schedule()
-    without fetching it three times."""
-    win_loss = {}
+    """Derive an off/def/form rating per team from this season's completed
+    games so far. Separated from fetch_season_games() so the same raw game
+    list can also feed grade_pending_history() and build_schedule() without
+    fetching it three times.
+
+    Previously this only looked at win/loss record (a team that goes 5-0
+    winning every game by 1 point rated identically to one that goes 5-0
+    blowing teams out by 20) and threw away the actual final scores
+    balldontlie already hands over. Now it runs a Simple Rating System
+    (SRS): each team's raw point-differential average gets iteratively
+    corrected by the strength of the opponents it actually played, so a
+    gaudy differential built against a weak schedule is discounted and a
+    modest one against a tough schedule is credited -- this converges in a
+    handful of passes. The resulting schedule adjustment is split evenly
+    between "off" and "def" so predict_margin's existing off-minus-def net
+    calculation reproduces the adjusted rating exactly, while predict_total
+    still gets a separate offense and defense number to work with.
+
+    "form" also switches from a win/loss-streak proxy to an actual
+    scoring-margin trend: each team's last FORM_GAMES average margin versus
+    its full-season average, capped so a short hot/cold streak nudges the
+    prediction without dominating it.
+    """
+    team_games = {}
     for game in games:
         if game.get("status") != "Final":
             continue
-        home = normalize_team(game["home_team"]["full_name"])
-        away = normalize_team(game["visitor_team"]["full_name"])
-        hs   = game.get("home_team_score", 0)
-        vs   = game.get("visitor_team_score", 0)
-        if hs and vs:
-            win_loss.setdefault(home, {"w": 0, "l": 0})
-            win_loss.setdefault(away, {"w": 0, "l": 0})
-            if hs > vs:
-                win_loss[home]["w"] += 1
-                win_loss[away]["l"] += 1
-            else:
-                win_loss[away]["w"] += 1
-                win_loss[home]["l"] += 1
+        try:
+            home = normalize_team(game["home_team"]["full_name"])
+            away = normalize_team(game["visitor_team"]["full_name"])
+            hs   = game["home_team_score"]
+            vs   = game["visitor_team_score"]
+            g_date = str(game.get("date", ""))[:10]
+        except (KeyError, TypeError):
+            continue
+        if not hs or not vs:
+            continue
+        team_games.setdefault(home, []).append({"opp": away, "pf": hs, "pa": vs, "date": g_date})
+        team_games.setdefault(away, []).append({"opp": home, "pf": vs, "pa": hs, "date": g_date})
+
+    teams = [t for t in team_games if t in TEAM_CN]
+    for t in teams:
+        team_games[t].sort(key=lambda g: g["date"])
+
+    raw_margin = {t: sum(g["pf"] - g["pa"] for g in team_games[t]) / len(team_games[t]) for t in teams}
+    raw_off    = {t: sum(g["pf"] for g in team_games[t]) / len(team_games[t]) for t in teams}
+    raw_def    = {t: sum(g["pa"] for g in team_games[t]) / len(team_games[t]) for t in teams}
+
+    net = dict(raw_margin)
+    for _ in range(SRS_ITERATIONS):
+        net = {
+            t: sum((g["pf"] - g["pa"]) + net.get(g["opp"], 0.0) for g in team_games[t]) / len(team_games[t])
+            for t in teams
+        }
 
     ratings = {}
-    for team, rec in win_loss.items():
-        if team not in TEAM_CN:
-            continue
-        total   = rec["w"] + rec["l"]
-        win_pct = rec["w"] / total if total else 0.5
-        ratings[team] = {
-            "off":  round(110.0 + win_pct * 18.0, 1),
-            "def":  round(120.0 - win_pct * 14.0, 1),
-            "form": round((win_pct - 0.5) * 4, 2),
-        }
+    for t in teams:
+        sos = net[t] - raw_margin[t]
+        off = raw_off[t] + sos / 2
+        deff = raw_def[t] - sos / 2
+
+        recent = team_games[t][-FORM_GAMES:]
+        recent_margin = sum(g["pf"] - g["pa"] for g in recent) / len(recent)
+        form = max(-FORM_CAP, min(FORM_CAP, (recent_margin - raw_margin[t]) * FORM_SCALE))
+
+        ratings[t] = {"off": round(off, 1), "def": round(deff, 1), "form": round(form, 2)}
 
     log.info("Game-based ratings loaded: %d teams", len(ratings))
     return ratings
+
+
+def build_rest_days(games):
+    """Map each team to every date (played or still scheduled) it appears
+    on in this season's game list, so predict_margin can look up how many
+    days of rest it has before a specific upcoming matchup. A team on zero
+    days' rest (a back-to-back) is a well-documented, measurable
+    disadvantage -- worse on the road than at home, due to the added
+    travel -- and this is the first time that signal is available, since
+    fetch_season_games() already pulls the full season schedule."""
+    team_dates = {}
+    for game in games:
+        try:
+            home = normalize_team(game["home_team"]["full_name"])
+            away = normalize_team(game["visitor_team"]["full_name"])
+        except (KeyError, TypeError):
+            continue
+        g_date = str(game.get("date", ""))[:10]
+        if not g_date:
+            continue
+        team_dates.setdefault(home, set()).add(g_date)
+        team_dates.setdefault(away, set()).add(g_date)
+    return {team: sorted(dates) for team, dates in team_dates.items()}
+
+
+def rest_days_before(team_dates, team, target_date):
+    """Days of rest `team` has before `target_date` (YYYY-MM-DD), measured
+    from its closest earlier game in the schedule. None if no earlier game
+    is known (season opener, or the team is missing from the schedule
+    feed) -- callers treat that as "unknown", not as any particular amount
+    of rest."""
+    dates = team_dates.get(team)
+    if not dates:
+        return None
+    try:
+        target = datetime.strptime(target_date, "%Y-%m-%d")
+    except ValueError:
+        return None
+    prev = None
+    for d in dates:
+        try:
+            dt = datetime.strptime(d, "%Y-%m-%d")
+        except ValueError:
+            continue
+        if dt < target and (prev is None or dt > prev):
+            prev = dt
+    return (target - prev).days if prev is not None else None
 
 
 def describe_data_source(live_ratings, season_games):
@@ -669,7 +755,11 @@ def kelly_stake(prob, price, bankroll, fraction=KELLY_FRACTION):
     return round(bankroll * k, 1)
 
 
-def predict_margin(home, away, injury_data, live_ratings):
+B2B_HOME_PENALTY = 1.3
+B2B_AWAY_PENALTY = 2.0
+
+
+def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_rest=None):
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
     h_stat = dict(h_base)
@@ -702,6 +792,15 @@ def predict_margin(home, away, injury_data, live_ratings):
     a_net  = (a_stat["off"] - a_stat["def"]) + a_base.get("form", 0.0)
     margin = (h_net - a_net) / 2 + HOME_ADVANTAGE
 
+    # Zero days' rest (a back-to-back) is a measurable fatigue hit -- worse
+    # on the road, where there's travel on top of it. Unknown rest (None,
+    # e.g. a season opener or a team missing from the schedule feed) is
+    # left alone rather than assumed to be either fresh or tired.
+    if home_rest == 1:
+        margin -= B2B_HOME_PENALTY
+    if away_rest == 1:
+        margin += B2B_AWAY_PENALTY
+
     def fmt(lst):
         return ["%s(%s)" % (display_player_name(p), "缺" if s == "out" else "限") for p, s in lst]
 
@@ -709,9 +808,15 @@ def predict_margin(home, away, injury_data, live_ratings):
 
 
 def predict_total(home, away, live_ratings):
+    """Each side's expected points is its own offense against the
+    opponent's defense, not just the two offenses added together -- the
+    previous formula ignored defense entirely, so a historically stingy
+    defense never pulled a projected total down."""
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
-    return round((h_base["off"] + a_base["off"]) * 0.97, 1)
+    home_pts = (h_base["off"] + a_base["def"]) / 2
+    away_pts = (a_base["off"] + h_base["def"]) / 2
+    return round(home_pts + away_pts, 1)
 
 
 def get_consensus_line(bookmakers, team_name, exclude_book=None):
@@ -1510,6 +1615,7 @@ def run():
 
     season_games = fetch_season_games()
     live_ratings = build_live_ratings(season_games)
+    team_dates   = build_rest_days(season_games)
     data_source  = describe_data_source(live_ratings, season_games)
     injuries     = get_injury_report()
     games        = fetch_odds()
@@ -1543,7 +1649,11 @@ def run():
         bookmakers = g.get("bookmakers", [])
 
         daily_picks.setdefault(g_date, {})
-        margin, h_missing, a_missing = predict_margin(home, away, injuries, live_ratings)
+        home_rest = rest_days_before(team_dates, home, g_date)
+        away_rest = rest_days_before(team_dates, away, g_date)
+        margin, h_missing, a_missing = predict_margin(
+            home, away, injuries, live_ratings, home_rest=home_rest, away_rest=away_rest,
+        )
 
         model_total     = predict_total(home, away, live_ratings)
         consensus_total = get_consensus_total(bookmakers)
