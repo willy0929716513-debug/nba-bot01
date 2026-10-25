@@ -1522,9 +1522,57 @@ def build_history_list(history, limit=30):
     ]
 
 
+def build_performance_trend(history):
+    """Chronological running win-rate and cumulative profit across settled
+    (win/loss) regular-season bets, for the dashboard's performance trend
+    chart -- same profit formula as calc_performance, just accumulated
+    point by point instead of collapsed into one final total."""
+    settled = [
+        h for h in history.values()
+        if h.get("result") in ("win", "loss") and h.get("league", "regular") == "regular"
+    ]
+    settled.sort(key=lambda h: h.get("date", ""))
+    trend = []
+    wins = 0
+    profit = 0.0
+    for i, h in enumerate(settled, 1):
+        stake = h.get("kelly_stake") or 10.0
+        if h["result"] == "win":
+            wins += 1
+            profit += stake * (h.get("price", 1.9) - 1)
+        else:
+            profit -= stake
+        trend.append({
+            "date":     h.get("date", ""),
+            "win_rate": round(wins / i * 100, 1),
+            "profit":   round(profit, 1),
+        })
+    return trend
+
+
+def build_power_rankings(live_ratings):
+    """Rank order for the dashboard's team power-rankings table: net rating
+    (off minus def, already SRS opponent-adjusted by build_live_ratings)
+    descending. Empty when live_ratings itself is empty (static-fallback
+    mode), same as every other feature that depends on real game data."""
+    rows = []
+    for team, r in live_ratings.items():
+        rows.append({
+            "team": TEAM_CN.get(team, team),
+            "net":  round(r["off"] - r["def"], 1),
+            "off":  round(r["off"], 1),
+            "def":  round(r["def"], 1),
+            "form": round(r.get("form", 0.0), 2),
+        })
+    rows.sort(key=lambda x: x["net"], reverse=True)
+    for i, row in enumerate(rows, 1):
+        row["rank"] = i
+    return rows
+
+
 def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
                       total_rec, wins, win_rate, profit, summer_league, history,
-                      schedule, parlay):
+                      schedule, parlay, power_rankings):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     days = []
     for date in sorted(daily_picks):
@@ -1576,10 +1624,12 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
             "profit":                round(profit, 1),
             "min_sample":            MIN_HISTORY_SAMPLE,
         },
-        "summer_league": summer_league,
-        "history":       build_history_list(history),
-        "schedule":      schedule,
-        "parlay":        parlay,
+        "summer_league":      summer_league,
+        "history":            build_history_list(history),
+        "performance_trend":  build_performance_trend(history),
+        "schedule":           schedule,
+        "parlay":             parlay,
+        "power_rankings":     power_rankings,
     }
 
     try:
@@ -1861,6 +1911,7 @@ def run():
         total_rec=total_rec, wins=wins, win_rate=win_rate, profit=profit,
         summer_league=summer_league, history=history,
         schedule=schedule, parlay=parlay,
+        power_rankings=build_power_rankings(live_ratings),
     )
 
     log.info("Sending to Discord, length: %d", len(output))

@@ -367,6 +367,23 @@
   .bar-track { position: relative; width: 100px; height: 6px; background: var(--surface); border-radius: 4px; overflow: hidden; flex: 0 0 auto; }
   .bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
 
+  .prob-meter { display: flex; align-items: center; gap: 8px; margin-top: 8px; max-width: 220px; }
+  .prob-meter .track { flex: 1; height: 7px; border-radius: 4px; background: var(--surface); overflow: hidden; }
+  .prob-meter .fill { height: 100%; border-radius: 4px; transition: width .5s cubic-bezier(.4,0,.2,1); }
+  .prob-meter .pct { font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; color: var(--ink-2); }
+
+  .rank-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 6px;
+    background: var(--surface); color: var(--ink-2);
+    font-size: 10.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+    margin-right: 2px; flex: 0 0 auto;
+  }
+  .rank-num.top3 { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+
+  .trend-chart-card { padding: 16px var(--gap-card); margin-bottom: 14px; }
+  .trend-chart-card svg { width: 100%; height: 110px; display: block; }
+
   .subhead { font-size: 13px; font-weight: 700; color: var(--ink-2); margin: 20px 0 4px; padding: 0 var(--gap-card); }
   .row-list + .subhead { margin-top: 20px; }
 
@@ -497,6 +514,7 @@
     <div class="seg" id="seg" role="tablist">
       <div class="seg-indicator" id="seg-indicator"></div>
       <a class="seg-btn" href="#regular-season-section" data-target="regular-season-section" id="ic-tab-cal"><span></span>推薦</a>
+      <a class="seg-btn" href="#power-rankings-section" data-target="power-rankings-section" id="ic-tab-rank"><span></span>戰力排行</a>
       <a class="seg-btn" href="#schedule-section" data-target="schedule-section" id="ic-tab-schedule"><span></span>賽程</a>
       <a class="seg-btn" href="#summer-league-section" data-target="summer-league-section" id="ic-tab-sun"><span></span>夏季聯賽</a>
       <a class="seg-btn" href="#history-section" data-target="history-section" id="ic-tab-hist"><span></span>歷史紀錄</a>
@@ -543,6 +561,15 @@
     <div id="regular-season-trio"></div>
     <div id="parlay-body"></div>
     <div id="regular-season-body"></div>
+  </section>
+
+  <section id="power-rankings-section" class="reveal">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-rank"></span>
+      <div class="head-text"><h2>戰力排行榜</h2><p>SRS 模型：依對手強弱校正過的場均淨勝分</p></div>
+      <span class="chev" id="icon-chev-rank"></span>
+    </div>
+    <div id="power-rankings-body"></div>
   </section>
 
   <section id="schedule-section" class="reveal">
@@ -639,14 +666,17 @@
   document.getElementById("icon-footer-chevron").querySelector("svg").setAttribute("class", "chev-sm");
   mount("icon-status-clock", "clock");
   mount("icon-sec-cal", "calendar");
+  mount("icon-sec-rank", "barchart");
   mount("icon-sec-schedule", "clock");
   mount("icon-sec-sun", "sun");
   mount("icon-sec-hist", "history");
   mount("icon-chev-cal", "chevronright");
+  mount("icon-chev-rank", "chevronright");
   mount("icon-chev-schedule", "chevronright");
   mount("icon-chev-sun", "chevronright");
   mount("icon-chev-hist", "chevronright");
   document.querySelector("#ic-tab-cal span").innerHTML = svg("calendar");
+  document.querySelector("#ic-tab-rank span").innerHTML = svg("barchart");
   document.querySelector("#ic-tab-sun span").innerHTML = svg("sun");
   document.querySelector("#ic-tab-hist span").innerHTML = svg("history");
 
@@ -978,6 +1008,7 @@
             '<span class="stat">Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b></span>' +
             '<span class="stat">Kelly 建議 <b>$' + Number(p.kelly_stake).toFixed(1) + '</b></span>' +
           '</div>' +
+          probMeter(p.prob) +
         '</div>';
       });
       html += '</div>';
@@ -992,6 +1023,77 @@
     return '<div style="display:flex;align-items:center;gap:8px;">' +
       '<div class="bar-track"><div class="bar-fill" style="' + (v >= 0 ? 'left:50%;' : 'right:50%;') + 'width:' + (pct / 2) + '%;background:' + color + ';"></div></div>' +
       '<span class="stat"><b>' + (v >= 0 ? "+" : "") + v.toFixed(1) + '</b></span></div>';
+  }
+
+  function probMeter(prob) {
+    var pct = Math.max(0, Math.min(100, Number(prob) || 0));
+    var color = pct >= 60 ? "var(--success)" : (pct >= 50 ? "var(--brand)" : "var(--ink-3)");
+    return '<div class="prob-meter"><div class="track"><div class="fill" style="width:' + pct +
+      '%;background:' + color + ';"></div></div><span class="pct">' + pct.toFixed(0) + '%</span></div>';
+  }
+
+  function renderPowerRankings(data) {
+    var rankings = data.power_rankings || [];
+    var body = document.getElementById("power-rankings-body");
+    if (!rankings.length) {
+      body.innerHTML = emptyState("barchart", "尚無即時戰力數據",
+        "目前使用靜態備用評分，等賽季開打、balldontlie 累積幾場完賽資料後，這裡就會自動顯示即時戰力排行。");
+      return;
+    }
+    var html = '<div class="card row-list hoverable">';
+    rankings.forEach(function (r) {
+      var formHtml = r.form > 0.15
+        ? '近期手感 <b style="color:var(--success);">↑ ' + r.form.toFixed(1) + '</b>'
+        : (r.form < -0.15 ? '近期手感 <b style="color:var(--danger);">↓ ' + Math.abs(r.form).toFixed(1) + '</b>' : '近期手感持平');
+      html += '<div class="row">' +
+        '<div class="row-top">' +
+          '<span class="row-title matchup-line"><span class="rank-num' + (r.rank <= 3 ? ' top3' : '') + '">' + r.rank + '</span>' +
+            teamLogo(r.team) + esc(r.team) + '</span>' +
+          marginBar(r.net) +
+        '</div>' +
+        '<div class="team-stats-line">進攻 <b style="color:var(--ink);">' + Number(r.off).toFixed(1) +
+          '</b> ｜ 防守 <b style="color:var(--ink);">' + Number(r.def).toFixed(1) + '</b> ｜ ' + formHtml + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    html += '<div class="note-box">' + svg("info") +
+      '<span>淨勝分（進攻減防守）已用 SRS 依對手實際戰力反覆校正，不是單純的場均得失分差；近期手感比較最近 10 場與整季的場均淨勝分落差。</span></div>';
+    body.innerHTML = html;
+  }
+
+  function togglePowerRankingsTab(data) {
+    var available = !!(data.power_rankings && data.power_rankings.length);
+    var tab = document.getElementById("ic-tab-rank");
+    var section = document.getElementById("power-rankings-section");
+    if (tab) tab.style.display = available ? "" : "none";
+    if (section) section.style.display = available ? "" : "none";
+  }
+
+  function renderTrendChart(trend) {
+    if (!trend || trend.length < 2) return "";
+    var w = 600, h = 110, pad = 10;
+    var profits = trend.map(function (t) { return t.profit; });
+    var min = Math.min(0, Math.min.apply(null, profits));
+    var max = Math.max(0, Math.max.apply(null, profits));
+    var range = (max - min) || 1;
+    var stepX = (w - pad * 2) / (profits.length - 1);
+    var points = profits.map(function (p, i) {
+      var x = pad + i * stepX;
+      var y = h - pad - ((p - min) / range) * (h - pad * 2);
+      return x.toFixed(1) + "," + y.toFixed(1);
+    }).join(" ");
+    var zeroY = (h - pad - ((0 - min) / range) * (h - pad * 2)).toFixed(1);
+    var last = profits[profits.length - 1];
+    var lineColor = last >= 0 ? "var(--success)" : "var(--danger)";
+    return '<div class="card trend-chart-card">' +
+      '<div class="row-sub" style="margin-bottom:10px;">歷史累積損益走勢（依 Kelly 建議注碼試算，僅供參考，不是實際下注金額）</div>' +
+      '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' +
+        '<line x1="' + pad + '" y1="' + zeroY + '" x2="' + (w - pad) + '" y2="' + zeroY + '" style="stroke:var(--hairline);stroke-width:1;"/>' +
+        '<polyline points="' + points + '" fill="none" style="stroke:' + lineColor + ';stroke-width:2.5;" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg>' +
+      '<div class="row-sub" style="margin-top:8px;">目前累積：<b style="color:' + lineColor + ';">' +
+        (last >= 0 ? "+" : "") + last.toFixed(1) + '</b>（共 ' + trend.length + ' 場已結算）</div>' +
+    '</div>';
   }
 
   function renderParlay(data) {
@@ -1160,7 +1262,8 @@
       body.innerHTML = emptyState("history", "目前沒有歷史紀錄", "只有「正式執行」且達到 💎頂級 等級的例行賽推薦、或 Edge ≥ 6% 的夏季聯賽推薦才會被記錄下來，跑過幾次正式排程後這裡就會累積資料。");
       return;
     }
-    var html = '<div class="card row-list hoverable">';
+    var html = renderTrendChart(data.performance_trend);
+    html += '<div class="card row-list hoverable">';
     history.forEach(function (h) {
       var isSummer = h.league === "summer";
       html += '<div class="row">' +
@@ -1196,10 +1299,12 @@
     renderRegularSeasonTrio(data);
     renderParlay(data);
     renderRegularSeason(data);
+    renderPowerRankings(data);
     renderSchedule(data);
     renderSummerLeague(data);
     renderHistory(data);
     toggleSummerLeagueTab(data);
+    togglePowerRankingsTab(data);
   }
 
   function toggleSummerLeagueTab(data) {
@@ -1249,6 +1354,7 @@
   function showSkeletons() {
     skeletonTiles();
     skeletonRows("regular-season-body", 2);
+    skeletonRows("power-rankings-body", 4);
     skeletonRows("summer-league-body", 3);
     skeletonRows("history-body", 3);
     document.getElementById("regular-season-trio").innerHTML = "";
