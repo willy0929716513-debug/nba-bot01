@@ -1277,6 +1277,37 @@
     body.innerHTML = html;
   }
 
+  function renderCalibrationCard(label, entry) {
+    var perf  = entry.performance || {};
+    var calib = entry.calibration || {};
+    if (!perf.total_recommendations && !calib.n) return "";
+    var small = perf.total_recommendations < 10;
+    var html = '<div class="card" style="padding:16px;margin-bottom:10px;">' +
+      '<div class="row-top"><span class="row-title">' + esc(label) + '</span>' +
+      '<span class="row-time">' + perf.total_recommendations + ' 場已結算</span></div>' +
+      '<div class="row-stats" style="margin-top:8px;">' +
+      '<span class="stat">勝率 <b>' + Number(perf.win_rate).toFixed(1) + '%</b></span>' +
+      '<span class="stat">損益 <b>' + (perf.profit >= 0 ? "+" : "") + Number(perf.profit).toFixed(1) + '</b></span>';
+    if (calib.n > 0) {
+      html += '<span class="stat">Brier <b>' + Number(calib.brier).toFixed(4) + '</b></span>' +
+        '<span class="stat">LogLoss <b>' + Number(calib.log_loss).toFixed(4) + '</b></span>';
+      if (calib.mae_margin != null) html += '<span class="stat">分差 MAE <b>' + Number(calib.mae_margin).toFixed(1) + '</b></span>';
+      if (calib.mae_total != null) html += '<span class="stat">總分 MAE <b>' + Number(calib.mae_total).toFixed(1) + '</b></span>';
+    }
+    html += '</div>';
+    if (small) {
+      html += '<div class="row-sub" style="margin-top:6px;opacity:.75;">樣本數 &lt; 10 場，統計僅供參考，不代表長期表現</div>';
+    }
+    if (calib.buckets && calib.buckets.length) {
+      html += '<div class="row-sub" style="margin-top:8px;">機率校準（預測機率 vs 實際命中率）：' +
+        calib.buckets.map(function (b) {
+          return esc(b.range) + ' 預測' + b.avg_predicted + '%/實際' + b.actual_rate + '%(n=' + b.n + ')';
+        }).join('， ') + '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
   function renderHistory(data) {
     var history = data.history || [];
     var body = document.getElementById("history-body");
@@ -1284,14 +1315,19 @@
       body.innerHTML = emptyState("history", "目前沒有歷史紀錄", "只有「正式執行」且達到 💎頂級 等級的例行賽推薦、或 Edge ≥ 6% 的夏季聯賽推薦才會被記錄下來，跑過幾次正式排程後這裡就會累積資料。");
       return;
     }
+    var byMarket = (data.performance || {}).by_market || {};
     var html = renderTrendChart(data.performance_trend);
+    if (byMarket.spread) html += renderCalibrationCard("讓分（Model A/B）", byMarket.spread);
+    if (byMarket.total) html += renderCalibrationCard("大小分（Model C）", byMarket.total);
     html += '<div class="card row-list hoverable">';
     history.forEach(function (h) {
       var isSummer = h.league === "summer";
+      var isTotal  = h.market === "total";
       html += '<div class="row">' +
         '<div class="row-top">' +
-          '<span class="row-title matchup-line">' + teamLogo(teamNameFromBet(h.bet), 18) + esc(h.bet) +
-            (isSummer ? ' <span class="badge badge-status">夏聯</span>' : '') + '</span>' +
+          '<span class="row-title matchup-line">' + (isTotal ? "" : teamLogo(teamNameFromBet(h.bet), 18)) + esc(h.bet) +
+            (isSummer ? ' <span class="badge badge-status">夏聯</span>' : '') +
+            (isTotal ? ' <span class="badge badge-status">大小分</span>' : '') + '</span>' +
           '<span class="badge ' + resultBadgeClass(h.result) + '">' + esc(h.result) + '</span>' +
         '</div>' +
         '<div class="row-sub">' + esc(h.date) + ' ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) + '</div>' +
