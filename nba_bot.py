@@ -543,6 +543,55 @@ def rest_days_before(team_dates, team, target_date):
     return (target - prev).days if prev is not None else None
 
 
+HOME_ADV_SHRINKAGE_K = 8
+
+
+def build_home_advantage(games):
+    """Measure this season's actual home-court edge from real results
+    instead of assuming the fixed HOME_ADVANTAGE constant applies evenly
+    to all 30 teams -- some arenas (altitude, crowd noise, travel distance
+    for visitors) carry a measurably bigger home boost than others.
+
+    Returns (league_avg, team_adv): league_avg is the league-wide average
+    home-game margin, a data-derived replacement for the old fixed
+    constant; team_adv maps each team to its own home-court edge, shrunk
+    toward league_avg in proportion to how many home games it's actually
+    played (HOME_ADV_SHRINKAGE_K games' worth of weight given to the
+    league average) so a team 3 games into its home slate doesn't get a
+    wild number off a couple of blowouts either way. Falls back to
+    (HOME_ADVANTAGE, {}) when there's no game data yet."""
+    home_margins = []
+    team_home = {}
+    for game in games:
+        if game.get("status") != "Final":
+            continue
+        try:
+            home = normalize_team(game["home_team"]["full_name"])
+            hs = game["home_team_score"]
+            vs = game["visitor_team_score"]
+        except (KeyError, TypeError):
+            continue
+        if not hs or not vs:
+            continue
+        margin = hs - vs
+        home_margins.append(margin)
+        team_home.setdefault(home, []).append(margin)
+
+    if not home_margins:
+        return HOME_ADVANTAGE, {}
+
+    league_avg = sum(home_margins) / len(home_margins)
+    team_adv = {}
+    for team, margins in team_home.items():
+        if team not in TEAM_CN:
+            continue
+        n = len(margins)
+        team_avg = sum(margins) / n
+        shrink = n / (n + HOME_ADV_SHRINKAGE_K)
+        team_adv[team] = league_avg + shrink * (team_avg - league_avg)
+    return league_avg, team_adv
+
+
 def describe_data_source(live_ratings, season_games):
     """Distinguish *why* live ratings fell back to FALLBACK_RATINGS, since
     "靜態備用" alone collapses three very different situations into one
@@ -759,7 +808,7 @@ B2B_HOME_PENALTY = 1.3
 B2B_AWAY_PENALTY = 2.0
 
 
-def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_rest=None):
+def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_rest=None, home_adv=None):
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
     h_stat = dict(h_base)
@@ -790,7 +839,7 @@ def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_r
 
     h_net  = (h_stat["off"] - h_stat["def"]) + h_base.get("form", 0.0)
     a_net  = (a_stat["off"] - a_stat["def"]) + a_base.get("form", 0.0)
-    margin = (h_net - a_net) / 2 + HOME_ADVANTAGE
+    margin = (h_net - a_net) / 2 + (home_adv if home_adv is not None else HOME_ADVANTAGE)
 
     # Zero days' rest (a back-to-back) is a measurable fatigue hit -- worse
     # on the road, where there's travel on top of it. Unknown rest (None,
@@ -1666,6 +1715,7 @@ def run():
     season_games = fetch_season_games()
     live_ratings = build_live_ratings(season_games)
     team_dates   = build_rest_days(season_games)
+    league_home_adv, team_home_adv = build_home_advantage(season_games)
     data_source  = describe_data_source(live_ratings, season_games)
     injuries     = get_injury_report()
     games        = fetch_odds()
@@ -1701,8 +1751,10 @@ def run():
         daily_picks.setdefault(g_date, {})
         home_rest = rest_days_before(team_dates, home, g_date)
         away_rest = rest_days_before(team_dates, away, g_date)
+        home_adv  = team_home_adv.get(home, league_home_adv)
         margin, h_missing, a_missing = predict_margin(
-            home, away, injuries, live_ratings, home_rest=home_rest, away_rest=away_rest,
+            home, away, injuries, live_ratings,
+            home_rest=home_rest, away_rest=away_rest, home_adv=home_adv,
         )
 
         model_total     = predict_total(home, away, live_ratings)
