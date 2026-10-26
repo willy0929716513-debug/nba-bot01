@@ -5,6 +5,7 @@ import logging
 import json
 import time
 import re
+import math
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
@@ -706,17 +707,44 @@ def save_history(history):
         log.error("Failed to save history: %s", e)
 
 
-def calc_performance(history, league="regular"):
+def format_market_calibration_line(label, perf, calib, min_sample=None):
+    """One report line summarizing a single market's (spread or total)
+    settled-bet performance plus calibration -- shared by the Discord
+    message and (via export_site_data) the website, so the two never
+    drift out of sync on what a market's numbers actually mean."""
+    min_sample = MIN_HISTORY_SAMPLE if min_sample is None else min_sample
+    total, wins, win_rate, profit = perf
+    line = "%s: %d 場已結算 | 勝率 %.1f%% | 損益 %+.1f 元\n" % (label, total, win_rate, profit)
+    if calib["n"] > 0:
+        line += "> Brier %.4f ｜ LogLoss %.4f" % (calib["brier"], calib["log_loss"])
+        if calib["mae_margin"] is not None:
+            line += " ｜ 分差 MAE %.1f" % calib["mae_margin"]
+        if calib["mae_total"] is not None:
+            line += " ｜ 總分 MAE %.1f" % calib["mae_total"]
+        line += "\n"
+    if total < min_sample:
+        line += "（樣本數 < %d 場，統計僅供參考，不代表長期表現）\n" % min_sample
+    return line
+
+
+def calc_performance(history, league="regular", market=None):
     """Entries carry a "league" tag ("regular" or "summer") so the two can be
     tracked side by side in one Gist without a regular-season Kelly-based
     profit figure ever getting diluted by summer-league reference-only picks
     that were never actually staked. Untagged entries (written before the
     "league" field existed) default to "regular" for backward compatibility.
+
+    `market` optionally narrows further to "spread" or "total" (untagged
+    entries, written before totals bets existed, default to "spread").
+    Leaving it None keeps every existing call site's original behavior --
+    both markets combined.
     """
     total = win = 0
     profit = 0.0
     for record in history.values():
         if record.get("league", "regular") != league:
+            continue
+        if market is not None and record.get("market", "spread") != market:
             continue
         if record.get("result") not in ["win", "loss"]:
             continue
@@ -729,6 +757,90 @@ def calc_performance(history, league="regular"):
             profit -= stake
     win_rate = (win / total * 100) if total else 0
     return total, win, win_rate, profit
+
+
+def calc_calibration(history, league="regular", market=None):
+    """Brier score, log loss, and (when available) mean absolute error of
+    the model's predicted margin/total against what actually happened --
+    computed only from settled (win/loss) bets, not pushes or pending
+    ones.
+
+    This is pure measurement, not a fitted calibrator: with the sample
+    sizes this project has so far (tens, not the hundreds+ a calibrator
+    needs), fitting something like Platt scaling or isotonic regression
+    would just be overfitting noise. This intentionally stops at
+    reporting the raw numbers plus a bucketed calibration table (does the
+    ~70%-confidence bucket actually win ~70% of the time?) and leaves
+    fitting an actual correction for once there's enough settled history
+    to validate one against, not just tune it on.
+
+    mae_margin/mae_total only reflect records that have both a
+    predicted_* and actual_* field -- older settled bets, graded before
+    those fields existed, are silently skipped for that stat only (they
+    still count toward the Brier/log-loss sample, since prob/result were
+    always stored).
+    """
+    outcomes = []
+    margin_errors = []
+    total_errors = []
+    for record in history.values():
+        if record.get("league", "regular") != league:
+            continue
+        if market is not None and record.get("market", "spread") != market:
+            continue
+        if record.get("result") not in ("win", "loss"):
+            continue
+        prob = record.get("prob")
+        if prob is None:
+            continue
+        outcome = 1.0 if record["result"] == "win" else 0.0
+        outcomes.append((prob, outcome))
+
+        pm, am = record.get("predicted_margin"), record.get("actual_margin")
+        if pm is not None and am is not None:
+            margin_errors.append(abs(pm - am))
+        pt, at = record.get("predicted_total"), record.get("actual_total")
+        if pt is not None and at is not None:
+            total_errors.append(abs(pt - at))
+
+    n = len(outcomes)
+    if n == 0:
+        return {"n": 0, "brier": None, "log_loss": None, "mae_margin": None, "mae_total": None, "buckets": []}
+
+    brier = sum((p - o) ** 2 for p, o in outcomes) / n
+
+    eps = 1e-6
+    log_loss = 0.0
+    for p, o in outcomes:
+        pc = min(max(p, eps), 1 - eps)
+        log_loss += -(o * math.log(pc) + (1 - o) * math.log(1 - pc))
+    log_loss /= n
+
+    bucket_defs = [
+        ("50-60%", 0.5, 0.6), ("60-70%", 0.6, 0.7), ("70-80%", 0.7, 0.8),
+        ("80-90%", 0.8, 0.9), ("90%+",   0.9, 1.01),
+    ]
+    buckets = []
+    for label, lo, hi in bucket_defs:
+        bucket = [(p, o) for p, o in outcomes if lo <= p < hi]
+        if not bucket:
+            continue
+        bn = len(bucket)
+        buckets.append({
+            "range":         label,
+            "n":             bn,
+            "avg_predicted": round(sum(p for p, _ in bucket) / bn * 100, 1),
+            "actual_rate":   round(sum(o for _, o in bucket) / bn * 100, 1),
+        })
+
+    return {
+        "n":         n,
+        "brier":     round(brier, 4),
+        "log_loss":  round(log_loss, 4),
+        "mae_margin": round(sum(margin_errors) / len(margin_errors), 2) if margin_errors else None,
+        "mae_total":  round(sum(total_errors) / len(total_errors), 2) if total_errors else None,
+        "buckets":   buckets,
+    }
 
 
 def find_final_score(games, home_en, away_en, taiwan_date, window_days=1):
@@ -781,7 +893,15 @@ def grade_pending_history(history, games):
     Besides win/loss/push, records the actual final score alongside the
     prediction that was made for it (prob/edge were already stored), so
     the history view doubles as a predicted-vs-actual comparison rather
-    than just a scoreboard.
+    than just a scoreboard. Also stashes actual_margin (spread bets) or
+    actual_total (totals bets) in the same home-relative / game-total
+    frame as predicted_margin/predicted_total, so calc_calibration() can
+    compute a real MAE instead of just win/loss.
+
+    Totals entries are keyed "<game_id>_total" (see run()'s totals
+    history-write block) specifically so they don't collide with a
+    spread entry for the same game in the same dict; strip that suffix
+    before parsing the embedded team/date info out of the key.
     """
     graded = 0
     for game_id, record in history.items():
@@ -790,10 +910,40 @@ def grade_pending_history(history, games):
         if record.get("result") != "pending":
             continue
 
+        market  = record.get("market", "spread")
+        base_id = game_id[:-len("_total")] if market == "total" and game_id.endswith("_total") else game_id
+
         try:
-            teams_part, date_part = game_id.rsplit("_", 1)
+            teams_part, date_part = base_id.rsplit("_", 1)
             away_en, home_en = teams_part.split("@", 1)
         except ValueError:
+            continue
+
+        if market == "total":
+            m = re.match(r"^(大分 Over|小分 Under)\s+([+-]?\d+(?:\.\d+)?)$", record.get("bet", ""))
+            if not m:
+                continue
+            side_label, line_str = m.group(1), m.group(2)
+
+            score = find_final_score(games, home_en, away_en, date_part)
+            if score is None:
+                continue
+
+            line = float(line_str)
+            actual_total = score["home_score"] + score["away_score"]
+            diff = actual_total - line
+            if diff == 0:
+                record["result"] = "push"
+            elif (side_label == "大分 Over") == (diff > 0):
+                record["result"] = "win"
+            else:
+                record["result"] = "loss"
+            record["actual_total"] = actual_total
+            record["final_score"] = "%s %d - %d %s" % (
+                TEAM_CN.get(away_en, away_en), score["away_score"],
+                score["home_score"], TEAM_CN.get(home_en, home_en),
+            )
+            graded += 1
             continue
 
         m = re.match(r"^(.+?)\s+([+-]?\d+(?:\.\d+)?)$", record.get("bet", ""))
@@ -821,6 +971,7 @@ def grade_pending_history(history, games):
             record["result"] = "loss"
         else:
             record["result"] = "push"
+        record["actual_margin"] = score["home_score"] - score["away_score"]
         record["final_score"] = "%s %d - %d %s" % (
             TEAM_CN.get(away_en, away_en), score["away_score"],
             score["home_score"], TEAM_CN.get(home_en, home_en),
@@ -1610,6 +1761,7 @@ def build_history_list(history, limit=30):
             "kelly_stake": h.get("kelly_stake"),
             "result":      RESULT_ZH.get(h.get("result", "pending"), h.get("result", "pending")),
             "league":      h.get("league", "regular"),
+            "market":      h.get("market", "spread"),
             "final_score": h.get("final_score"),
         }
         for h in items[:limit]
@@ -1737,6 +1889,21 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
             "win_rate":              round(win_rate, 1),
             "profit":                round(profit, 1),
             "min_sample":            MIN_HISTORY_SAMPLE,
+            "by_market": {
+                m: {
+                    "performance": {
+                        "total_recommendations": t,
+                        "wins":                  w,
+                        "win_rate":              round(wr, 1),
+                        "profit":                round(pf, 1),
+                    },
+                    "calibration": calc_calibration(history, league="regular", market=m),
+                }
+                for m, (t, w, wr, pf) in (
+                    ("spread", calc_performance(history, league="regular", market="spread")),
+                    ("total",  calc_performance(history, league="regular", market="total")),
+                )
+            },
         },
         "summer_league":      summer_league,
         "history":            build_history_list(history),
@@ -1937,14 +2104,16 @@ def run():
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
-                                "date":        g_date,
-                                "bet":         "%s %+.1f" % (TEAM_CN.get(name, name), line),
-                                "book":        book.get("title", "?"),
-                                "price":       price,
-                                "prob":        round(prob, 4),
-                                "edge":        round(edge, 4),
-                                "kelly_stake": stake,
-                                "result":      existing_h.get("result", "pending") if existing_h else "pending",
+                                "date":             g_date,
+                                "market":           "spread",
+                                "bet":              "%s %+.1f" % (TEAM_CN.get(name, name), line),
+                                "book":             book.get("title", "?"),
+                                "price":            price,
+                                "prob":             round(prob, 4),
+                                "edge":             round(edge, 4),
+                                "kelly_stake":      stake,
+                                "predicted_margin": round(margin, 2),
+                                "result":           existing_h.get("result", "pending") if existing_h else "pending",
                             }
 
         # Same edge-vs-market approach as spreads, applied to the Over/Under
@@ -2030,6 +2199,27 @@ def run():
                             "market_total":    t_consensus,
                         }
 
+                    # Keyed by game_id + "_total" (not the bare game_id) --
+                    # a spread pick and a totals pick for the same game are
+                    # two different bets and must not overwrite each other
+                    # in the same history dict.
+                    if t_in_range and t_edge > 0.12 and is_official_run and g_date == today_s:
+                        total_hist_id = game_id + "_total"
+                        existing_th = history.get(total_hist_id)
+                        if existing_th is None or t_edge > existing_th.get("edge", 0):
+                            history[total_hist_id] = {
+                                "date":            g_date,
+                                "market":          "total",
+                                "bet":             "%s %.1f" % (side_cn, total_line),
+                                "book":            book.get("title", "?"),
+                                "price":           t_price,
+                                "prob":            round(t_prob, 4),
+                                "edge":            round(t_edge, 4),
+                                "kelly_stake":     t_stake,
+                                "predicted_total": round(model_total, 2),
+                                "result":          existing_th.get("result", "pending") if existing_th else "pending",
+                            }
+
     total_rec, wins, win_rate, profit = calc_performance(history, league="regular")
     regular_history_count = sum(1 for r in history.values() if r.get("league", "regular") == "regular")
     small_sample_note = "（樣本數 < %d 場，統計僅供參考，不代表長期表現）\n" % MIN_HISTORY_SAMPLE
@@ -2041,6 +2231,19 @@ def run():
     ) % (regular_history_count, total_rec, win_rate, profit)
     if total_rec < MIN_HISTORY_SAMPLE:
         perf_msg += small_sample_note
+
+    # Model A (spread) and Model C (totals) get scored separately -- a
+    # combined win rate can't tell you whether one market is actually
+    # working and the other isn't, since a hot run on one masks a cold
+    # one on the other.
+    spread_perf  = calc_performance(history, league="regular", market="spread")
+    spread_calib = calc_calibration(history, league="regular", market="spread")
+    totals_perf  = calc_performance(history, league="regular", market="total")
+    totals_calib = calc_calibration(history, league="regular", market="total")
+    if spread_calib["n"] or totals_calib["n"]:
+        perf_msg += "\n📐 **分市場校準**（Brier/LogLoss 越低越好；MAE 是預測與實際的平均誤差）\n"
+        perf_msg += format_market_calibration_line("讓分", spread_perf, spread_calib)
+        perf_msg += format_market_calibration_line("大小分", totals_perf, totals_calib)
 
     summer_total, summer_wins, summer_win_rate, _ = calc_performance(history, league="summer")
     if summer_total or any(r.get("league") == "summer" for r in history.values()):
