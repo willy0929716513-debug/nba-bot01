@@ -980,7 +980,7 @@
     var rs = data.regular_season || {};
     var days = rs.days || [];
     var body = document.getElementById("regular-season-body");
-    var anyPicks = days.some(function (d) { return d.picks && d.picks.length; });
+    var anyPicks = days.some(function (d) { return (d.picks && d.picks.length) || (d.totals && d.totals.length); });
     if (!anyPicks) {
       body.innerHTML = emptyState("inbox", "目前沒有賽事資料",
         "盤口來源目前沒有任何例行賽賽事可供分析，等下一次排程抓到賽程後就會顯示。");
@@ -988,10 +988,12 @@
     }
     var html = "";
     days.forEach(function (day) {
-      if (!day.picks || !day.picks.length) return;
+      var hasPicks  = day.picks && day.picks.length;
+      var hasTotals = day.totals && day.totals.length;
+      if (!hasPicks && !hasTotals) return;
       html += '<div class="subhead">' + esc(day.label) + '</div>';
       html += '<div class="card row-list hoverable">';
-      day.picks.forEach(function (p) {
+      (day.picks || []).forEach(function (p) {
         html += '<div class="row">' +
           '<div class="row-top">' +
             '<span class="row-title">' + matchupWithLogos(p.matchup) + '</span>' +
@@ -1009,6 +1011,26 @@
             '<span class="stat">Kelly 建議 <b>$' + Number(p.kelly_stake).toFixed(1) + '</b></span>' +
           '</div>' +
           probMeter(p.prob) +
+        '</div>';
+      });
+      (day.totals || []).forEach(function (t) {
+        html += '<div class="row">' +
+          '<div class="row-top">' +
+            '<span class="row-title">' + matchupWithLogos(t.matchup) + '</span>' +
+            '<span class="row-time">' + esc(t.start_time) + '</span>' +
+          '</div>' +
+          '<div class="row-sub">' +
+            '<span class="badge badge-status" style="margin-right:6px;">大小分</span>' +
+            '<span class="badge ' + tierBadgeClass(t.tier) + '" style="margin-right:6px;">' + esc(t.tier) + '</span>' +
+            '投注 <b>' + esc(t.bet) + '</b> @ <b>' + Number(t.price).toFixed(2) + '</b>（' + esc(t.book) + '）' +
+          '</div>' +
+          '<div class="row-sub">模型預測 <b>' + Number(t.model_total).toFixed(1) + '</b> 分 ｜ 共識 <b>' + Number(t.market_total).toFixed(1) + '</b> 分</div>' +
+          '<div class="row-stats">' +
+            '<span class="stat">機率 <b>' + Number(t.prob).toFixed(1) + '%</b></span>' +
+            '<span class="stat">Edge <b>' + (t.edge >= 0 ? "+" : "") + Number(t.edge).toFixed(1) + '%</b></span>' +
+            '<span class="stat">Kelly 建議 <b>$' + Number(t.kelly_stake).toFixed(1) + '</b></span>' +
+          '</div>' +
+          probMeter(t.prob) +
         '</div>';
       });
       html += '</div>';
@@ -1323,7 +1345,10 @@
   function renderRegularSeasonTrio(data) {
     var days = (data.regular_season || {}).days || [];
     var allPicks = [];
-    days.forEach(function (d) { (d.picks || []).forEach(function (p) { allPicks.push(p); }); });
+    days.forEach(function (d) {
+      (d.picks || []).forEach(function (p) { allPicks.push(p); });
+      (d.totals || []).forEach(function (t) { allPicks.push(t); });
+    });
     var qualifying = allPicks.filter(function (p) { return p.meets_threshold; });
     var el = document.getElementById("regular-season-trio");
     if (!qualifying.length) { el.innerHTML = ""; return; }
@@ -1331,7 +1356,7 @@
     el.innerHTML = '<div class="trio">' +
       '<div class="trio-tile"><div class="v">' + esc(tierGrade(best.tier)) + '</div><div class="l">推薦等級</div><div class="s">' + esc(best.tier) + '</div></div>' +
       '<div class="trio-tile"><div class="v">' + qualifying.length + '<small>場</small></div><div class="l">今日精選</div><div class="s">符合門檻賽事</div></div>' +
-      '<div class="trio-tile"><div class="v">' + Number(best.prob).toFixed(0) + '<small>%</small></div><div class="l">勝率預估</div><div class="s">最高 Edge 之推薦</div></div>' +
+      '<div class="trio-tile"><div class="v">' + Number(best.prob).toFixed(0) + '<small>%</small></div><div class="l">機率預估</div><div class="s">最高 Edge 之推薦</div></div>' +
       '</div>';
   }
 
