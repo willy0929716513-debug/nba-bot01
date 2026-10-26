@@ -298,8 +298,9 @@ def safe_get(url, headers=None, params=None, retries=3, timeout=15, max_wait=Non
     return None
 
 
-def _player_marked_out(text, player, team_nickname, out_keywords, skip_keywords):
-    """Scan every occurrence of `player` in `text`, not just the first.
+def _player_status(text, player, team_nickname, out_keywords, questionable_keywords, clear_keywords):
+    """Scan every occurrence of `player` in `text`, not just the first, and
+    return "out", "questionable", or None.
 
     Many players share a surname across the league (Davis, Brown, Williams,
     Green, Jones, ...), and IMPACT_PLAYERS only stores last names, so a
@@ -307,24 +308,47 @@ def _player_marked_out(text, player, team_nickname, out_keywords, skip_keywords)
     player, a nav link, an unrelated story) and never look further. Each
     occurrence is only trusted if the team's nickname also appears nearby,
     which is how RotoWire groups players under a team heading.
+
+    An occurrence tagged with a clear_keywords word ("available", "good to
+    go" -- RotoWire's own all-clear wording, not a risk signal) is treated
+    as no signal at all, not downgraded to "questionable". "out" from any
+    occurrence wins outright and returns immediately, since it's strictly
+    stronger evidence than "questionable" found elsewhere for the same
+    player; "questionable" is only the final answer if no occurrence ever
+    confirms "out".
     """
     start = 0
+    best = None
     while True:
         idx = text.find(player, start)
         if idx == -1:
-            return False
+            return best
         start = idx + len(player)
         wide_window = text[max(0, idx - 300):idx + 300]
         if team_nickname not in wide_window:
             continue
         local_window = text[max(0, idx - 80):idx + 200]
-        if any(s in local_window for s in skip_keywords):
+        if any(s in local_window for s in clear_keywords):
             continue
         if any(s in local_window for s in out_keywords):
-            return True
+            return "out"
+        if best is None and any(s in local_window for s in questionable_keywords):
+            best = "questionable"
 
 
 def get_injury_report():
+    """Returns {"out": {team: [players]}, "questionable": {team: [players]}}.
+
+    "questionable" used to be scanned for only to *suppress* false "out"
+    matches (a mention near "questionable" was skipped rather than wrongly
+    counted as out) and then thrown away -- a star tagged questionable got
+    treated as fully healthy right up until RotoWire confirmed them out,
+    even though real uncertainty about their availability existed well
+    before that. Now that signal is kept and fed into predict_margin's
+    existing "limited" penalty tier (LIMITED_PENALTY), which previously
+    could only ever be populated by manually hardcoding a name into
+    LIMITED_PLAYERS.
+    """
     try:
         url  = "https://www.rotowire.com/basketball/injury-report.php"
         hdrs = {
@@ -333,37 +357,44 @@ def get_injury_report():
         r = requests.get(url, headers=hdrs, timeout=15)
         r.raise_for_status()
 
-        injured = {}
+        out = {}
+        questionable = {}
         text = r.text.lower()
 
-        out_keywords  = ["ruled out", "will not play", "is out", "has been ruled out", "out ("]
-        skip_keywords = ["questionable", "probable", "available", "good to go", "day-to-day"]
+        out_keywords           = ["ruled out", "will not play", "is out", "has been ruled out", "out ("]
+        questionable_keywords  = ["questionable", "probable", "day-to-day"]
+        clear_keywords         = ["available", "good to go"]
 
         for full_team in IMPACT_PLAYERS:
             nickname = full_team.split()[-1].lower()
             for player in IMPACT_PLAYERS[full_team]:
                 if player not in text:
                     continue
-                if _player_marked_out(text, player, nickname, out_keywords, skip_keywords):
-                    if player not in injured.get(full_team, []):
-                        injured.setdefault(full_team, []).append(player)
+                status = _player_status(text, player, nickname, out_keywords, questionable_keywords, clear_keywords)
+                if status == "out" and player not in out.get(full_team, []):
+                    out.setdefault(full_team, []).append(player)
+                elif status == "questionable" and player not in questionable.get(full_team, []):
+                    questionable.setdefault(full_team, []).append(player)
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
-                if p in SEASON_OUT and p not in injured.get(team, []):
-                    injured.setdefault(team, []).append(p)
+                if p in SEASON_OUT and p not in out.get(team, []):
+                    out.setdefault(team, []).append(p)
 
-        log.info("RotoWire injury loaded: %d entries", sum(len(v) for v in injured.values()))
-        return injured
+        log.info(
+            "RotoWire injury loaded: %d out, %d questionable",
+            sum(len(v) for v in out.values()), sum(len(v) for v in questionable.values()),
+        )
+        return {"out": out, "questionable": questionable}
 
     except Exception as e:
         log.warning("RotoWire failed: %s, using SEASON_OUT fallback", e)
         fallback = {}
         for team, players in IMPACT_PLAYERS.items():
-            out = [p for p in players if p in SEASON_OUT]
-            if out:
-                fallback[team] = out
-        return fallback
+            season_out = [p for p in players if p in SEASON_OUT]
+            if season_out:
+                fallback[team] = season_out
+        return {"out": fallback, "questionable": {}}
 
 
 def fetch_season_games():
@@ -815,12 +846,13 @@ def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_r
     a_stat = dict(a_base)
 
     def get_missing(team):
-        injured_lower = [p.lower() for p in injury_data.get(team, [])]
+        out_lower = [p.lower() for p in injury_data.get("out", {}).get(team, [])]
+        q_lower   = [p.lower() for p in injury_data.get("questionable", {}).get(team, [])]
         result = []
         for k in IMPACT_PLAYERS.get(team, []):
-            if k in SEASON_OUT or any(k in p for p in injured_lower):
+            if k in SEASON_OUT or any(k in p for p in out_lower):
                 result.append((k, "out"))
-            elif k in LIMITED_PLAYERS:
+            elif k in LIMITED_PLAYERS or any(k in p for p in q_lower):
                 result.append((k, "limited"))
         return result
 
