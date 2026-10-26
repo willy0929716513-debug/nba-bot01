@@ -64,6 +64,13 @@ MAX_SPREAD       = 15.0
 MIN_SPREAD       = 3.0
 MIN_PRICE        = 1.75
 MAX_PRICE        = 2.15
+# NBA game totals have no settled, backtested std of their own yet (same
+# caveat as every other constant here) -- set a little above the margin's
+# DYNAMIC_STD_BASE as a starting assumption, since a total sums two teams'
+# independent scoring variance rather than one team's margin swing.
+TOTAL_STD_BASE   = 15.0
+MIN_TOTAL_PRICE  = 1.75
+MAX_TOTAL_PRICE  = 2.15
 DISCORD_CHAR_LIMIT = 1900
 BANKROLL         = 1000.0
 KELLY_FRACTION   = 0.20
@@ -923,9 +930,11 @@ def get_consensus_line(bookmakers, team_name, exclude_book=None):
     return (sum(lines) / len(lines)) if lines else None
 
 
-def get_consensus_total(bookmakers):
+def get_consensus_total(bookmakers, exclude_book=None):
     totals = []
     for book in bookmakers:
+        if exclude_book is not None and book.get("title") == exclude_book:
+            continue
         for market in book.get("markets", []):
             if market.get("key") != "totals":
                 continue
@@ -1465,7 +1474,7 @@ def display_player_name(key):
 
 
 
-def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks):
+def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks, daily_totals=None):
     """Every regular-season game on the next upcoming slate, not just the
     ones with a qualifying recommendation -- a full card so the dashboard's
     "賽程" tab answers "what's coming up" by itself. Final scores are filled
@@ -1495,6 +1504,10 @@ def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks)
     picks_for_date = {
         gid for gid, p in daily_picks.get(target_date, {}).items() if p["meets_threshold"]
     }
+    if daily_totals:
+        picks_for_date |= {
+            gid for gid, p in daily_totals.get(target_date, {}).items() if p["meets_threshold"]
+        }
 
     out  = []
     seen = set()
@@ -1653,11 +1666,13 @@ def build_power_rankings(live_ratings):
 
 def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
                       total_rec, wins, win_rate, profit, summer_league, history,
-                      schedule, parlay, power_rankings):
+                      schedule, parlay, power_rankings, daily_totals=None):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
+    daily_totals = daily_totals or {}
     days = []
-    for date in sorted(daily_picks):
-        picks = sorted(daily_picks[date].values(), key=lambda x: x["edge"], reverse=True)
+    for date in sorted(set(daily_picks) | set(daily_totals)):
+        picks  = sorted(daily_picks.get(date, {}).values(), key=lambda x: x["edge"], reverse=True)
+        totals = sorted(daily_totals.get(date, {}).values(), key=lambda x: x["edge"], reverse=True)
         days.append({
             "date":  date,
             "label": "今日賽事" if date == today_s else ("預告 %s" % date),
@@ -1679,9 +1694,27 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
                 }
                 for p in picks
             ],
+            "totals": [
+                {
+                    "tier":             t["tier"],
+                    "meets_threshold":  t["meets_threshold"],
+                    "matchup":          t["matchup"],
+                    "start_time":       t["start_time"],
+                    "bet":              t["bet"],
+                    "price":            t["price"],
+                    "book":             t["book"],
+                    "prob":             round(t["prob"] * 100, 1),
+                    "edge":             round(t["edge"] * 100, 1),
+                    "kelly_stake":      t["kelly_stake"],
+                    "model_total":      t["model_total"],
+                    "market_total":     t["market_total"],
+                }
+                for t in totals
+            ],
         })
 
-    qualifying_picks = [p for d in daily_picks.values() for p in d.values() if p["meets_threshold"]]
+    qualifying_picks = [p for d in daily_picks.values() for p in d.values() if p["meets_threshold"]] + \
+                        [p for d in daily_totals.values() for p in d.values() if p["meets_threshold"]]
     total_picks = len(qualifying_picks)
     avg_edge    = (
         sum(p["edge"] for p in qualifying_picks) / total_picks
@@ -1760,7 +1793,8 @@ def run():
         log.info("No regular-season games and no Summer League data; nothing to report")
         return
 
-    daily_picks = {}
+    daily_picks  = {}
+    daily_totals = {}
 
     for g in games:
         try:
@@ -1779,8 +1813,11 @@ def run():
         away       = normalize_team(g.get("away_team", ""))
         game_id    = "%s@%s_%s" % (away, home, g_date)
         bookmakers = g.get("bookmakers", [])
+        away_cn    = TEAM_CN.get(away, away)
+        home_cn    = TEAM_CN.get(home, home)
 
         daily_picks.setdefault(g_date, {})
+        daily_totals.setdefault(g_date, {})
         home_rest = rest_days_before(team_dates, home, g_date)
         away_rest = rest_days_before(team_dates, away, g_date)
         home_adv  = team_home_adv.get(home, league_home_adv)
@@ -1859,8 +1896,6 @@ def run():
                         tier = "⭐ 穩定"
 
                     bet_cn        = TEAM_CN.get(name, name)
-                    away_cn       = TEAM_CN.get(away, away)
-                    home_cn       = TEAM_CN.get(home, home)
                     missing_str   = "狀況: " + ", ".join(missing) if missing else "陣容完整"
                     consensus_str = "共識線: %+.1f" % consensus
 
@@ -1912,6 +1947,89 @@ def run():
                                 "result":      existing_h.get("result", "pending") if existing_h else "pending",
                             }
 
+        # Same edge-vs-market approach as spreads, applied to the Over/Under
+        # total instead of the margin -- predict_total()/get_consensus_total()
+        # were already being computed above for the informational ou_note,
+        # but that number never became an actual recommendable bet with its
+        # own edge/probability/Kelly stake until now. Kept as a separate
+        # daily_totals track rather than merged into daily_picks, since a
+        # total isn't tied to either team the way a spread pick is, and a
+        # game can reasonably have both a spread pick and a totals pick at
+        # once. Not yet wired into the Gist history/auto-grading -- that
+        # expects a "TeamName +/-line" bet string, which a totals pick isn't.
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "totals":
+                    continue
+                book_consensus_total = get_consensus_total(bookmakers, exclude_book=book.get("title"))
+                for outcome in market.get("outcomes", []):
+                    side = outcome.get("name", "").lower()
+                    if side not in ("over", "under"):
+                        continue
+                    total_line = outcome.get("point")
+                    t_price    = outcome.get("price", 0)
+                    if total_line is None or not t_price or t_price <= 0:
+                        continue
+
+                    t_consensus = book_consensus_total if book_consensus_total is not None else total_line
+                    # Over wants the lowest available line (easier to clear);
+                    # Under wants the highest (easier to stay below) -- the
+                    # opposite of each other, unlike a spread's single
+                    # "higher point value always better" rule.
+                    total_advantage = (t_consensus - total_line) if side == "over" else (total_line - t_consensus)
+                    if total_advantage < 0:
+                        continue
+
+                    prob_over = simulate_cover(model_total - total_line, 0, std=TOTAL_STD_BASE)
+                    t_prob    = prob_over if side == "over" else (1 - prob_over)
+                    t_edge    = t_prob - (1 / t_price)
+
+                    t_in_range = MIN_TOTAL_PRICE < t_price <= MAX_TOTAL_PRICE
+                    t_meets_threshold = t_in_range and t_edge >= EDGE_THRESHOLD
+
+                    t_stake = kelly_stake(t_prob, t_price, BANKROLL)
+
+                    if not t_meets_threshold:
+                        t_tier = "👀 觀察中"
+                    elif t_edge > 0.12:
+                        t_tier = "💎 頂級"
+                    elif t_edge > 0.09:
+                        t_tier = "🔥 強力"
+                    else:
+                        t_tier = "⭐ 穩定"
+
+                    side_cn = "大分 Over" if side == "over" else "小分 Under"
+                    t_msg = (
+                        "**[%s] %s @ %s** (%s)\n"
+                        "投注: `%s %.1f` @ **%.2f** (%s)\n"
+                        "> 模型預測 %.1f 分 | 共識 %.1f 分\n"
+                        "> 機率: %.1f%% | Edge: %+.1f%% | Kelly建議: $%.1f\n"
+                    ) % (
+                        t_tier, away_cn, home_cn,
+                        c_time_tw.strftime("%m/%d %H:%M"),
+                        side_cn, total_line, t_price, book.get("title", "?"),
+                        model_total, t_consensus,
+                        t_prob * 100, t_edge * 100, t_stake,
+                    )
+
+                    existing_t = daily_totals[g_date].get(game_id)
+                    if existing_t is None or t_edge > existing_t["edge"]:
+                        daily_totals[g_date][game_id] = {
+                            "edge":            t_edge,
+                            "prob":            t_prob,
+                            "price":           t_price,
+                            "kelly_stake":     t_stake,
+                            "msg":             t_msg,
+                            "tier":            t_tier,
+                            "meets_threshold": t_meets_threshold,
+                            "matchup":         "%s @ %s" % (away_cn, home_cn),
+                            "start_time":      c_time_tw.strftime("%m/%d %H:%M"),
+                            "bet":             "%s %.1f" % (side_cn, total_line),
+                            "book":            book.get("title", "?"),
+                            "model_total":     model_total,
+                            "market_total":    t_consensus,
+                        }
+
     total_rec, wins, win_rate, profit = calc_performance(history, league="regular")
     regular_history_count = sum(1 for r in history.values() if r.get("league", "regular") == "regular")
     small_sample_note = "（樣本數 < %d 場，統計僅供參考，不代表長期表現）\n" % MIN_HISTORY_SAMPLE
@@ -1934,7 +2052,8 @@ def run():
         if summer_total < MIN_HISTORY_SAMPLE:
             perf_msg += small_sample_note
 
-    qualifying_picks = [p for d in daily_picks.values() for p in d.values() if p["meets_threshold"]]
+    qualifying_picks = [p for d in daily_picks.values() for p in d.values() if p["meets_threshold"]] + \
+                        [p for d in daily_totals.values() for p in d.values() if p["meets_threshold"]]
     total_picks = len(qualifying_picks)
     avg_edge    = (
         sum(p["edge"] for p in qualifying_picks) / total_picks
@@ -1950,13 +2069,15 @@ def run():
     else:
         output += "🔧 測試版本（不寫入回測）\n"
 
-    if not daily_picks:
+    if not daily_picks and not daily_totals:
         output += "\n今日無賽事資料。\n"
     else:
-        for date in sorted(daily_picks):
+        for date in sorted(set(daily_picks) | set(daily_totals)):
             label = "📅 今日賽事" if date == today_s else ("⏭ 預告 %s" % date)
             output += "\n%s\n" % label
-            for p in sorted(daily_picks[date].values(), key=lambda x: x["edge"], reverse=True):
+            for p in sorted(daily_picks.get(date, {}).values(), key=lambda x: x["edge"], reverse=True):
+                output += p["msg"]
+            for p in sorted(daily_totals.get(date, {}).values(), key=lambda x: x["edge"], reverse=True):
                 output += p["msg"]
             output += "-" * 30 + "\n"
 
@@ -1971,7 +2092,7 @@ def run():
             parlay["combined_price"], parlay["combined_prob"], parlay["note"]
         )
 
-    schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks)
+    schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks, daily_totals)
 
     summer_league["performance"] = {
         "total_recommendations": summer_total,
@@ -1996,6 +2117,7 @@ def run():
         summer_league=summer_league, history=history,
         schedule=schedule, parlay=parlay,
         power_rankings=build_power_rankings(live_ratings),
+        daily_totals=daily_totals,
     )
 
     log.info("Sending to Discord, length: %d", len(output))
