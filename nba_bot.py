@@ -1058,6 +1058,42 @@ def predict_total(home, away, live_ratings):
     return round(home_pts + away_pts, 1)
 
 
+def get_consensus_moneyline_prob(bookmakers, team_name):
+    """Devigged win probability implied by the moneyline (h2h) market,
+    averaged across books -- a second, more direct read on what the
+    market thinks the win probability actually is, versus backing one out
+    indirectly through the spread and our own simulate_cover() Gaussian
+    assumption. Devig per book (normalize that book's own both-sides
+    1/price to sum to 1) before averaging, so each book's own vig cancels
+    out instead of surviving into the average.
+
+    Purely informational -- displayed next to the model's own probability
+    for comparison, but does NOT feed into prob/edge/Kelly anywhere in
+    this file. The spread pipeline already sizes real money off its
+    existing math, and there isn't yet enough settled history to tell
+    whether blending this in would actually improve calibration rather
+    than just add noise, so for now it stays a side-by-side comparison.
+
+    None if no h2h market data is available for this game (most books
+    post spreads more reliably than moneylines on every game).
+    """
+    probs = []
+    for book in bookmakers:
+        for market in book.get("markets", []):
+            if market.get("key") != "h2h":
+                continue
+            raw = {}
+            for outcome in market.get("outcomes", []):
+                name  = normalize_team(outcome.get("name", ""))
+                price = outcome.get("price")
+                if price and price > 0:
+                    raw[name] = 1.0 / price
+            total = sum(raw.values())
+            if total > 0 and team_name in raw:
+                probs.append(raw[team_name] / total)
+    return (sum(probs) / len(probs)) if probs else None
+
+
 def get_consensus_line(bookmakers, team_name, exclude_book=None):
     """Average posted spread for `team_name` across books, as a baseline to
     check whether one specific book's line is unusually favorable ("value").
@@ -1816,9 +1852,72 @@ def build_power_rankings(live_ratings):
     return rows
 
 
+ELO_INITIAL = 1500.0
+ELO_K       = 20.0
+
+
+def build_elo_ratings(games):
+    """Classic sequential Elo, replayed walk-forward over this season's
+    completed games in chronological order -- each team starts at
+    ELO_INITIAL, and a team's rating after processing date X depends only
+    on games on or before X, never on anything later. That makes this
+    inherently leak-free without needing special-casing: sorting by date
+    before the single forward pass is the whole mechanism.
+
+    Tracked as a second, independent rating system alongside
+    build_live_ratings()' SRS approach -- not blended into picks or used
+    to override them. There isn't yet enough settled history in this
+    project's own Gist record to tell whether Elo or SRS actually
+    correlates better with real outcomes here, so for now both are just
+    reported side by side on the dashboard for comparison; K=20 and the
+    1500 starting point are the standard textbook defaults, not values
+    tuned against this project's own results.
+    """
+    completed = []
+    for game in games:
+        if game.get("status") != "Final":
+            continue
+        try:
+            home = normalize_team(game["home_team"]["full_name"])
+            away = normalize_team(game["visitor_team"]["full_name"])
+            hs   = game["home_team_score"]
+            vs   = game["visitor_team_score"]
+            g_date = str(game.get("date", ""))[:10]
+        except (KeyError, TypeError):
+            continue
+        if not hs or not vs:
+            continue
+        completed.append({"home": home, "away": away, "hs": hs, "vs": vs, "date": g_date})
+    completed.sort(key=lambda g: g["date"])
+
+    ratings = {}
+    for g in completed:
+        if g["home"] not in TEAM_CN or g["away"] not in TEAM_CN:
+            continue
+        r_home = ratings.setdefault(g["home"], ELO_INITIAL)
+        r_away = ratings.setdefault(g["away"], ELO_INITIAL)
+        expected_home = 1.0 / (1.0 + 10 ** ((r_away - r_home) / 400.0))
+        actual_home   = 1.0 if g["hs"] > g["vs"] else 0.0
+        delta = ELO_K * (actual_home - expected_home)
+        ratings[g["home"]] = r_home + delta
+        ratings[g["away"]] = r_away - delta
+
+    return {team: round(r, 1) for team, r in ratings.items()}
+
+
+def build_elo_rankings(elo_ratings):
+    """Rank order for the dashboard, mirroring build_power_rankings()'
+    shape so the frontend can render them the same way."""
+    rows = [{"team": TEAM_CN.get(team, team), "rating": rating} for team, rating in elo_ratings.items()]
+    rows.sort(key=lambda x: x["rating"], reverse=True)
+    for i, row in enumerate(rows, 1):
+        row["rank"] = i
+    return rows
+
+
 def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
                       total_rec, wins, win_rate, profit, summer_league, history,
-                      schedule, parlay, power_rankings, daily_totals=None):
+                      schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     daily_totals = daily_totals or {}
     days = []
@@ -1843,6 +1942,10 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
                     "missing":          p["missing"],
                     "consensus":        p["consensus"],
                     "ou_note":          p["ou_note"],
+                    "market_implied_prob": (
+                        round(p["market_implied_prob"] * 100, 1)
+                        if p.get("market_implied_prob") is not None else None
+                    ),
                 }
                 for p in picks
             ],
@@ -1911,6 +2014,7 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
         "schedule":           schedule,
         "parlay":             parlay,
         "power_rankings":     power_rankings,
+        "elo_rankings":       elo_rankings or [],
     }
 
     try:
@@ -2065,19 +2169,24 @@ def run():
                     bet_cn        = TEAM_CN.get(name, name)
                     missing_str   = "狀況: " + ", ".join(missing) if missing else "陣容完整"
                     consensus_str = "共識線: %+.1f" % consensus
+                    market_implied_prob = get_consensus_moneyline_prob(bookmakers, name)
 
+                    market_prob_note = (
+                        "\n> 市場隱含勝率（moneyline）: %.1f%%（純比較，未納入計算）" % (market_implied_prob * 100)
+                        if market_implied_prob is not None else ""
+                    )
                     msg = (
                         "**[%s] %s @ %s** (%s)\n"
                         "投注: `%s %+.1f` @ **%.2f** (%s)\n"
                         "> %s | %s\n"
-                        "> 勝率: %.1f%% | Edge: %+.1f%% | Kelly建議: $%.1f\n"
+                        "> 勝率: %.1f%% | Edge: %+.1f%% | Kelly建議: $%.1f%s\n"
                         "> %s\n"
                     ) % (
                         tier, away_cn, home_cn,
                         c_time_tw.strftime("%m/%d %H:%M"),
                         bet_cn, line, price, book.get("title", "?"),
                         missing_str, consensus_str,
-                        prob * 100, edge * 100, stake,
+                        prob * 100, edge * 100, stake, market_prob_note,
                         ou_note,
                     )
 
@@ -2098,6 +2207,7 @@ def run():
                             "missing":     missing_str,
                             "consensus":   consensus_str,
                             "ou_note":     ou_note,
+                            "market_implied_prob": market_implied_prob,
                         }
 
                     if in_range and edge > 0.12 and is_official_run and g_date == today_s:
@@ -2321,6 +2431,7 @@ def run():
         schedule=schedule, parlay=parlay,
         power_rankings=build_power_rankings(live_ratings),
         daily_totals=daily_totals,
+        elo_rankings=build_elo_rankings(build_elo_ratings(season_games)),
     )
 
     log.info("Sending to Discord, length: %d", len(output))
