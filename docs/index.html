@@ -1360,7 +1360,9 @@
     document.getElementById("regular-season-trio").innerHTML = "";
   }
 
+  var lastLoadAt = 0;
   function loadData() {
+    lastLoadAt = Date.now();
     var refreshIcon = document.getElementById("refresh-btn");
     if (refreshIcon) refreshIcon.classList.add("spinning");
     return fetch("data/latest.json?t=" + Date.now())
@@ -1387,6 +1389,24 @@
     var card = document.getElementById("trigger-card");
     card.classList.add("open");
     card.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  // The backend updates data/latest.json roughly once a day, but a visitor
+  // who just leaves the page open has no way to know that -- the page
+  // would otherwise look permanently "stuck" on whatever it fetched when
+  // first opened. Re-fetch periodically while the tab is actually visible
+  // (background tabs are often throttled by the browser anyway, so this
+  // skips wasted fetches), and also catch up immediately on returning to
+  // a tab that's been hidden/backgrounded longer than that interval,
+  // since a backgrounded setInterval can be paused rather than just slowed.
+  var AUTO_REFRESH_MS = 5 * 60 * 1000;
+  setInterval(function () {
+    if (document.visibilityState === "visible") loadData();
+  }, AUTO_REFRESH_MS);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && Date.now() - lastLoadAt > AUTO_REFRESH_MS) {
+      loadData();
+    }
   });
 
   showSkeletons();
