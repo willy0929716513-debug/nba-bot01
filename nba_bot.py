@@ -727,6 +727,32 @@ def format_market_calibration_line(label, perf, calib, min_sample=None):
     return line
 
 
+def build_period_report(history, period_label, cutoff_date):
+    """A report block summarizing settled regular-season bets (both
+    markets, broken out separately) with a `date` on or after
+    cutoff_date (YYYY-MM-DD) -- reused for both the weekly and monthly
+    recap, just with a different label and window, by reusing
+    calc_performance()/calc_calibration() against a date-filtered subset
+    of history rather than needing a separate date-range-aware code path
+    inside those functions.
+
+    Returns "" when nothing settled in the window at all, so callers can
+    skip appending an empty section instead of posting a report that's
+    just headers over nothing.
+    """
+    recent = {k: v for k, v in history.items() if v.get("date", "") >= cutoff_date}
+    spread_perf  = calc_performance(recent, league="regular", market="spread")
+    spread_calib = calc_calibration(recent, league="regular", market="spread")
+    totals_perf  = calc_performance(recent, league="regular", market="total")
+    totals_calib = calc_calibration(recent, league="regular", market="total")
+    if not spread_calib["n"] and not totals_calib["n"]:
+        return ""
+    report = "\n%s\n" % period_label
+    report += format_market_calibration_line("讓分", spread_perf, spread_calib)
+    report += format_market_calibration_line("大小分", totals_perf, totals_calib)
+    return report
+
+
 def calc_performance(history, league="regular", market=None):
     """Entries carry a "league" tag ("regular" or "summer") so the two can be
     tracked side by side in one Gist without a regular-season Kelly-based
@@ -2354,6 +2380,21 @@ def run():
         perf_msg += "\n📐 **分市場校準**（Brier/LogLoss 越低越好；MAE 是預測與實際的平均誤差）\n"
         perf_msg += format_market_calibration_line("讓分", spread_perf, spread_calib)
         perf_msg += format_market_calibration_line("大小分", totals_perf, totals_calib)
+
+    # The bot already runs daily, so it naturally passes through every
+    # Monday and the 1st of every month without needing a separate
+    # schedule/workflow -- just check the date on the run that happens to
+    # land there.
+    if now_tw.weekday() == 0:
+        perf_msg += build_period_report(
+            history, "📈 **週報**（近 7 天已結算）",
+            (now_tw - timedelta(days=7)).strftime("%Y-%m-%d"),
+        )
+    if now_tw.day == 1:
+        perf_msg += build_period_report(
+            history, "📈 **月報**（近 30 天已結算）",
+            (now_tw - timedelta(days=30)).strftime("%Y-%m-%d"),
+        )
 
     summer_total, summer_wins, summer_win_rate, _ = calc_performance(history, league="summer")
     if summer_total or any(r.get("league") == "summer" for r in history.values()):
