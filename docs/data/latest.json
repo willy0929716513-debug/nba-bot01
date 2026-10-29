@@ -1,206 +1,272 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-10-29 03:47",
+  "generated_at": "2026-10-30 03:47",
   "data_source": "即時數據",
   "run_type": "official",
   "regular_season": {
-    "total_picks": 17,
-    "avg_edge": 16.1,
+    "total_picks": 15,
+    "avg_edge": 13.4,
     "days": [
       {
-        "date": "2026-10-29",
+        "date": "2026-10-30",
         "label": "今日賽事",
         "picks": [
           {
-            "tier": "💎 頂級",
+            "tier": "⭐ 穩定",
             "meets_threshold": true,
-            "matchup": "勇士 @ 灰狼",
-            "start_time": "10/29 08:10",
-            "bet": "灰狼 -3.5",
-            "price": 1.89,
-            "book": "BetRivers",
-            "prob": 68.5,
-            "edge": 15.6,
-            "kelly_stake": 66.1,
-            "missing": "狀況: Butler(缺)",
-            "consensus": "共識線: -3.8",
-            "ou_note": "OU: 模型偏大分 (232.5 vs 市場 227.4) 偏Over",
+            "matchup": "國王 @ 鵜鶘",
+            "start_time": "10/30 08:10",
+            "bet": "國王 +6.5",
+            "price": 1.87,
+            "book": "DraftKings",
+            "prob": 60.5,
+            "edge": 7.0,
+            "kelly_stake": 30.3,
+            "missing": "陣容完整",
+            "consensus": "共識線: +6.0",
+            "ou_note": "OU: 模型 235.8 vs 市場 235.9 (無明顯偏向)",
             "market_implied_prob": null
           },
           {
             "tier": "👀 觀察中",
             "meets_threshold": false,
-            "matchup": "熱火 @ 老鷹",
-            "start_time": "10/29 07:10",
-            "bet": "老鷹 -2.0",
-            "price": 1.93,
-            "book": "LowVig.ag",
-            "prob": 65.0,
-            "edge": 13.2,
-            "kelly_stake": 54.8,
+            "matchup": "灰熊 @ 拓荒者",
+            "start_time": "10/30 10:10",
+            "bet": "拓荒者 -7.5",
+            "price": 1.91,
+            "book": "MyBookie.ag",
+            "prob": 54.9,
+            "edge": 2.5,
+            "kelly_stake": 10.5,
             "missing": "陣容完整",
-            "consensus": "共識線: -2.1",
-            "ou_note": "OU: 模型偏小分 (231.8 vs 市場 241.9) 偏Under",
+            "consensus": "共識線: -7.5",
+            "ou_note": "OU: 模型 231.9 vs 市場 232.7 (無明顯偏向)",
             "market_implied_prob": null
           },
           {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "騎士 @ 老鷹",
+            "start_time": "10/30 08:10",
+            "bet": "老鷹 -1.0",
+            "price": 1.94,
+            "book": "LowVig.ag",
+            "prob": 53.2,
+            "edge": 1.6,
+            "kelly_stake": 6.7,
+            "missing": "陣容完整",
+            "consensus": "共識線: -1.1",
+            "ou_note": "OU: 模型 236.4 vs 市場 237.6 (無明顯偏向)",
+            "market_implied_prob": null
+          }
+        ],
+        "totals": [
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "灰熊 @ 拓荒者",
+            "start_time": "10/30 10:10",
+            "bet": "小分 Under 233.5",
+            "price": 1.93,
+            "book": "BetRivers",
+            "prob": 54.4,
+            "edge": 2.6,
+            "kelly_stake": 10.6,
+            "model_total": 231.9,
+            "market_total": 232.625
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "騎士 @ 老鷹",
+            "start_time": "10/30 08:10",
+            "bet": "小分 Under 238.5",
+            "price": 1.87,
+            "book": "FanDuel",
+            "prob": 56.0,
+            "edge": 2.5,
+            "kelly_stake": 10.7,
+            "model_total": 236.4,
+            "market_total": 237.4375
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "國王 @ 鵜鶘",
+            "start_time": "10/30 08:10",
+            "bet": "小分 Under 236.5",
+            "price": 1.88,
+            "book": "BetRivers",
+            "prob": 52.1,
+            "edge": -1.1,
+            "kelly_stake": 0.0,
+            "model_total": 235.8,
+            "market_total": 235.875
+          }
+        ]
+      },
+      {
+        "date": "2026-10-31",
+        "label": "預告 2026-10-31",
+        "picks": [
+          {
             "tier": "🔥 強力",
             "meets_threshold": true,
-            "matchup": "火箭 @ 公鹿",
-            "start_time": "10/29 08:10",
-            "bet": "火箭 -8.0",
-            "price": 1.91,
-            "book": "MyBookie.ag",
-            "prob": 61.4,
-            "edge": 9.1,
-            "kelly_stake": 38.0,
+            "matchup": "魔術 @ 暴龍",
+            "start_time": "10/31 07:40",
+            "bet": "暴龍 -5.0",
+            "price": 1.9,
+            "book": "LowVig.ag",
+            "prob": 62.9,
+            "edge": 10.2,
+            "kelly_stake": 43.2,
             "missing": "陣容完整",
-            "consensus": "共識線: -8.3",
-            "ou_note": "OU: 模型偏大分 (235.3 vs 市場 225.9) 偏Over",
+            "consensus": "共識線: -5.4",
+            "ou_note": "OU: 模型 223.2 vs 市場 224.8 (無明顯偏向)",
+            "market_implied_prob": null
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "湖人 @ 勇士",
+            "start_time": "10/31 10:10",
+            "bet": "湖人 -1.5",
+            "price": 1.91,
+            "book": "FanDuel",
+            "prob": 60.5,
+            "edge": 8.2,
+            "kelly_stake": 34.3,
+            "missing": "狀況: Butler(缺)",
+            "consensus": "共識線: -1.5",
+            "ou_note": "OU: 模型偏大分 (236.9 vs 市場 233.8) 偏Over",
             "market_implied_prob": null
           },
           {
             "tier": "⭐ 穩定",
             "meets_threshold": true,
-            "matchup": "湖人 @ 快艇",
-            "start_time": "10/29 10:40",
-            "bet": "快艇 +4.5",
+            "matchup": "溜馬 @ 熱火",
+            "start_time": "10/31 08:10",
+            "bet": "溜馬 +5.0",
             "price": 1.94,
             "book": "LowVig.ag",
-            "prob": 58.3,
-            "edge": 6.7,
-            "kelly_stake": 27.7,
+            "prob": 58.1,
+            "edge": 6.5,
+            "kelly_stake": 26.9,
             "missing": "陣容完整",
             "consensus": "共識線: +4.4",
-            "ou_note": "OU: 模型偏大分 (235.6 vs 市場 228.6) 偏Over",
+            "ou_note": "OU: 模型偏小分 (231.8 vs 市場 239.5) 偏Under",
             "market_implied_prob": null
           },
           {
-            "tier": "👀 觀察中",
-            "meets_threshold": false,
-            "matchup": "金塊 @ 鵜鶘",
-            "start_time": "10/29 08:10",
-            "bet": "鵜鶘 +4.5",
-            "price": 1.95,
-            "book": "FanDuel",
-            "prob": 55.8,
-            "edge": 4.5,
-            "kelly_stake": 18.4,
+            "tier": "⭐ 穩定",
+            "meets_threshold": true,
+            "matchup": "金塊 @ 太陽",
+            "start_time": "10/31 10:10",
+            "bet": "太陽 +4.5",
+            "price": 1.89,
+            "book": "BetRivers",
+            "prob": 59.1,
+            "edge": 6.2,
+            "kelly_stake": 26.2,
             "missing": "陣容完整",
-            "consensus": "共識線: +4.5",
-            "ou_note": "OU: 模型 243.6 vs 市場 240.8 (無明顯偏向)",
+            "consensus": "共識線: +4.2",
+            "ou_note": "OU: 模型 228.8 vs 市場 228.9 (無明顯偏向)",
             "market_implied_prob": null
           },
           {
             "tier": "👀 觀察中",
             "meets_threshold": false,
-            "matchup": "尼克 @ 公牛",
-            "start_time": "10/29 08:10",
-            "bet": "尼克 -6.5",
-            "price": 1.87,
-            "book": "FanDuel",
-            "prob": 57.0,
-            "edge": 3.6,
-            "kelly_stake": 15.3,
+            "matchup": "尼克 @ 七六人",
+            "start_time": "10/31 07:40",
+            "bet": "七六人 +0.5",
+            "price": 1.92,
+            "book": "BetRivers",
+            "prob": 58.3,
+            "edge": 6.2,
+            "kelly_stake": 25.8,
             "missing": "陣容完整",
-            "consensus": "共識線: -7.2",
-            "ou_note": "OU: 模型偏小分 (224.7 vs 市場 232.2) 偏Under",
+            "consensus": "共識線: -1.5",
+            "ou_note": "OU: 模型偏小分 (218.8 vs 市場 229.3) 偏Under",
             "market_implied_prob": null
           },
           {
             "tier": "👀 觀察中",
             "meets_threshold": false,
-            "matchup": "馬刺 @ 爵士",
-            "start_time": "10/29 09:10",
-            "bet": "爵士 +14.0",
-            "price": 1.91,
-            "book": "MyBookie.ag",
-            "prob": 55.6,
-            "edge": 3.3,
-            "kelly_stake": 13.7,
-            "missing": "陣容完整",
-            "consensus": "共識線: +13.6",
-            "ou_note": "OU: 模型偏小分 (230.0 vs 市場 233.6) 偏Under",
-            "market_implied_prob": null
-          },
-          {
-            "tier": "👀 觀察中",
-            "meets_threshold": false,
-            "matchup": "七六人 @ 溜馬",
-            "start_time": "10/29 07:10",
-            "bet": "溜馬 +7.5",
-            "price": 1.95,
-            "book": "DraftKings",
-            "prob": 53.4,
-            "edge": 2.2,
-            "kelly_stake": 8.9,
-            "missing": "陣容完整",
-            "consensus": "共識線: +7.3",
-            "ou_note": "OU: 模型偏小分 (224.2 vs 市場 234.0) 偏Under",
-            "market_implied_prob": null
-          },
-          {
-            "tier": "👀 觀察中",
-            "meets_threshold": false,
-            "matchup": "黃蜂 @ 活塞",
-            "start_time": "10/29 07:10",
+            "matchup": "活塞 @ 籃網",
+            "start_time": "10/31 07:40",
             "bet": "活塞 -7.5",
-            "price": 1.94,
-            "book": "LowVig.ag",
-            "prob": 52.9,
-            "edge": 1.4,
-            "kelly_stake": 5.6,
+            "price": 1.95,
+            "book": "DraftKings",
+            "prob": 53.8,
+            "edge": 2.5,
+            "kelly_stake": 10.2,
             "missing": "陣容完整",
-            "consensus": "共識線: -7.5",
-            "ou_note": "OU: 模型偏大分 (217.5 vs 市場 212.8) 偏Over",
+            "consensus": "共識線: -7.7",
+            "ou_note": "OU: 模型偏大分 (225.8 vs 市場 222.3) 偏Over",
             "market_implied_prob": null
           },
           {
             "tier": "👀 觀察中",
             "meets_threshold": false,
-            "matchup": "巫師 @ 騎士",
-            "start_time": "10/29 07:10",
-            "bet": "巫師 +10.5",
+            "matchup": "黃蜂 @ 巫師",
+            "start_time": "10/31 07:10",
+            "bet": "巫師 +1.5",
             "price": 1.87,
             "book": "DraftKings",
-            "prob": 53.7,
-            "edge": 0.2,
-            "kelly_stake": 1.0,
+            "prob": 55.4,
+            "edge": 2.0,
+            "kelly_stake": 8.4,
             "missing": "陣容完整",
-            "consensus": "共識線: +9.7",
-            "ou_note": "OU: 模型偏小分 (234.1 vs 市場 240.2) 偏Under",
+            "consensus": "共識線: +0.5",
+            "ou_note": "OU: 模型偏小分 (219.3 vs 市場 222.5) 偏Under",
             "market_implied_prob": null
           },
           {
             "tier": "👀 觀察中",
             "meets_threshold": false,
-            "matchup": "魔術 @ 暴龍",
-            "start_time": "10/29 07:40",
-            "bet": "暴龍 -4.5",
+            "matchup": "公牛 @ 塞爾提克",
+            "start_time": "10/31 07:40",
+            "bet": "公牛 +15.5",
+            "price": 1.93,
+            "book": "BetRivers",
+            "prob": 52.2,
+            "edge": 0.3,
+            "kelly_stake": 1.4,
+            "missing": "陣容完整",
+            "consensus": "共識線: +15.0",
+            "ou_note": "OU: 模型偏大分 (237.9 vs 市場 232.3) 偏Over",
+            "market_implied_prob": null
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "火箭 @ 獨行俠",
+            "start_time": "10/31 08:10",
+            "bet": "獨行俠 +5.5",
             "price": 1.91,
-            "book": "MyBookie.ag",
-            "prob": 51.4,
-            "edge": -0.9,
-            "kelly_stake": 0.0,
-            "missing": "陣容完整",
-            "consensus": "共識線: -4.7",
-            "ou_note": "OU: 模型 221.7 vs 市場 223.9 (無明顯偏向)",
-            "market_implied_prob": null
-          },
-          {
-            "tier": "👀 觀察中",
-            "meets_threshold": false,
-            "matchup": "雷霆 @ 獨行俠",
-            "start_time": "10/29 09:40",
-            "bet": "獨行俠 +6.5",
-            "price": 1.83,
-            "book": "FanDuel",
-            "prob": 52.9,
-            "edge": -1.8,
+            "book": "BetMGM",
+            "prob": 52.2,
+            "edge": -0.1,
             "kelly_stake": 0.0,
             "missing": "陣容完整",
             "consensus": "共識線: +5.5",
-            "ou_note": "OU: 模型偏小分 (220.2 vs 市場 228.1) 偏Under",
+            "ou_note": "OU: 模型 228.9 vs 市場 227.5 (無明顯偏向)",
+            "market_implied_prob": null
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "快艇 @ 灰狼",
+            "start_time": "10/31 08:10",
+            "bet": "快艇 +7.5",
+            "price": 1.94,
+            "book": "LowVig.ag",
+            "prob": 50.5,
+            "edge": -1.1,
+            "kelly_stake": 0.0,
+            "missing": "陣容完整",
+            "consensus": "共識線: +7.5",
+            "ou_note": "OU: 模型 221.3 vs 市場 221.5 (無明顯偏向)",
             "market_implied_prob": null
           }
         ],
@@ -208,170 +274,142 @@
           {
             "tier": "💎 頂級",
             "meets_threshold": true,
-            "matchup": "七六人 @ 溜馬",
-            "start_time": "10/29 07:10",
-            "bet": "小分 Under 234.5",
-            "price": 1.93,
-            "book": "DraftKings",
-            "prob": 75.4,
-            "edge": 23.6,
-            "kelly_stake": 98.0,
-            "model_total": 224.2,
-            "market_total": 233.9375
+            "matchup": "尼克 @ 七六人",
+            "start_time": "10/31 07:40",
+            "bet": "小分 Under 230.5",
+            "price": 1.91,
+            "book": "FanDuel",
+            "prob": 78.2,
+            "edge": 25.9,
+            "kelly_stake": 108.5,
+            "model_total": 218.8,
+            "market_total": 229.1
           },
           {
             "tier": "💎 頂級",
             "meets_threshold": true,
-            "matchup": "熱火 @ 老鷹",
-            "start_time": "10/29 07:10",
-            "bet": "小分 Under 242.5",
-            "price": 1.87,
-            "book": "DraftKings",
-            "prob": 76.4,
-            "edge": 23.0,
-            "kelly_stake": 98.7,
+            "matchup": "溜馬 @ 熱火",
+            "start_time": "10/31 08:10",
+            "bet": "小分 Under 239.5",
+            "price": 1.93,
+            "book": "LowVig.ag",
+            "prob": 69.8,
+            "edge": 18.0,
+            "kelly_stake": 74.6,
             "model_total": 231.8,
-            "market_total": 241.8125
+            "market_total": 239.5
           },
           {
             "tier": "💎 頂級",
             "meets_threshold": true,
-            "matchup": "火箭 @ 公鹿",
-            "start_time": "10/29 08:10",
-            "bet": "大分 Over 225.5",
+            "matchup": "公牛 @ 塞爾提克",
+            "start_time": "10/31 07:40",
+            "bet": "大分 Over 230.5",
             "price": 1.91,
-            "book": "LowVig.ag",
-            "prob": 74.4,
-            "edge": 22.1,
-            "kelly_stake": 92.7,
-            "model_total": 235.3,
-            "market_total": 225.9375
-          },
-          {
-            "tier": "💎 頂級",
-            "meets_threshold": true,
-            "matchup": "雷霆 @ 獨行俠",
-            "start_time": "10/29 09:40",
-            "bet": "小分 Under 228.5",
-            "price": 1.91,
-            "book": "BetMGM",
-            "prob": 71.3,
-            "edge": 18.9,
-            "kelly_stake": 79.4,
-            "model_total": 220.2,
-            "market_total": 228.0
-          },
-          {
-            "tier": "💎 頂級",
-            "meets_threshold": true,
-            "matchup": "尼克 @ 公牛",
-            "start_time": "10/29 08:10",
-            "bet": "小分 Under 232.5",
-            "price": 1.91,
-            "book": "MyBookie.ag",
-            "prob": 70.2,
-            "edge": 17.9,
-            "kelly_stake": 75.0,
-            "model_total": 224.7,
-            "market_total": 232.125
-          },
-          {
-            "tier": "💎 頂級",
-            "meets_threshold": true,
-            "matchup": "湖人 @ 快艇",
-            "start_time": "10/29 10:40",
-            "bet": "大分 Over 228.5",
-            "price": 1.98,
-            "book": "LowVig.ag",
-            "prob": 68.3,
-            "edge": 17.8,
-            "kelly_stake": 71.8,
-            "model_total": 235.6,
-            "market_total": 228.5625
-          },
-          {
-            "tier": "💎 頂級",
-            "meets_threshold": true,
-            "matchup": "巫師 @ 騎士",
-            "start_time": "10/29 07:10",
-            "bet": "小分 Under 240.5",
-            "price": 1.93,
-            "book": "BetRivers",
-            "prob": 66.5,
-            "edge": 14.7,
-            "kelly_stake": 61.0,
-            "model_total": 234.1,
-            "market_total": 240.1875
-          },
-          {
-            "tier": "💎 頂級",
-            "meets_threshold": true,
-            "matchup": "勇士 @ 灰狼",
-            "start_time": "10/29 08:10",
-            "bet": "大分 Over 226.5",
-            "price": 1.87,
-            "book": "BetRivers",
-            "prob": 65.5,
-            "edge": 12.0,
-            "kelly_stake": 51.7,
-            "model_total": 232.5,
-            "market_total": 227.5
+            "book": "DraftKings",
+            "prob": 69.1,
+            "edge": 16.8,
+            "kelly_stake": 70.4,
+            "model_total": 237.9,
+            "market_total": 232.75
           },
           {
             "tier": "🔥 強力",
             "meets_threshold": true,
-            "matchup": "黃蜂 @ 活塞",
-            "start_time": "10/29 07:10",
-            "bet": "大分 Over 212.5",
+            "matchup": "活塞 @ 籃網",
+            "start_time": "10/31 07:40",
+            "bet": "大分 Over 220.5",
             "price": 1.91,
             "book": "FanDuel",
-            "prob": 63.3,
-            "edge": 10.9,
-            "kelly_stake": 45.9,
-            "model_total": 217.5,
-            "market_total": 212.875
+            "prob": 64.0,
+            "edge": 11.6,
+            "kelly_stake": 48.7,
+            "model_total": 225.8,
+            "market_total": 222.7
+          },
+          {
+            "tier": "🔥 強力",
+            "meets_threshold": true,
+            "matchup": "黃蜂 @ 巫師",
+            "start_time": "10/31 07:10",
+            "bet": "小分 Under 223.5",
+            "price": 1.92,
+            "book": "BetRivers",
+            "prob": 61.2,
+            "edge": 9.1,
+            "kelly_stake": 37.9,
+            "model_total": 219.3,
+            "market_total": 222.25
           },
           {
             "tier": "⭐ 穩定",
             "meets_threshold": true,
-            "matchup": "馬刺 @ 爵士",
-            "start_time": "10/29 09:10",
-            "bet": "小分 Under 234.5",
-            "price": 1.85,
+            "matchup": "湖人 @ 勇士",
+            "start_time": "10/31 10:10",
+            "bet": "大分 Over 233.5",
+            "price": 1.95,
             "book": "FanDuel",
-            "prob": 61.7,
-            "edge": 7.7,
-            "kelly_stake": 33.4,
-            "model_total": 230.0,
-            "market_total": 233.5
-          },
-          {
-            "tier": "👀 觀察中",
-            "meets_threshold": false,
-            "matchup": "金塊 @ 鵜鶘",
-            "start_time": "10/29 08:10",
-            "bet": "大分 Over 240.5",
-            "price": 1.91,
-            "book": "FanDuel",
-            "prob": 58.2,
-            "edge": 5.8,
-            "kelly_stake": 24.3,
-            "model_total": 243.6,
-            "market_total": 240.8125
+            "prob": 58.8,
+            "edge": 7.5,
+            "kelly_stake": 30.9,
+            "model_total": 236.9,
+            "market_total": 233.83333333333334
           },
           {
             "tier": "👀 觀察中",
             "meets_threshold": false,
             "matchup": "魔術 @ 暴龍",
-            "start_time": "10/29 07:40",
-            "bet": "小分 Under 224.5",
-            "price": 1.88,
+            "start_time": "10/31 07:40",
+            "bet": "小分 Under 225.5",
+            "price": 1.87,
+            "book": "FanDuel",
+            "prob": 56.5,
+            "edge": 3.0,
+            "kelly_stake": 12.9,
+            "model_total": 223.2,
+            "market_total": 224.7
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "火箭 @ 獨行俠",
+            "start_time": "10/31 08:10",
+            "bet": "大分 Over 227.5",
+            "price": 1.92,
+            "book": "BetRivers",
+            "prob": 53.6,
+            "edge": 1.6,
+            "kelly_stake": 6.5,
+            "model_total": 228.9,
+            "market_total": 227.5
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "金塊 @ 太陽",
+            "start_time": "10/31 10:10",
+            "bet": "小分 Under 229.5",
+            "price": 1.93,
             "book": "LowVig.ag",
-            "prob": 57.7,
-            "edge": 4.5,
-            "kelly_stake": 19.2,
-            "model_total": 221.7,
-            "market_total": 223.8125
+            "prob": 51.6,
+            "edge": -0.2,
+            "kelly_stake": 0.0,
+            "model_total": 228.8,
+            "market_total": 228.75
+          },
+          {
+            "tier": "👀 觀察中",
+            "meets_threshold": false,
+            "matchup": "快艇 @ 灰狼",
+            "start_time": "10/31 08:10",
+            "bet": "小分 Under 222.5",
+            "price": 1.85,
+            "book": "BetRivers",
+            "prob": 53.4,
+            "edge": -0.7,
+            "kelly_stake": 0.0,
+            "model_total": 221.3,
+            "market_total": 221.25
           }
         ]
       },
@@ -380,22 +418,6 @@
         "label": "預告 2026-12-26",
         "picks": [
           {
-            "tier": "🔥 強力",
-            "meets_threshold": true,
-            "matchup": "雷霆 @ 灰狼",
-            "start_time": "12/26 09:10",
-            "bet": "灰狼 +4.5",
-            "price": 1.91,
-            "book": "DraftKings",
-            "prob": 62.2,
-            "edge": 9.8,
-            "kelly_stake": 41.3,
-            "missing": "陣容完整",
-            "consensus": "共識線: +4.5",
-            "ou_note": "OU: 模型偏小分 (219.5 vs 市場 233.5) 偏Under",
-            "market_implied_prob": null
-          },
-          {
             "tier": "👀 觀察中",
             "meets_threshold": false,
             "matchup": "七六人 @ 湖人",
@@ -403,12 +425,28 @@
             "bet": "湖人 -1.0",
             "price": 1.91,
             "book": "BetRivers",
-            "prob": 59.8,
-            "edge": 7.5,
-            "kelly_stake": 31.3,
+            "prob": 62.2,
+            "edge": 9.8,
+            "kelly_stake": 41.2,
             "missing": "陣容完整",
             "consensus": "共識線: -1.5",
-            "ou_note": "OU: 模型 232.8 vs 市場 235.8 (無明顯偏向)",
+            "ou_note": "OU: 模型偏小分 (227.5 vs 市場 235.8) 偏Under",
+            "market_implied_prob": null
+          },
+          {
+            "tier": "🔥 強力",
+            "meets_threshold": true,
+            "matchup": "雷霆 @ 灰狼",
+            "start_time": "12/26 09:10",
+            "bet": "灰狼 +4.5",
+            "price": 1.91,
+            "book": "DraftKings",
+            "prob": 62.1,
+            "edge": 9.7,
+            "kelly_stake": 40.9,
+            "missing": "陣容完整",
+            "consensus": "共識線: +4.5",
+            "ou_note": "OU: 模型偏小分 (220.5 vs 市場 233.5) 偏Under",
             "market_implied_prob": null
           },
           {
@@ -419,12 +457,12 @@
             "bet": "馬刺 +1.0",
             "price": 1.87,
             "book": "BetRivers",
-            "prob": 60.9,
-            "edge": 7.4,
-            "kelly_stake": 31.8,
+            "prob": 62.9,
+            "edge": 9.5,
+            "kelly_stake": 40.7,
             "missing": "陣容完整",
             "consensus": "共識線: -1.5",
-            "ou_note": "OU: 模型偏小分 (217.8 vs 市場 227.8) 偏Under",
+            "ou_note": "OU: 模型偏小分 (223.0 vs 市場 229.2) 偏Under",
             "market_implied_prob": null
           },
           {
@@ -432,15 +470,15 @@
             "meets_threshold": false,
             "matchup": "金塊 @ 勇士",
             "start_time": "12/26 11:40",
-            "bet": "勇士 +4.5",
-            "price": 1.87,
+            "bet": "勇士 +2.5",
+            "price": 1.91,
             "book": "DraftKings",
-            "prob": 58.8,
-            "edge": 5.3,
-            "kelly_stake": 22.7,
+            "prob": 54.3,
+            "edge": 2.0,
+            "kelly_stake": 8.2,
             "missing": "狀況: Butler(缺)",
             "consensus": "共識線: +2.0",
-            "ou_note": "OU: 模型 236.3 vs 市場 235.5 (無明顯偏向)",
+            "ou_note": "OU: 模型偏小分 (230.9 vs 市場 235.0) 偏Under",
             "market_implied_prob": null
           },
           {
@@ -451,12 +489,12 @@
             "bet": "塞爾提克 -5.5",
             "price": 1.93,
             "book": "BetRivers",
-            "prob": 55.2,
-            "edge": 3.4,
-            "kelly_stake": 14.2,
+            "prob": 53.4,
+            "edge": 1.5,
+            "kelly_stake": 6.4,
             "missing": "陣容完整",
-            "consensus": "共識線: -5.5",
-            "ou_note": "OU: 模型 231.2 vs 市場 230.0 (無明顯偏向)",
+            "consensus": "共識線: -6.5",
+            "ou_note": "OU: 模型 232.7 vs 市場 230.5 (無明顯偏向)",
             "market_implied_prob": null
           }
         ],
@@ -469,11 +507,25 @@
             "bet": "小分 Under 233.5",
             "price": 1.91,
             "book": "DraftKings",
-            "prob": 82.5,
-            "edge": 30.2,
-            "kelly_stake": 126.6,
-            "model_total": 219.5,
+            "prob": 80.6,
+            "edge": 28.2,
+            "kelly_stake": 118.6,
+            "model_total": 220.5,
             "market_total": 233.5
+          },
+          {
+            "tier": "💎 頂級",
+            "meets_threshold": true,
+            "matchup": "七六人 @ 湖人",
+            "start_time": "12/26 06:10",
+            "bet": "小分 Under 237.5",
+            "price": 1.83,
+            "book": "DraftKings",
+            "prob": 74.7,
+            "edge": 20.1,
+            "kelly_stake": 88.6,
+            "model_total": 227.5,
+            "market_total": 234.0
           },
           {
             "tier": "💎 頂級",
@@ -483,77 +535,63 @@
             "bet": "小分 Under 230.0",
             "price": 1.89,
             "book": "BetRivers",
-            "prob": 79.2,
-            "edge": 26.3,
-            "kelly_stake": 111.7,
-            "model_total": 217.8,
-            "market_total": 225.5
+            "prob": 67.4,
+            "edge": 14.5,
+            "kelly_stake": 61.6,
+            "model_total": 223.0,
+            "market_total": 228.5
           },
           {
-            "tier": "⭐ 穩定",
+            "tier": "🔥 強力",
             "meets_threshold": true,
-            "matchup": "七六人 @ 湖人",
-            "start_time": "12/26 06:10",
-            "bet": "小分 Under 237.5",
-            "price": 1.83,
+            "matchup": "金塊 @ 勇士",
+            "start_time": "12/26 11:40",
+            "bet": "小分 Under 235.5",
+            "price": 1.91,
             "book": "DraftKings",
-            "prob": 62.0,
-            "edge": 7.4,
-            "kelly_stake": 32.6,
-            "model_total": 232.8,
-            "market_total": 234.0
+            "prob": 62.4,
+            "edge": 10.0,
+            "kelly_stake": 42.1,
+            "model_total": 230.9,
+            "market_total": 234.5
           },
           {
             "tier": "👀 觀察中",
             "meets_threshold": false,
             "matchup": "熱火 @ 塞爾提克",
             "start_time": "12/26 03:40",
-            "bet": "大分 Over 229.5",
+            "bet": "大分 Over 230.5",
             "price": 1.91,
             "book": "DraftKings",
-            "prob": 54.4,
-            "edge": 2.0,
-            "kelly_stake": 8.6,
-            "model_total": 231.2,
+            "prob": 56.1,
+            "edge": 3.7,
+            "kelly_stake": 15.5,
+            "model_total": 232.7,
             "market_total": 230.5
-          },
-          {
-            "tier": "👀 觀察中",
-            "meets_threshold": false,
-            "matchup": "金塊 @ 勇士",
-            "start_time": "12/26 11:40",
-            "bet": "大分 Over 234.5",
-            "price": 1.89,
-            "book": "BetRivers",
-            "prob": 54.7,
-            "edge": 1.8,
-            "kelly_stake": 7.6,
-            "model_total": 236.3,
-            "market_total": 236.5
           }
         ]
       }
     ]
   },
   "performance": {
-    "total_recommendations": 30,
-    "wins": 17,
-    "win_rate": 56.7,
-    "profit": 401.6,
+    "total_recommendations": 39,
+    "wins": 22,
+    "win_rate": 56.4,
+    "profit": 439.5,
     "min_sample": 10,
     "by_market": {
       "spread": {
         "performance": {
-          "total_recommendations": 26,
+          "total_recommendations": 27,
           "wins": 15,
-          "win_rate": 57.7,
-          "profit": 369.8
+          "win_rate": 55.6,
+          "profit": 303.7
         },
         "calibration": {
-          "n": 26,
-          "brier": 0.2412,
-          "log_loss": 0.6729,
-          "mae_margin": 15.09,
+          "n": 27,
+          "brier": 0.2497,
+          "log_loss": 0.6907,
+          "mae_margin": 18.6,
           "mae_total": null,
           "buckets": [
             {
@@ -564,9 +602,9 @@
             },
             {
               "range": "60-70%",
-              "n": 16,
-              "avg_predicted": 65.2,
-              "actual_rate": 43.8
+              "n": 17,
+              "avg_predicted": 65.4,
+              "actual_rate": 41.2
             },
             {
               "range": "70-80%",
@@ -579,29 +617,29 @@
       },
       "total": {
         "performance": {
-          "total_recommendations": 4,
-          "wins": 2,
-          "win_rate": 50.0,
-          "profit": 31.8
+          "total_recommendations": 12,
+          "wins": 7,
+          "win_rate": 58.3,
+          "profit": 135.8
         },
         "calibration": {
-          "n": 4,
-          "brier": 0.2532,
-          "log_loss": 0.6959,
+          "n": 12,
+          "brier": 0.2496,
+          "log_loss": 0.6945,
           "mae_margin": null,
-          "mae_total": 17.97,
+          "mae_total": 14.86,
           "buckets": [
             {
               "range": "60-70%",
-              "n": 3,
+              "n": 6,
               "avg_predicted": 66.7,
-              "actual_rate": 33.3
+              "actual_rate": 50.0
             },
             {
               "range": "70-80%",
-              "n": 1,
-              "avg_predicted": 73.2,
-              "actual_rate": 100.0
+              "n": 6,
+              "avg_predicted": 73.5,
+              "actual_rate": 66.7
             }
           ]
         }
@@ -632,10 +670,10 @@
       "prob": 76.4,
       "edge": 23.0,
       "kelly_stake": 98.7,
-      "result": "待開獎",
+      "result": "落敗",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "熱火 129 - 117 老鷹"
     },
     {
       "date": "2026-10-29",
@@ -645,10 +683,10 @@
       "prob": 66.5,
       "edge": 14.7,
       "kelly_stake": 61.0,
-      "result": "待開獎",
+      "result": "獲勝",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "巫師 111 - 121 騎士"
     },
     {
       "date": "2026-10-29",
@@ -658,10 +696,10 @@
       "prob": 75.4,
       "edge": 23.6,
       "kelly_stake": 98.0,
-      "result": "待開獎",
+      "result": "獲勝",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "七六人 114 - 109 溜馬"
     },
     {
       "date": "2026-10-29",
@@ -671,10 +709,10 @@
       "prob": 70.2,
       "edge": 17.9,
       "kelly_stake": 75.0,
-      "result": "待開獎",
+      "result": "落敗",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "尼克 133 - 127 公牛"
     },
     {
       "date": "2026-10-29",
@@ -684,10 +722,10 @@
       "prob": 68.5,
       "edge": 15.6,
       "kelly_stake": 66.1,
-      "result": "待開獎",
+      "result": "落敗",
       "league": "regular",
       "market": "spread",
-      "final_score": null
+      "final_score": "勇士 119 - 114 灰狼"
     },
     {
       "date": "2026-10-29",
@@ -697,10 +735,10 @@
       "prob": 65.5,
       "edge": 12.0,
       "kelly_stake": 51.7,
-      "result": "待開獎",
+      "result": "獲勝",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "勇士 119 - 114 灰狼"
     },
     {
       "date": "2026-10-29",
@@ -710,10 +748,10 @@
       "prob": 74.4,
       "edge": 22.1,
       "kelly_stake": 92.7,
-      "result": "待開獎",
+      "result": "獲勝",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "火箭 132 - 100 公鹿"
     },
     {
       "date": "2026-10-29",
@@ -723,10 +761,10 @@
       "prob": 71.3,
       "edge": 18.9,
       "kelly_stake": 79.4,
-      "result": "待開獎",
+      "result": "獲勝",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "雷霆 96 - 120 獨行俠"
     },
     {
       "date": "2026-10-29",
@@ -736,10 +774,10 @@
       "prob": 68.3,
       "edge": 17.8,
       "kelly_stake": 71.8,
-      "result": "待開獎",
+      "result": "落敗",
       "league": "regular",
       "market": "total",
-      "final_score": null
+      "final_score": "湖人 103 - 87 快艇"
     },
     {
       "date": "2026-10-28",
@@ -1165,266 +1203,238 @@
       "date": "2026-10-28",
       "win_rate": 56.7,
       "profit": 401.6
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 54.8,
+      "profit": 302.9
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 56.2,
+      "profit": 359.7
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 57.6,
+      "profit": 450.8
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 55.9,
+      "profit": 375.8
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 54.3,
+      "profit": 309.7
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 55.6,
+      "profit": 354.7
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 56.8,
+      "profit": 439.0
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 57.9,
+      "profit": 511.3
+    },
+    {
+      "date": "2026-10-29",
+      "win_rate": 56.4,
+      "profit": 439.5
     }
   ],
   "schedule": {
-    "date": "2026-10-29",
+    "date": "2026-10-30",
     "games": [
       {
         "home": "老鷹",
-        "away": "熱火",
-        "start_time": "10/29 07:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "活塞",
-        "away": "黃蜂",
-        "start_time": "10/29 07:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "騎士",
-        "away": "巫師",
-        "start_time": "10/29 07:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "溜馬",
-        "away": "七六人",
-        "start_time": "10/29 07:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "暴龍",
-        "away": "魔術",
-        "start_time": "10/29 07:40",
+        "away": "騎士",
+        "start_time": "10/30 08:10",
         "status": "未開始",
         "home_score": null,
         "away_score": null,
         "has_pick": false
-      },
-      {
-        "home": "公牛",
-        "away": "尼克",
-        "start_time": "10/29 08:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
       },
       {
         "home": "鵜鶘",
-        "away": "金塊",
-        "start_time": "10/29 08:10",
+        "away": "國王",
+        "start_time": "10/30 08:10",
+        "status": "未開始",
+        "home_score": null,
+        "away_score": null,
+        "has_pick": true
+      },
+      {
+        "home": "拓荒者",
+        "away": "灰熊",
+        "start_time": "10/30 10:10",
         "status": "未開始",
         "home_score": null,
         "away_score": null,
         "has_pick": false
-      },
-      {
-        "home": "灰狼",
-        "away": "勇士",
-        "start_time": "10/29 08:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "公鹿",
-        "away": "火箭",
-        "start_time": "10/29 08:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "爵士",
-        "away": "馬刺",
-        "start_time": "10/29 09:10",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "獨行俠",
-        "away": "雷霆",
-        "start_time": "10/29 09:40",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
-      },
-      {
-        "home": "快艇",
-        "away": "湖人",
-        "start_time": "10/29 10:40",
-        "status": "未開始",
-        "home_score": null,
-        "away_score": null,
-        "has_pick": true
       }
     ]
   },
   "parlay": null,
   "power_rankings": [
     {
-      "team": "火箭",
-      "net": 22.9,
-      "off": 127.3,
-      "def": 104.4,
+      "team": "拓荒者",
+      "net": 19.2,
+      "off": 129.6,
+      "def": 110.4,
       "form": 0.0,
       "rank": 1
     },
     {
-      "team": "老鷹",
-      "net": 19.5,
-      "off": 126.1,
-      "def": 106.6,
+      "team": "火箭",
+      "net": 18.2,
+      "off": 125.0,
+      "def": 106.8,
       "form": 0.0,
       "rank": 2
     },
     {
-      "team": "拓荒者",
-      "net": 18.4,
-      "off": 129.2,
-      "def": 110.8,
+      "team": "湖人",
+      "net": 15.4,
+      "off": 126.1,
+      "def": 110.7,
       "form": 0.0,
       "rank": 3
     },
     {
       "team": "灰狼",
-      "net": 17.2,
-      "off": 122.1,
-      "def": 104.9,
+      "net": 13.2,
+      "off": 120.7,
+      "def": 107.5,
       "form": 0.0,
       "rank": 4
     },
     {
       "team": "馬刺",
-      "net": 13.9,
-      "off": 120.1,
-      "def": 106.2,
+      "net": 10.6,
+      "off": 118.6,
+      "def": 108.0,
       "form": 0.0,
       "rank": 5
     },
     {
-      "team": "湖人",
-      "net": 12.1,
-      "off": 130.3,
-      "def": 118.2,
+      "team": "暴龍",
+      "net": 9.8,
+      "off": 114.9,
+      "def": 105.1,
       "form": 0.0,
       "rank": 6
     },
     {
-      "team": "雷霆",
-      "net": 12.0,
-      "off": 112.0,
-      "def": 100.0,
+      "team": "老鷹",
+      "net": 8.6,
+      "off": 122.0,
+      "def": 113.4,
       "form": 0.0,
       "rank": 7
     },
     {
-      "team": "快艇",
-      "net": 9.0,
-      "off": 115.8,
-      "def": 106.8,
+      "team": "灰熊",
+      "net": 7.3,
+      "off": 115.5,
+      "def": 108.2,
       "form": 0.0,
       "rank": 8
     },
     {
-      "team": "魔術",
-      "net": 6.0,
-      "off": 116.0,
-      "def": 110.0,
+      "team": "獨行俠",
+      "net": 6.8,
+      "off": 116.4,
+      "def": 109.6,
       "form": 0.0,
       "rank": 9
     },
     {
-      "team": "活塞",
-      "net": 4.2,
-      "off": 112.1,
-      "def": 107.9,
+      "team": "快艇",
+      "net": 5.5,
+      "off": 110.0,
+      "def": 104.5,
       "form": 0.0,
       "rank": 10
     },
     {
-      "team": "灰熊",
-      "net": 3.9,
-      "off": 113.8,
-      "def": 109.9,
+      "team": "雷霆",
+      "net": 5.4,
+      "off": 109.1,
+      "def": 103.7,
       "form": 0.0,
       "rank": 11
     },
     {
-      "team": "暴龍",
-      "net": 3.5,
-      "off": 110.4,
-      "def": 106.9,
+      "team": "活塞",
+      "net": 2.6,
+      "off": 107.9,
+      "def": 105.3,
       "form": 0.0,
       "rank": 12
     },
     {
-      "team": "尼克",
-      "net": 1.6,
-      "off": 105.4,
-      "def": 103.8,
+      "team": "勇士",
+      "net": 2.6,
+      "off": 119.8,
+      "def": 117.2,
       "form": 0.0,
       "rank": 13
     },
     {
-      "team": "獨行俠",
-      "net": 0.9,
-      "off": 114.7,
-      "def": 113.8,
+      "team": "騎士",
+      "net": -0.5,
+      "off": 118.5,
+      "def": 119.0,
       "form": 0.0,
       "rank": 14
     },
     {
-      "team": "七六人",
-      "net": 0.6,
-      "off": 108.8,
-      "def": 108.2,
+      "team": "塞爾提克",
+      "net": -0.7,
+      "off": 115.4,
+      "def": 116.1,
       "form": 0.0,
       "rank": 15
     },
     {
-      "team": "騎士",
-      "net": 0.5,
-      "off": 119.9,
-      "def": 119.4,
+      "team": "七六人",
+      "net": -1.2,
+      "off": 108.5,
+      "def": 109.7,
       "form": 0.0,
       "rank": 16
     },
     {
-      "team": "塞爾提克",
-      "net": -0.3,
-      "off": 115.6,
-      "def": 115.9,
+      "team": "爵士",
+      "net": -2.4,
+      "off": 115.1,
+      "def": 117.5,
       "form": 0.0,
       "rank": 17
     },
     {
-      "team": "勇士",
+      "team": "熱火",
       "net": -3.6,
-      "off": 117.2,
-      "def": 120.8,
+      "off": 115.1,
+      "def": 118.7,
       "form": 0.0,
       "rank": 18
+    },
+    {
+      "team": "尼克",
+      "net": -4.6,
+      "off": 107.4,
+      "def": 112.0,
+      "form": 0.0,
+      "rank": 19
     },
     {
       "team": "太陽",
@@ -1432,93 +1442,85 @@
       "off": 113.7,
       "def": 119.3,
       "form": 0.0,
-      "rank": 19
-    },
-    {
-      "team": "爵士",
-      "net": -6.5,
-      "off": 113.6,
-      "def": 120.1,
-      "form": 0.0,
       "rank": 20
     },
     {
-      "team": "國王",
-      "net": -6.9,
-      "off": 113.2,
-      "def": 120.1,
+      "team": "魔術",
+      "net": -5.7,
+      "off": 110.4,
+      "def": 116.1,
       "form": 0.0,
       "rank": 21
     },
     {
       "team": "溜馬",
-      "net": -9.1,
-      "off": 111.2,
-      "def": 120.3,
+      "net": -6.6,
+      "off": 111.6,
+      "def": 118.2,
       "form": 0.0,
       "rank": 22
     },
     {
-      "team": "熱火",
-      "net": -10.0,
-      "off": 110.4,
-      "def": 120.4,
+      "team": "金塊",
+      "net": -7.3,
+      "off": 108.7,
+      "def": 116.0,
       "form": 0.0,
       "rank": 23
     },
     {
-      "team": "金塊",
-      "net": -10.0,
-      "off": 112.3,
-      "def": 122.3,
+      "team": "國王",
+      "net": -7.6,
+      "off": 112.8,
+      "def": 120.4,
       "form": 0.0,
       "rank": 24
     },
     {
-      "team": "黃蜂",
-      "net": -11.4,
-      "off": 101.8,
-      "def": 113.2,
+      "team": "巫師",
+      "net": -9.0,
+      "off": 110.2,
+      "def": 119.2,
       "form": 0.0,
       "rank": 25
     },
     {
-      "team": "鵜鶘",
-      "net": -11.8,
-      "off": 120.4,
-      "def": 132.2,
+      "team": "黃蜂",
+      "net": -10.2,
+      "off": 99.5,
+      "def": 109.7,
       "form": 0.0,
       "rank": 26
     },
     {
-      "team": "巫師",
-      "net": -12.4,
-      "off": 108.2,
-      "def": 120.6,
+      "team": "鵜鶘",
+      "net": -11.7,
+      "off": 113.3,
+      "def": 125.0,
       "form": 0.0,
       "rank": 27
     },
     {
       "team": "籃網",
-      "net": -14.6,
-      "off": 111.8,
-      "def": 126.4,
+      "net": -14.1,
+      "off": 112.1,
+      "def": 126.2,
       "form": 0.0,
       "rank": 28
     },
     {
       "team": "公鹿",
-      "net": -16.8,
-      "off": 111.1,
-      "def": 127.9,
+      "net": -14.2,
+      "off": 111.7,
+      "def": 125.9,
       "form": 0.0,
       "rank": 29
     },
     {
       "team": "公牛",
-      "net": -25.0,
-      "off": 107.6,
-      "def": 132.6,
+      "net": -19.8,
+      "off": 112.2,
+      "def": 132.0,
       "form": 0.0,
       "rank": 30
     }
@@ -1526,136 +1528,136 @@
   "elo_rankings": [
     {
       "team": "火箭",
-      "rating": 1538.9,
+      "rating": 1547.3,
       "rank": 1
-    },
-    {
-      "team": "雷霆",
-      "rating": 1538.3,
-      "rank": 2
     },
     {
       "team": "灰熊",
       "rating": 1537.2,
-      "rank": 3
+      "rank": 2
     },
     {
       "team": "拓荒者",
       "rating": 1529.7,
-      "rank": 4
-    },
-    {
-      "team": "黃蜂",
-      "rating": 1519.5,
-      "rank": 5
+      "rank": 3
     },
     {
       "team": "湖人",
-      "rating": 1519.1,
+      "rating": 1528.3,
+      "rank": 4
+    },
+    {
+      "team": "活塞",
+      "rating": 1528.0,
+      "rank": 5
+    },
+    {
+      "team": "七六人",
+      "rating": 1527.7,
       "rank": 6
+    },
+    {
+      "team": "雷霆",
+      "rating": 1527.2,
+      "rank": 7
+    },
+    {
+      "team": "騎士",
+      "rating": 1520.8,
+      "rank": 8
+    },
+    {
+      "team": "暴龍",
+      "rating": 1519.4,
+      "rank": 9
     },
     {
       "team": "塞爾提克",
       "rating": 1518.6,
-      "rank": 7
-    },
-    {
-      "team": "灰狼",
-      "rating": 1518.6,
-      "rank": 8
-    },
-    {
-      "team": "七六人",
-      "rating": 1518.3,
-      "rank": 9
-    },
-    {
-      "team": "活塞",
-      "rating": 1518.0,
       "rank": 10
     },
     {
-      "team": "騎士",
-      "rating": 1511.1,
+      "team": "獨行俠",
+      "rating": 1510.6,
       "rank": 11
     },
     {
-      "team": "暴龍",
+      "team": "馬刺",
       "rating": 1510.0,
       "rank": 12
     },
     {
-      "team": "馬刺",
-      "rating": 1500.6,
+      "team": "黃蜂",
+      "rating": 1509.4,
       "rank": 13
     },
     {
-      "team": "老鷹",
-      "rating": 1500.5,
+      "team": "灰狼",
+      "rating": 1507.5,
       "rank": 14
     },
     {
-      "team": "巫師",
-      "rating": 1500.0,
+      "team": "金塊",
+      "rating": 1498.6,
       "rank": 15
     },
     {
-      "team": "獨行俠",
-      "rating": 1499.5,
+      "team": "勇士",
+      "rating": 1492.7,
       "rank": 16
     },
     {
-      "team": "溜馬",
-      "rating": 1497.8,
+      "team": "尼克",
+      "rating": 1491.7,
       "rank": 17
-    },
-    {
-      "team": "魔術",
-      "rating": 1490.6,
-      "rank": 18
     },
     {
       "team": "太陽",
       "rating": 1490.6,
+      "rank": 18
+    },
+    {
+      "team": "巫師",
+      "rating": 1490.3,
       "rank": 19
     },
     {
-      "team": "快艇",
-      "rating": 1490.6,
+      "team": "老鷹",
+      "rating": 1489.4,
       "rank": 20
     },
     {
-      "team": "金塊",
-      "rating": 1489.2,
+      "team": "溜馬",
+      "rating": 1488.4,
       "rank": 21
     },
     {
-      "team": "公鹿",
-      "rating": 1482.2,
+      "team": "快艇",
+      "rating": 1481.4,
       "rank": 22
     },
     {
-      "team": "尼克",
-      "rating": 1481.7,
+      "team": "魔術",
+      "rating": 1481.1,
       "rank": 23
     },
     {
-      "team": "勇士",
-      "rating": 1481.7,
+      "team": "公鹿",
+      "rating": 1473.8,
       "rank": 24
     },
     {
-      "team": "爵士",
-      "rating": 1481.7,
+      "team": "熱火",
+      "rating": 1472.8,
       "rank": 25
     },
     {
-      "team": "公牛",
-      "rating": 1480.3,
+      "team": "爵士",
+      "rating": 1472.2,
       "rank": 26
     },
     {
-      "team": "鵜鶘",
+      "team": "公牛",
       "rating": 1470.3,
       "rank": 27
     },
@@ -1665,13 +1667,13 @@
       "rank": 28
     },
     {
-      "team": "熱火",
+      "team": "籃網",
       "rating": 1461.7,
       "rank": 29
     },
     {
-      "team": "籃網",
-      "rating": 1461.7,
+      "team": "鵜鶘",
+      "rating": 1460.8,
       "rank": 30
     }
   ]
