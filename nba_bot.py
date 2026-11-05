@@ -1821,12 +1821,41 @@ def build_parlay(picks_for_date):
     }
 
 
+def _matchup_from_history_key(game_id, market):
+    """Best-effort matchup string reconstructed from a history entry's own
+    dict key, for entries written before the "matchup" field existed.
+
+    The team identity was always encoded in the key -- that's literally
+    how grade_pending_history()/find_final_score() locate the right final
+    score -- it just was never also copied into a separately readable
+    field until now. Since the key already has it, old entries don't
+    need to stay blank forever: every key format this file has ever used
+    for history (`summer_<matchup>_<date>`, `<away>@<home>_<date>`, and
+    `<away>@<home>_<date>_total`) is parsed here. Returns None if the key
+    doesn't match any known shape.
+    """
+    try:
+        if game_id.startswith("summer_"):
+            rest = game_id[len("summer_"):]
+            matchup, _, _date = rest.rpartition("_")
+            return matchup or None
+        base = game_id[:-len("_total")] if market == "total" and game_id.endswith("_total") else game_id
+        teams_part, _date = base.rsplit("_", 1)
+        away_en, home_en = teams_part.split("@", 1)
+        return "%s @ %s" % (TEAM_CN.get(away_en, away_en), TEAM_CN.get(home_en, home_en))
+    except ValueError:
+        return None
+
+
 def build_history_list(history, limit=30):
-    items = sorted(history.values(), key=lambda h: h.get("date", ""), reverse=True)
-    return [
-        {
+    items = sorted(history.items(), key=lambda kv: kv[1].get("date", ""), reverse=True)
+    out = []
+    for game_id, h in items[:limit]:
+        market  = h.get("market", "spread")
+        matchup = h.get("matchup") or _matchup_from_history_key(game_id, market) or ""
+        out.append({
             "date":        h.get("date", ""),
-            "matchup":     h.get("matchup", ""),
+            "matchup":     matchup,
             "bet":         h.get("bet", ""),
             "book":        h.get("book", ""),
             "price":       h.get("price"),
@@ -1835,11 +1864,10 @@ def build_history_list(history, limit=30):
             "kelly_stake": h.get("kelly_stake"),
             "result":      RESULT_ZH.get(h.get("result", "pending"), h.get("result", "pending")),
             "league":      h.get("league", "regular"),
-            "market":      h.get("market", "spread"),
+            "market":      market,
             "final_score": h.get("final_score"),
-        }
-        for h in items[:limit]
-    ]
+        })
+    return out
 
 
 def build_performance_trend(history):
