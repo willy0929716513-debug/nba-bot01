@@ -1593,6 +1593,7 @@ def record_summer_history(history, summer_league, is_official_run):
             continue
         history[game_id] = {
             "date":        date,
+            "matchup":     r["matchup"],
             "bet":         r["bet"],
             "book":        r["book"],
             "price":       r["price"],
@@ -1825,6 +1826,7 @@ def build_history_list(history, limit=30):
     return [
         {
             "date":        h.get("date", ""),
+            "matchup":     h.get("matchup", ""),
             "bet":         h.get("bet", ""),
             "book":        h.get("book", ""),
             "price":       h.get("price"),
@@ -2252,6 +2254,7 @@ def run():
                             history[game_id] = {
                                 "date":             g_date,
                                 "market":           "spread",
+                                "matchup":          "%s @ %s" % (away_cn, home_cn),
                                 "bet":              "%s %+.1f" % (TEAM_CN.get(name, name), line),
                                 "book":             book.get("title", "?"),
                                 "price":            price,
@@ -2356,6 +2359,7 @@ def run():
                             history[total_hist_id] = {
                                 "date":            g_date,
                                 "market":          "total",
+                                "matchup":         "%s @ %s" % (away_cn, home_cn),
                                 "bet":             "%s %.1f" % (side_cn, total_line),
                                 "book":            book.get("title", "?"),
                                 "price":           t_price,

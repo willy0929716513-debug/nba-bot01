@@ -1328,14 +1328,24 @@
     history.forEach(function (h) {
       var isSummer = h.league === "summer";
       var isTotal  = h.market === "total";
+      // Older history entries written before the matchup field existed
+      // have no "who played whom" on record -- fall back to just the bet
+      // string (with a single team logo guessed from it) rather than
+      // showing nothing.
+      var titleHtml = h.matchup
+        ? matchupWithLogos(h.matchup)
+        : ((isTotal ? "" : teamLogo(teamNameFromBet(h.bet), 18)) + esc(h.bet));
       html += '<div class="row">' +
         '<div class="row-top">' +
-          '<span class="row-title matchup-line">' + (isTotal ? "" : teamLogo(teamNameFromBet(h.bet), 18)) + esc(h.bet) +
-            (isSummer ? ' <span class="badge badge-status">夏聯</span>' : '') +
-            (isTotal ? ' <span class="badge badge-status">大小分</span>' : '') + '</span>' +
-          '<span class="badge ' + resultBadgeClass(h.result) + '">' + esc(h.result) + '</span>' +
+          '<span class="row-title matchup-line">' + titleHtml + '</span>' +
+          '<span class="row-time">' + esc(h.date) + '</span>' +
         '</div>' +
-        '<div class="row-sub">' + esc(h.date) + ' ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) + '</div>' +
+        '<div class="row-sub">' +
+          '<span class="badge ' + resultBadgeClass(h.result) + '" style="margin-right:6px;">' + esc(h.result) + '</span>' +
+          (isSummer ? '<span class="badge badge-status" style="margin-right:6px;">夏聯</span>' : '') +
+          (isTotal ? '<span class="badge badge-status" style="margin-right:6px;">大小分</span>' : '') +
+          '投注 <b>' + esc(h.bet) + '</b> ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) +
+        '</div>' +
         (h.final_score ? '<div class="row-sub">實際比分：' + esc(h.final_score) + '</div>' : '') +
         '<div class="row-stats">' +
           '<span class="stat">模型勝率 <b>' + Number(h.prob).toFixed(1) + '%</b></span>' +
