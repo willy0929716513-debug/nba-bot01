@@ -56,7 +56,17 @@ SUMMER_LEAGUE_ESPN_SLUGS = [
 ]
 
 SIMS             = 50000
-EDGE_THRESHOLD   = 0.06
+# Raised from 0.06 -- not fit to this project's own ~30-50-bet history
+# (far too few samples to tune a threshold against without just chasing
+# noise), but a deliberate, structural selectivity choice: a real,
+# consistently exploitable edge against an efficient sportsbook line is
+# rare, and the smaller an edge is, the more of it is plausibly just
+# estimation error rather than a genuine mispricing. Demanding more edge
+# before something counts as a real (Kelly-staked) recommendation trades
+# fewer total picks for a higher bar per pick, which is the standard
+# selectivity lever in this situation -- not a claim that the
+# probability model itself got more accurate.
+EDGE_THRESHOLD   = 0.08
 MODEL_WEIGHT     = 0.35
 MARKET_WEIGHT    = 0.65
 DYNAMIC_STD_BASE = 13.0
