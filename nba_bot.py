@@ -729,8 +729,12 @@ def format_market_calibration_line(label, perf, calib, min_sample=None):
         line += "> Brier %.4f ｜ LogLoss %.4f" % (calib["brier"], calib["log_loss"])
         if calib["mae_margin"] is not None:
             line += " ｜ 分差 MAE %.1f" % calib["mae_margin"]
+        if calib["bias_margin"] is not None:
+            line += " ｜ 分差偏差 %+.1f" % calib["bias_margin"]
         if calib["mae_total"] is not None:
             line += " ｜ 總分 MAE %.1f" % calib["mae_total"]
+        if calib["bias_total"] is not None:
+            line += " ｜ 總分偏差 %+.1f" % calib["bias_total"]
         line += "\n"
     if total < min_sample:
         line += "（樣本數 < %d 場，統計僅供參考，不代表長期表現）\n" % min_sample
@@ -815,10 +819,25 @@ def calc_calibration(history, league="regular", market=None):
     those fields existed, are silently skipped for that stat only (they
     still count toward the Brier/log-loss sample, since prob/result were
     always stored).
+
+    bias_margin/bias_total are the SIGNED mean of (predicted - actual),
+    alongside the existing absolute-error MAE. MAE alone can't tell a
+    model that's randomly wrong in both directions apart from one with a
+    consistent directional lean (e.g. always overrating the home side, or
+    always projecting totals too high) -- the exact asymmetry-shaped bug
+    found and fixed in the totals pipeline (model probability never
+    blended with market consensus) wouldn't have shown up as a changed
+    MAE from that alone, since an unblended estimate isn't necessarily
+    biased in one constant direction, just noisier/overconfident. This is
+    a second, complementary measurement, still unfitted -- it exists so a
+    future directional bias is visible on the dashboard/reports instead
+    of requiring the same kind of manual digging that caught this one.
     """
     outcomes = []
     margin_errors = []
+    margin_diffs = []
     total_errors = []
+    total_diffs = []
     for record in history.values():
         if record.get("league", "regular") != league:
             continue
@@ -835,13 +854,20 @@ def calc_calibration(history, league="regular", market=None):
         pm, am = record.get("predicted_margin"), record.get("actual_margin")
         if pm is not None and am is not None:
             margin_errors.append(abs(pm - am))
+            margin_diffs.append(pm - am)
         pt, at = record.get("predicted_total"), record.get("actual_total")
         if pt is not None and at is not None:
             total_errors.append(abs(pt - at))
+            total_diffs.append(pt - at)
 
     n = len(outcomes)
     if n == 0:
-        return {"n": 0, "brier": None, "log_loss": None, "mae_margin": None, "mae_total": None, "buckets": []}
+        return {
+            "n": 0, "brier": None, "log_loss": None,
+            "mae_margin": None, "mae_total": None,
+            "bias_margin": None, "bias_total": None,
+            "buckets": [],
+        }
 
     brier = sum((p - o) ** 2 for p, o in outcomes) / n
 
@@ -875,6 +901,8 @@ def calc_calibration(history, league="regular", market=None):
         "log_loss":  round(log_loss, 4),
         "mae_margin": round(sum(margin_errors) / len(margin_errors), 2) if margin_errors else None,
         "mae_total":  round(sum(total_errors) / len(total_errors), 2) if total_errors else None,
+        "bias_margin": round(sum(margin_diffs) / len(margin_diffs), 2) if margin_diffs else None,
+        "bias_total":  round(sum(total_diffs) / len(total_diffs), 2) if total_diffs else None,
         "buckets":   buckets,
     }
 

@@ -1297,7 +1297,9 @@
       html += '<span class="stat">Brier <b>' + Number(calib.brier).toFixed(4) + '</b></span>' +
         '<span class="stat">LogLoss <b>' + Number(calib.log_loss).toFixed(4) + '</b></span>';
       if (calib.mae_margin != null) html += '<span class="stat">分差 MAE <b>' + Number(calib.mae_margin).toFixed(1) + '</b></span>';
+      if (calib.bias_margin != null) html += '<span class="stat">分差偏差 <b>' + (calib.bias_margin >= 0 ? "+" : "") + Number(calib.bias_margin).toFixed(1) + '</b></span>';
       if (calib.mae_total != null) html += '<span class="stat">總分 MAE <b>' + Number(calib.mae_total).toFixed(1) + '</b></span>';
+      if (calib.bias_total != null) html += '<span class="stat">總分偏差 <b>' + (calib.bias_total >= 0 ? "+" : "") + Number(calib.bias_total).toFixed(1) + '</b></span>';
     }
     html += '</div>';
     if (small) {
