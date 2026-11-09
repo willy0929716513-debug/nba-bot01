@@ -2326,7 +2326,24 @@ def run():
                     if total_advantage < 0:
                         continue
 
-                    prob_over = simulate_cover(model_total - total_line, 0, std=TOTAL_STD_BASE)
+                    # Bug fix: unlike the spread pipeline (which blends its own
+                    # margin with the market consensus line at MODEL_WEIGHT/
+                    # MARKET_WEIGHT before simulating), this was comparing the
+                    # model's OWN total prediction straight against the book's
+                    # line with no market anchoring at all -- t_consensus was
+                    # computed and shown in the message, but never actually fed
+                    # into the probability. Real settled totals history bears
+                    # this out: the model-only total's empirical error (MAE
+                    # ~16 points) implies a true std near 20, well above the
+                    # 15 this simulation assumed, which is exactly the shape of
+                    # overconfident probabilities -- and totals performance
+                    # (50% win rate, negative profit, worse-calibrated than
+                    # spreads) matches. Blending toward the market consensus
+                    # the same way spreads already do closes that specific gap
+                    # using the project's own existing weights, not a new
+                    # number picked to fit this sample's results.
+                    blended_total = model_total * MODEL_WEIGHT + t_consensus * MARKET_WEIGHT
+                    prob_over = simulate_cover(blended_total - total_line, 0, std=TOTAL_STD_BASE)
                     t_prob    = prob_over if side == "over" else (1 - prob_over)
                     t_edge    = t_prob - (1 / t_price)
 
