@@ -654,6 +654,133 @@ def build_home_advantage(games):
     return league_avg, team_adv
 
 
+def fetch_espn_team_ids():
+    """ESPN's own numeric team IDs, discovered fresh each run rather than
+    hardcoded -- same "discover, don't hardcode" approach already used for
+    the Summer League sport_key, so a relocation/renumbering doesn't
+    silently go stale. Free, keyless endpoint, same host already used for
+    Summer League scores. Returns {normalized_team_name: espn_id}, {} on
+    any failure (caller must treat empty as "feature unavailable this
+    run", never crash or guess IDs)."""
+    data = safe_get(
+        "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams",
+        params={"limit": 50},
+    )
+    if not data:
+        return {}
+    out = {}
+    try:
+        leagues = data["sports"][0]["leagues"][0]
+        for entry in leagues.get("teams", []):
+            team = entry.get("team", {})
+            name = normalize_team(team.get("displayName", ""))
+            tid  = team.get("id")
+            if name and tid:
+                out[name] = tid
+    except (KeyError, IndexError, TypeError):
+        return {}
+    return out
+
+
+ESPN_BOX_STAT_FIELDS = {
+    "fieldGoalsAttempted": "fga", "fieldGoalsMade": "fgm",
+    "threePointFieldGoalsAttempted": "tpa", "threePointFieldGoalsMade": "tpm",
+    "freeThrowsAttempted": "fta", "freeThrowsMade": "ftm",
+    "offensiveRebounds": "oreb", "turnovers": "tov", "points": "pts",
+    "gamesPlayed": "games",
+}
+
+
+def fetch_team_box_stats(team_ids):
+    """Season-to-date cumulative team box-score totals from ESPN's free,
+    keyless stats endpoint (same host already used for Summer League
+    scores). balldontlie's own equivalent data (box scores / advanced
+    stats) requires a paid tier -- see README's 已知限制 history -- this is
+    a free source for the same underlying numbers (shot attempts, makes,
+    turnovers, rebounds), not the same endpoint.
+
+    Returns {team_name: {fga, fgm, tpa, tpm, fta, ftm, oreb, tov, pts,
+    games}}. A team missing from the response, or whose response is
+    malformed/incomplete, is simply left out of the result -- never
+    filled with a guessed or carried-over value.
+    """
+    out = {}
+    for team_name, tid in team_ids.items():
+        data = safe_get(
+            "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/%s/statistics" % tid,
+        )
+        if not data:
+            continue
+        try:
+            categories = data["results"]["stats"]["categories"]
+        except (KeyError, TypeError):
+            continue
+        row = {}
+        for cat in categories:
+            for stat in cat.get("stats", []):
+                key = ESPN_BOX_STAT_FIELDS.get(stat.get("name"))
+                if key is None:
+                    continue
+                try:
+                    row[key] = float(stat["value"])
+                except (KeyError, TypeError, ValueError):
+                    pass
+        if len(row) == len(ESPN_BOX_STAT_FIELDS) and row.get("games", 0) > 0 and row.get("fga", 0) > 0:
+            out[team_name] = row
+    return out
+
+
+def compute_four_factors(box_stats):
+    """Dean Oliver's "four factors" (eFG%, turnover rate, offensive
+    rebound rate, free-throw rate) plus an estimated pace (possessions
+    per game) and pace-adjusted offensive rating, from real season-to-
+    date box totals. Standard textbook formulas applied to real data --
+    not fitted to this project's own small bet-outcome sample, so the
+    usual small-sample caution that governs calibration/weight tuning in
+    this file doesn't apply here the same way; these are fit to this
+    season's hundreds of team-games of real box-score totals, same as
+    build_live_ratings' SRS.
+
+    oreb_rate here is an offense-only approximation -- own offensive
+    rebounds over own missed-shot opportunities (OREB / (FGA - FGM +
+    OREB)) -- rather than the textbook-exact OREB / (OREB + opponent
+    DREB), since this endpoint doesn't expose opponent-matched rebounding
+    splits. Flagged here rather than silently presented as the exact
+    textbook version.
+
+    No DRtg here: points allowed would need dividing by the pace of the
+    games this team actually played (opponent-paced), which this
+    endpoint doesn't give either. build_live_ratings' existing points-
+    allowed-per-game approach is left as is rather than faking a
+    defensive pace from this team's own offensive one.
+
+    A team with zero games or zero FGA is skipped (new/incomplete data),
+    not divided-by-zero into a fabricated number.
+    """
+    out = {}
+    for team, b in box_stats.items():
+        if b.get("fga", 0) <= 0 or b.get("games", 0) <= 0:
+            continue
+        efg = (b["fgm"] + 0.5 * b["tpm"]) / b["fga"]
+        ft_rate = b["fta"] / b["fga"]
+        tov_denom = b["fga"] + 0.44 * b["fta"] + b["tov"]
+        tov_pct = b["tov"] / tov_denom if tov_denom > 0 else None
+        oreb_denom = b["fga"] - b["fgm"] + b["oreb"]
+        oreb_rate = b["oreb"] / oreb_denom if oreb_denom > 0 else None
+        possessions = b["fga"] - b["oreb"] + b["tov"] + 0.44 * b["fta"]
+        pace = possessions / b["games"] if b["games"] > 0 else None
+        ortg = (b["pts"] / b["games"]) / pace * 100 if pace else None
+        out[team] = {
+            "efg":       round(efg, 3),
+            "ft_rate":   round(ft_rate, 3),
+            "tov_pct":   round(tov_pct, 3) if tov_pct is not None else None,
+            "oreb_rate": round(oreb_rate, 3) if oreb_rate is not None else None,
+            "pace":      round(pace, 1) if pace else None,
+            "ortg":      round(ortg, 1) if ortg is not None else None,
+        }
+    return out
+
+
 def describe_data_source(live_ratings, season_games):
     """Distinguish *why* live ratings fell back to FALLBACK_RATINGS, since
     "靜態備用" alone collapses three very different situations into one
@@ -1177,16 +1304,37 @@ def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_r
     return margin, fmt(h_missing), fmt(a_missing)
 
 
-def predict_total(home, away, live_ratings):
+def predict_total(home, away, live_ratings, four_factors=None, league_avg_pace=None):
     """Each side's expected points is its own offense against the
     opponent's defense, not just the two offenses added together -- the
     previous formula ignored defense entirely, so a historically stingy
-    defense never pulled a projected total down."""
+    defense never pulled a projected total down.
+
+    When real pace data is available for both teams (four_factors, from
+    compute_four_factors()) and a league_avg_pace to compare against, the
+    raw off/def-based estimate is scaled by how much faster/slower than
+    league average this specific matchup is expected to play. Two slow-
+    pace teams should be projected for fewer total points than the raw
+    per-game average alone would suggest, and a fast-paced matchup for
+    more -- the previous version had no way to account for pace at all.
+    Missing pace data for either team (fetch failed, a team too new to
+    have a full box-stat line yet, etc.) leaves the estimate exactly as
+    it was before this -- no guessed pace is ever substituted in.
+    """
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
     home_pts = (h_base["off"] + a_base["def"]) / 2
     away_pts = (a_base["off"] + h_base["def"]) / 2
-    return round(home_pts + away_pts, 1)
+    total = home_pts + away_pts
+
+    if four_factors and league_avg_pace:
+        h_ff = four_factors.get(home)
+        a_ff = four_factors.get(away)
+        if h_ff and a_ff and h_ff.get("pace") and a_ff.get("pace"):
+            game_pace = (h_ff["pace"] + a_ff["pace"]) / 2
+            total *= game_pace / league_avg_pace
+
+    return round(total, 1)
 
 
 def get_consensus_moneyline_prob(bookmakers, team_name):
@@ -2024,19 +2172,35 @@ def build_performance_trend(history):
     return trend
 
 
-def build_power_rankings(live_ratings):
+def build_power_rankings(live_ratings, four_factors=None):
     """Rank order for the dashboard's team power-rankings table: net rating
     (off minus def, already SRS opponent-adjusted by build_live_ratings)
     descending. Empty when live_ratings itself is empty (static-fallback
-    mode), same as every other feature that depends on real game data."""
+    mode), same as every other feature that depends on real game data.
+
+    four_factors (from compute_four_factors(), real box-stat-derived
+    eFG%/turnover rate/offensive rebound rate/FT rate/pace) are attached
+    per team when available, display-only -- same "real signal, shown
+    before it's validated enough to wire into Kelly-staked picks" status
+    as the Elo ratings and moneyline-implied probability already on this
+    dashboard. None for a team missing from the four_factors fetch,
+    never a guessed number.
+    """
+    four_factors = four_factors or {}
     rows = []
     for team, r in live_ratings.items():
+        ff = four_factors.get(team, {})
         rows.append({
             "team": TEAM_CN.get(team, team),
             "net":  round(r["off"] - r["def"], 1),
             "off":  round(r["off"], 1),
             "def":  round(r["def"], 1),
             "form": round(r.get("form", 0.0), 2),
+            "pace":      ff.get("pace"),
+            "efg":       round(ff["efg"] * 100, 1) if ff.get("efg") is not None else None,
+            "tov_pct":   round(ff["tov_pct"] * 100, 1) if ff.get("tov_pct") is not None else None,
+            "oreb_rate": round(ff["oreb_rate"] * 100, 1) if ff.get("oreb_rate") is not None else None,
+            "ft_rate":   round(ff["ft_rate"] * 100, 1) if ff.get("ft_rate") is not None else None,
         })
     rows.sort(key=lambda x: x["net"], reverse=True)
     for i, row in enumerate(rows, 1):
@@ -2272,6 +2436,16 @@ def run():
     team_dates   = build_rest_days(season_games)
     league_home_adv, team_home_adv = build_home_advantage(season_games)
     data_source  = describe_data_source(live_ratings, season_games)
+
+    # Free (ESPN, no key) team box-stat totals -> real four factors + pace,
+    # used to pace-adjust predict_total() and shown on the power-rankings
+    # dashboard. Empty on any fetch hiccup -- every caller below already
+    # treats that as "feature unavailable this run", never a crash.
+    espn_team_ids   = fetch_espn_team_ids()
+    team_box_stats  = fetch_team_box_stats(espn_team_ids) if espn_team_ids else {}
+    four_factors    = compute_four_factors(team_box_stats) if team_box_stats else {}
+    _paces          = [f["pace"] for f in four_factors.values() if f.get("pace")]
+    league_avg_pace = (sum(_paces) / len(_paces)) if _paces else None
     injuries     = get_injury_report()
     games        = fetch_odds()
     history      = load_history()
@@ -2316,7 +2490,7 @@ def run():
             home_rest=home_rest, away_rest=away_rest, home_adv=home_adv,
         )
 
-        model_total     = predict_total(home, away, live_ratings)
+        model_total     = predict_total(home, away, live_ratings, four_factors=four_factors, league_avg_pace=league_avg_pace)
         consensus_total = get_consensus_total(bookmakers)
         ou_note = ""
         if consensus_total:
@@ -2694,7 +2868,7 @@ def run():
         total_rec=total_rec, wins=wins, win_rate=win_rate, profit=profit,
         summer_league=summer_league, history=history,
         schedule=schedule, parlay=parlay, parlay_note=parlay_note,
-        power_rankings=build_power_rankings(live_ratings),
+        power_rankings=build_power_rankings(live_ratings, four_factors=four_factors),
         daily_totals=daily_totals,
         elo_rankings=build_elo_rankings(build_elo_ratings(season_games)),
     )

@@ -1071,6 +1071,13 @@
         ? '近期手感 <b style="color:var(--success);">↑ ' + r.form.toFixed(1) + '</b>'
         : (r.form < -0.15 ? '近期手感 <b style="color:var(--danger);">↓ ' + Math.abs(r.form).toFixed(1) + '</b>' : '近期手感持平');
       var elo = eloByTeam[r.team];
+      var ffHtml = (r.efg != null)
+        ? '<div class="team-stats-line">真實命中率 eFG% <b style="color:var(--ink);">' + Number(r.efg).toFixed(1) + '%</b>' +
+          ' ｜ 失誤率 <b style="color:var(--ink);">' + Number(r.tov_pct).toFixed(1) + '%</b>' +
+          ' ｜ 進攻籃板率 <b style="color:var(--ink);">' + Number(r.oreb_rate).toFixed(1) + '%</b>' +
+          ' ｜ 罰球率 <b style="color:var(--ink);">' + Number(r.ft_rate).toFixed(1) + '%</b>' +
+          ' ｜ 節奏 <b style="color:var(--ink);">' + Number(r.pace).toFixed(1) + '</b></div>'
+        : '';
       html += '<div class="row">' +
         '<div class="row-top">' +
           '<span class="row-title matchup-line"><span class="rank-num' + (r.rank <= 3 ? ' top3' : '') + '">' + r.rank + '</span>' +
@@ -1080,11 +1087,12 @@
         '<div class="team-stats-line">進攻 <b style="color:var(--ink);">' + Number(r.off).toFixed(1) +
           '</b> ｜ 防守 <b style="color:var(--ink);">' + Number(r.def).toFixed(1) + '</b> ｜ ' + formHtml +
           (elo ? ' ｜ Elo <b style="color:var(--ink);">' + Math.round(elo.rating) + '</b>（#' + elo.rank + '）' : '') + '</div>' +
+        ffHtml +
       '</div>';
     });
     html += '</div>';
     html += '<div class="note-box">' + svg("info") +
-      '<span>淨勝分（進攻減防守）已用 SRS 依對手實際戰力反覆校正，不是單純的場均得失分差；近期手感比較最近 10 場與整季的場均淨勝分落差。Elo 是另一套獨立計算的評分系統（標準公式，起始 1500 分），僅供跟 SRS 排名比較參考，目前樣本數還不足以驗證哪一套更準，尚未用來決定推薦。</span></div>';
+      '<span>淨勝分（進攻減防守）已用 SRS 依對手實際戰力反覆校正，不是單純的場均得失分差；近期手感比較最近 10 場與整季的場均淨勝分落差。Elo 是另一套獨立計算的評分系統（標準公式，起始 1500 分），僅供跟 SRS 排名比較參考，目前樣本數還不足以驗證哪一套更準，尚未用來決定推薦。eFG%/失誤率/進攻籃板率/罰球率/節奏是從真實球員出手數據算出的進階數據（免費來源），目前僅供參考顯示，節奏已經用來微調大小分的預測總分，但還沒有混入讓分的進攻/防守評分。</span></div>';
     body.innerHTML = html;
   }
 
