@@ -49,7 +49,8 @@ NBA 賠率分析機器人：抓取即時賠率與球隊戰績，套用蒙地卡�
 1. 想一個夠長、不好猜的 topic 名稱（例如用密碼產生器產生一串隨機英數字），把它當密碼保管——不要貼在 issue、commit 訊息或任何公開的地方，這個 repo 是公開的
 2. 到這個 repo 的 Settings → Secrets and variables → Actions，新增一個 secret：名稱 `NTFY_TOPIC`，值就是上一步想的字串
 3. 手機安裝 [ntfy](https://ntfy.sh/) App（iOS/Android 都有，免費），開啟後訂閱同一個 topic 名稱
-4. 等下一次 `live_score_alerts.yml` 執行（每 10 分鐘一次），或到 Actions 分頁手動 Run workflow 測試——有真正達標推薦的比賽開賽或打完時，手機就會收到通知，鎖定畫面也看得到
+4. 測試是否設定成功：到 repo 的 **Actions** 分頁 → 選 `Live Score Alerts` → 右上角 **Run workflow** → 把「只發一則測試推播」的勾選框打勾 → Run。幾秒內手機就應該會收到一則測試通知；收不到的話先看那次執行的 log，如果寫「NTFY_TOPIC not set」代表 secret 沒設定成功（檢查名稱有沒有打錯），如果 log 顯示「ntfy push sent」但手機沒收到，大概是第 3 步訂閱的 topic 名稱跟 secret 裡的不一樣
+5. 測試過關後，之後就讓它照每 10 分鐘的排程自動跑（不勾測試框的那個版本）——有真正達標推薦的比賽開賽或打完時，手機就會收到通知，鎖定畫面也看得到
 
 不設定 `NTFY_TOPIC` 完全不影響其他功能，`live_score_alerts.yml` 每次執行只會記錄一行「沒設定，跳過推播」的 log，不會出錯。
 
