@@ -819,6 +819,12 @@ def calc_performance(history, league="regular", market=None, since=None):
     return total, win, win_rate, profit
 
 
+CALIBRATION_BUCKET_DEFS = [
+    ("50-60%", 0.5, 0.6), ("60-70%", 0.6, 0.7), ("70-80%", 0.7, 0.8),
+    ("80-90%", 0.8, 0.9), ("90%+",   0.9, 1.01),
+]
+
+
 def calc_calibration(history, league="regular", market=None, since=None):
     """Brier score, log loss, and (when available) mean absolute error of
     the model's predicted margin/total against what actually happened --
@@ -902,12 +908,8 @@ def calc_calibration(history, league="regular", market=None, since=None):
         log_loss += -(o * math.log(pc) + (1 - o) * math.log(1 - pc))
     log_loss /= n
 
-    bucket_defs = [
-        ("50-60%", 0.5, 0.6), ("60-70%", 0.6, 0.7), ("70-80%", 0.7, 0.8),
-        ("80-90%", 0.8, 0.9), ("90%+",   0.9, 1.01),
-    ]
     buckets = []
-    for label, lo, hi in bucket_defs:
+    for label, lo, hi in CALIBRATION_BUCKET_DEFS:
         bucket = [(p, o) for p, o in outcomes if lo <= p < hi]
         if not bucket:
             continue
@@ -929,6 +931,47 @@ def calc_calibration(history, league="regular", market=None, since=None):
         "bias_total":  round(sum(total_diffs) / len(total_diffs), 2) if total_diffs else None,
         "buckets":   buckets,
     }
+
+
+# Below this real historical sample size, a calibration bucket's actual_rate
+# isn't trusted to gate anything -- same "too small to mean anything yet"
+# bar as MIN_HISTORY_SAMPLE, just applied per-bucket instead of to the whole
+# market. A bucket with 2-3 settled bets can show 0% or 100% purely from
+# which way one or two close games bounced.
+MIN_CALIBRATED_BUCKET_N = MIN_HISTORY_SAMPLE
+
+# The real-world win-rate band a parlay leg's calibration bucket must fall
+# into to count as "stable" -- requested by the person running this bot
+# specifically for parlay legs, where one weak leg sinks the whole ticket.
+STABLE_WINRATE_LOW  = 0.65
+STABLE_WINRATE_HIGH = 0.70
+
+
+def bucket_actual_rate(calib, prob):
+    """What a calibration bucket says ACTUALLY happened for predictions in
+    the same probability range as `prob` (0-1 scale) -- not what `prob`
+    itself claims. This is the honest way to answer "is a pick like this
+    one actually stable," since the model's own stated probability isn't
+    reliably true to its number yet (e.g. spread's 60-70% bucket has
+    actually been hitting ~42% in real settled history, while the 70-80%
+    bucket has done much better) -- using the raw stated prob to judge
+    "is this a 65-70%-stable pick" would be answering the wrong question.
+
+    Returns (actual_rate_fraction, n). actual_rate_fraction is None (with
+    n=0) when no bucket's range covers this prob at all (shouldn't happen
+    for a valid 0-1 prob, but defensive) or that bucket has zero settled
+    bets yet -- callers must treat that as "unknown," not as any
+    particular rate, and MIN_CALIBRATED_BUCKET_N exists so a technically
+    non-zero but tiny n doesn't get treated as reliable either.
+    """
+    pct = prob * 100
+    for label, lo, hi in CALIBRATION_BUCKET_DEFS:
+        if lo * 100 <= pct < hi * 100:
+            for b in calib.get("buckets", []):
+                if b["range"] == label:
+                    return b["actual_rate"] / 100, b["n"]
+            return None, 0
+    return None, 0
 
 
 def find_final_score(games, home_en, away_en, taiwan_date, window_days=1):
@@ -1830,14 +1873,33 @@ def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks,
 MAX_PARLAY_LEGS = 3
 
 
-def build_parlay(picks_for_date):
-    """Combine same-day picks into a single parlay (串關) suggestion, built
-    only from the 💎頂級 tier and capped at MAX_PARLAY_LEGS legs, taking the
-    highest-probability ones first. The explicit design goal here is
-    "least likely to blow up", not "biggest possible payout", so this
-    deliberately does NOT throw every top-tier pick of the day into one
-    bet -- more legs means more chances for exactly one of them to miss
-    and sink the whole ticket.
+def build_parlay(picks_for_date, spread_calib=None):
+    """Combine same-day picks into a single parlay (串關) suggestion, capped
+    at MAX_PARLAY_LEGS legs. The explicit design goal here is "least likely
+    to blow up", not "biggest possible payout", so this deliberately does
+    NOT throw every qualifying pick of the day into one bet -- more legs
+    means more chances for exactly one of them to miss and sink the whole
+    ticket.
+
+    Leg eligibility: requires both (a) meets_threshold (a genuine positive-
+    edge recommendation, not a sub-threshold "觀察中" pick) and (b) real
+    calibration-bucket evidence that picks at this leg's own predicted
+    probability actually win in the STABLE_WINRATE_LOW-STABLE_WINRATE_HIGH
+    range, with enough settled bets in that bucket (MIN_CALIBRATED_BUCKET_N)
+    to trust it. This is NOT "only use 💎頂級" (that's just an edge-size
+    tier, with no relationship to how accurate the stated probability has
+    actually been) and it is NOT "only use picks that say 65-70%" (the
+    model's own stated probability isn't reliably true to its number yet --
+    real settled history shows its 60-70%-stated bucket actually hitting far
+    below 65-70% at times, while a different stated band has done better).
+    Using the bucket's REAL historical hit rate is the only honest way to
+    answer "is a pick like this one actually stable" without just
+    relabeling the same picks and hoping.
+
+    spread_calib is the live calc_calibration(... market="spread") output;
+    None (no calibration data yet, or none passed) means no pick can be
+    verified as stable yet, so this returns None rather than falling back
+    to an unverified tier-based guess.
 
     Every leg must still hit for a parlay to pay out at all, so even one
     built entirely from individually-confident picks is mechanically less
@@ -1845,11 +1907,23 @@ def build_parlay(picks_for_date):
     not something leg selection can avoid, so it's spelled out in the
     output rather than left implied by "most stable."
     """
-    top_tier = [p for p in picks_for_date if p.get("tier") == "💎 頂級"]
-    if len(top_tier) < 2:
+    if not spread_calib:
         return None
-    top_tier.sort(key=lambda p: p["prob"], reverse=True)
-    legs = top_tier[:MAX_PARLAY_LEGS]
+
+    stable = []
+    for p in picks_for_date:
+        if not p.get("meets_threshold"):
+            continue
+        actual_rate, n = bucket_actual_rate(spread_calib, p["prob"])
+        if actual_rate is None or n < MIN_CALIBRATED_BUCKET_N:
+            continue
+        if STABLE_WINRATE_LOW <= actual_rate <= STABLE_WINRATE_HIGH:
+            stable.append(p)
+
+    if len(stable) < 2:
+        return None
+    stable.sort(key=lambda p: p["prob"], reverse=True)
+    legs = stable[:MAX_PARLAY_LEGS]
 
     combined_price = 1.0
     combined_prob  = 1.0
@@ -2035,7 +2109,8 @@ def build_elo_rankings(elo_ratings):
 
 def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
                       total_rec, wins, win_rate, profit, summer_league, history,
-                      schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None):
+                      schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None,
+                      parlay_note=None):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     daily_totals = daily_totals or {}
     days = []
@@ -2156,6 +2231,7 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
         "performance_trend":  build_performance_trend(history),
         "schedule":           schedule,
         "parlay":             parlay,
+        "parlay_note":        parlay_note,
         "power_rankings":     power_rankings,
         "elo_rankings":       elo_rankings or [],
     }
@@ -2571,9 +2647,13 @@ def run():
                 output += p["msg"]
             output += "-" * 30 + "\n"
 
-    parlay = build_parlay(list(daily_picks.get(today_s, {}).values()))
+    parlay = build_parlay(list(daily_picks.get(today_s, {}).values()), spread_calib=spread_calib)
+    parlay_note = None
     if parlay:
-        output += "\n🔗 **串關推薦**（僅取今日💎頂級，最多 %d 腿，求穩不求大）:\n" % MAX_PARLAY_LEGS
+        output += (
+            "\n🔗 **串關推薦**（只選歷史校準上，跟這一腿同機率區間的推薦，"
+            "實際命中率落在 %d-%d%% 之間的場次，最多 %d 腿，求穩不求大）:\n"
+        ) % (STABLE_WINRATE_LOW * 100, STABLE_WINRATE_HIGH * 100, MAX_PARLAY_LEGS)
         for leg in parlay["legs"]:
             output += "> %s | %s @ %.2f（勝率 %.1f%%）\n" % (
                 leg["matchup"], leg["bet"], leg["price"], leg["prob"]
@@ -2581,6 +2661,14 @@ def run():
         output += "> 合計賠率 %.2f | 全中機率 %.1f%%\n> %s\n" % (
             parlay["combined_price"], parlay["combined_prob"], parlay["note"]
         )
+    else:
+        parlay_note = (
+            "目前沒有任何機率區間同時滿足「已結算樣本數 ≥ %d 場」跟「實際命中率落在 "
+            "%d-%d%% 之間」兩個條件，所以今天沒有串關推薦——不是今天比較弱，是寧可不湊、"
+            "也不用沒驗證過的區間硬湊兩腿出來。"
+        ) % (MIN_CALIBRATED_BUCKET_N, STABLE_WINRATE_LOW * 100, STABLE_WINRATE_HIGH * 100)
+        if spread_calib.get("n"):
+            output += "\n🔗 **串關推薦**：%s\n" % parlay_note
 
     schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks, daily_totals)
 
@@ -2605,7 +2693,7 @@ def run():
         daily_picks=daily_picks, today_s=today_s,
         total_rec=total_rec, wins=wins, win_rate=win_rate, profit=profit,
         summer_league=summer_league, history=history,
-        schedule=schedule, parlay=parlay,
+        schedule=schedule, parlay=parlay, parlay_note=parlay_note,
         power_rankings=build_power_rankings(live_ratings),
         daily_totals=daily_totals,
         elo_rankings=build_elo_rankings(build_elo_ratings(season_games)),
