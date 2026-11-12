@@ -93,6 +93,19 @@ KELLY_FRACTION   = 0.20
 # a clean percentage that implies statistical confidence it doesn't have.
 MIN_HISTORY_SAMPLE = 10
 
+# The date the totals (大小分) pipeline started blending model_total with
+# market consensus before simulating a probability, fixing a real bug where
+# it previously ignored market consensus entirely (see blended_total in the
+# totals loop below). Settled totals bets dated before this are from the
+# old, unblended logic and shouldn't be averaged together with post-fix
+# bets when judging whether the fix actually worked -- a few bad weeks
+# under a bug that's already fixed shouldn't keep dragging down the number
+# that's supposed to say how the CURRENT logic is doing. Used only to
+# split reporting into an honest before/after comparison, never to drop
+# or hide the pre-fix record itself (still shown, just labeled as before
+# the fix rather than silently excluded).
+TOTALS_BLEND_FIX_DATE = "2026-11-10"
+
 # Re-verified ahead of the 2026-27 season tipoff (Oct 20, 2026; last checked
 # 2026-09-30) after the 2026-07 pass. Two moves resolved since then, both
 # confirmed via multiple independent sources: the Kawhi Leonard/Brandon
@@ -767,7 +780,7 @@ def build_period_report(history, period_label, cutoff_date):
     return report
 
 
-def calc_performance(history, league="regular", market=None):
+def calc_performance(history, league="regular", market=None, since=None):
     """Entries carry a "league" tag ("regular" or "summer") so the two can be
     tracked side by side in one Gist without a regular-season Kelly-based
     profit figure ever getting diluted by summer-league reference-only picks
@@ -778,6 +791,11 @@ def calc_performance(history, league="regular", market=None):
     entries, written before totals bets existed, default to "spread").
     Leaving it None keeps every existing call site's original behavior --
     both markets combined.
+
+    `since` (YYYY-MM-DD) optionally keeps only records with a game date on
+    or after it -- for comparing performance before/after a specific
+    code change without a stale pre-change sample dragging down (or
+    inflating) the read on whether that change actually helped.
     """
     total = win = 0
     profit = 0.0
@@ -785,6 +803,8 @@ def calc_performance(history, league="regular", market=None):
         if record.get("league", "regular") != league:
             continue
         if market is not None and record.get("market", "spread") != market:
+            continue
+        if since is not None and record.get("date", "") < since:
             continue
         if record.get("result") not in ["win", "loss"]:
             continue
@@ -799,7 +819,7 @@ def calc_performance(history, league="regular", market=None):
     return total, win, win_rate, profit
 
 
-def calc_calibration(history, league="regular", market=None):
+def calc_calibration(history, league="regular", market=None, since=None):
     """Brier score, log loss, and (when available) mean absolute error of
     the model's predicted margin/total against what actually happened --
     computed only from settled (win/loss) bets, not pushes or pending
@@ -832,6 +852,8 @@ def calc_calibration(history, league="regular", market=None):
     a second, complementary measurement, still unfitted -- it exists so a
     future directional bias is visible on the dashboard/reports instead
     of requiring the same kind of manual digging that caught this one.
+
+    `since` (YYYY-MM-DD): see calc_performance -- same meaning here.
     """
     outcomes = []
     margin_errors = []
@@ -842,6 +864,8 @@ def calc_calibration(history, league="regular", market=None):
         if record.get("league", "regular") != league:
             continue
         if market is not None and record.get("market", "spread") != market:
+            continue
+        if since is not None and record.get("date", "") < since:
             continue
         if record.get("result") not in ("win", "loss"):
             continue
@@ -2062,6 +2086,22 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
             ],
         })
 
+    t2, w2, wr2, pf2 = calc_performance(
+        history, league="regular", market="total", since=TOTALS_BLEND_FIX_DATE,
+    )
+    total_since_fix_block = {
+        "since": TOTALS_BLEND_FIX_DATE,
+        "performance": {
+            "total_recommendations": t2,
+            "wins":                  w2,
+            "win_rate":              round(wr2, 1),
+            "profit":                round(pf2, 1),
+        },
+        "calibration": calc_calibration(
+            history, league="regular", market="total", since=TOTALS_BLEND_FIX_DATE,
+        ),
+    } if t2 else None
+
     qualifying_picks = [p for d in daily_picks.values() for p in d.values() if p["meets_threshold"]] + \
                         [p for d in daily_totals.values() for p in d.values() if p["meets_threshold"]]
     total_picks = len(qualifying_picks)
@@ -2101,6 +2141,15 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
                     ("total",  calc_performance(history, league="regular", market="total")),
                 )
             },
+            # Totals-only, restricted to bets dated on/after the market-blend
+            # bugfix (TOTALS_BLEND_FIX_DATE) -- see that constant's comment,
+            # shown alongside the all-time totals numbers above so the
+            # dashboard can show both: the full history (for transparency)
+            # and a clean read on whether the fix actually changed anything,
+            # without waiting on a README footnote to explain why they
+            # differ. None (not an empty/zero block) until at least one
+            # post-fix totals bet has actually settled.
+            "total_since_fix": total_since_fix_block,
         },
         "summer_league":      summer_league,
         "history":            build_history_list(history),
