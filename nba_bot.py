@@ -6,6 +6,7 @@ import json
 import time
 import re
 import math
+import sys
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +20,16 @@ GITHUB_TOKEN    = os.getenv("GH_TOKEN", "")
 BALLDONTLIE_KEY = os.getenv("BALLDONTLIE_KEY", "")
 
 SITE_DATA_PATH = os.getenv("SITE_DATA_PATH", "docs/data/latest.json")
+
+# ntfy.sh (https://ntfy.sh) is a free, no-signup push-notification service --
+# POST a message to a topic URL and anyone subscribed (via their app, which
+# shows real OS notifications including on a locked phone's lock screen, or
+# a browser) gets it. NTFY_TOPIC is secret-ish by nature of the service
+# (anyone who knows the topic name can subscribe to or publish on it, there
+# being no authentication) -- it must be set as a real repo secret, never
+# committed, and is intentionally not given a default value here.
+NTFY_BASE_URL = os.getenv("NTFY_BASE_URL", "https://ntfy.sh")
+NTFY_TOPIC    = os.getenv("NTFY_TOPIC", "")
 
 
 def current_season_year(now=None):
@@ -2878,5 +2889,203 @@ def run():
     log.info("Done")
 
 
+# ============================================================
+# Live score push alerts -- a SEPARATE, much-more-frequent workflow
+# (.github/workflows/live_score_alerts.yml) from the once-daily run()
+# above. Polls ESPN's free scoreboard for games that today's already-
+# committed docs/data/latest.json marks as a real (meets_threshold)
+# recommendation, and pushes a notification via ntfy.sh (free, no
+# signup, delivers as a real OS notification -- including on a locked
+# phone -- to anyone subscribed to NTFY_TOPIC) the moment one tips off
+# or goes final. This can't live in run() itself: run() only fires once
+# a day, which would mean "live" alerts that are really a day late.
+# ============================================================
+
+LIVE_ALERT_GIST_DESC = "nba_bot_live_alert_state"
+
+
+def load_live_alert_state():
+    """Which games have already triggered a 'tipped off' / 'final' push
+    this run-to-run, so the same event doesn't get pushed again every
+    time this polls (every ~10 minutes). A separate Gist from the
+    settled-bet history Gist -- unrelated data, and keeping them apart
+    means this frequent poller can never race/clobber the once-daily
+    run()'s history writes."""
+    if not GITHUB_TOKEN:
+        return {}
+    headers = {"Authorization": "token %s" % GITHUB_TOKEN}
+    gists = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
+    if not gists:
+        return {}
+    for g in gists:
+        if g.get("description") == LIVE_ALERT_GIST_DESC:
+            raw_url = list(g["files"].values())[0]["raw_url"]
+            data = safe_get(raw_url)
+            return data if isinstance(data, dict) else {}
+    return {}
+
+
+def save_live_alert_state(state):
+    if not GITHUB_TOKEN:
+        return
+    headers = {
+        "Authorization": "token %s" % GITHUB_TOKEN,
+        "Content-Type":  "application/json",
+    }
+    content = json.dumps(state, ensure_ascii=False, indent=2)
+    gists   = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
+    gist_id = None
+    if gists:
+        for g in gists:
+            if g.get("description") == LIVE_ALERT_GIST_DESC:
+                gist_id = g["id"]
+                break
+    payload = {
+        "description": LIVE_ALERT_GIST_DESC,
+        "public":      False,
+        "files":       {"live_alert_state.json": {"content": content}},
+    }
+    try:
+        if gist_id:
+            requests.patch(
+                "https://api.github.com/gists/%s" % gist_id,
+                headers=headers, json=payload, timeout=10,
+            )
+        else:
+            requests.post(
+                "https://api.github.com/gists",
+                headers=headers, json=payload, timeout=10,
+            )
+        log.info("Live alert state saved to Gist")
+    except Exception as e:
+        log.error("Failed to save live alert state: %s", e)
+
+
+def send_ntfy(title, message, priority=3):
+    """Push a notification via ntfy.sh's JSON publish endpoint (not the
+    simpler curl -d "msg" -H "Title: ..." form) specifically so Chinese
+    text round-trips correctly as UTF-8 -- HTTP headers are not a
+    reliable place to put non-ASCII text, but a JSON body is. No-ops
+    (logged, not an error) when NTFY_TOPIC isn't configured, since an
+    unset topic means this feature was never set up, not that it's
+    broken."""
+    if not NTFY_TOPIC:
+        log.warning("NTFY_TOPIC not set -- skipping push notification: %s", title)
+        return
+    try:
+        requests.post(
+            NTFY_BASE_URL + "/",
+            json={"topic": NTFY_TOPIC, "title": title, "message": message, "priority": priority},
+            timeout=10,
+        )
+        log.info("ntfy push sent: %s", title)
+    except Exception as e:
+        log.error("Failed to send ntfy push: %s", e)
+
+
+def get_recommended_matchups_today(site_data_path=None):
+    """Real (meets_threshold) recommendations for today's Taiwan date, read
+    straight from the already-committed site data rather than re-deriving
+    picks from scratch -- this poller's job is just to watch for a score
+    change on games the daily run already decided were worth recommending,
+    not to run its own odds/model pass. Returns a set of frozenset(
+    {away_en, home_en}) pairs. Empty (not an error) if the file is
+    missing, unreadable, or today just has no qualifying picks.
+    """
+    path = site_data_path or SITE_DATA_PATH
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return set()
+
+    today_s = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d")
+    out = set()
+    for day in data.get("regular_season", {}).get("days", []):
+        if day.get("date") != today_s:
+            continue
+        for p in day.get("picks", []) + day.get("totals", []):
+            if not p.get("meets_threshold"):
+                continue
+            parts = str(p.get("matchup", "")).split(" @ ")
+            if len(parts) != 2:
+                continue
+            away_en = TEAM_CN_REVERSE.get(parts[0])
+            home_en = TEAM_CN_REVERSE.get(parts[1])
+            if away_en and home_en:
+                out.add(frozenset((away_en, home_en)))
+    return out
+
+
+def check_live_alerts():
+    """One poll: find today's real recommendations, check ESPN's live
+    scoreboard for each, and push a notification the first time one tips
+    off or goes final. Safe to call every ~10 minutes all day -- on a day
+    with no qualifying recommendations, or outside game hours, this does
+    a couple of free HTTP calls and exits having sent nothing."""
+    if not NTFY_TOPIC:
+        log.info("NTFY_TOPIC not set -- live score push alerts are disabled, skipping poll entirely")
+        return
+    recommended = get_recommended_matchups_today()
+    if not recommended:
+        log.info("No meets_threshold recommendations for today -- nothing to watch")
+        return
+
+    scoreboard = safe_get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard")
+    events = (scoreboard or {}).get("events", [])
+    if not events:
+        log.info("ESPN scoreboard returned no events this poll")
+        return
+
+    state   = load_live_alert_state()
+    changed = False
+
+    for ev in events:
+        comp = (ev.get("competitions") or [{}])[0]
+        competitors = comp.get("competitors", [])
+        home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+        away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+        if not home or not away:
+            continue
+        home_en = normalize_team((home.get("team") or {}).get("displayName", ""))
+        away_en = normalize_team((away.get("team") or {}).get("displayName", ""))
+        if frozenset((home_en, away_en)) not in recommended:
+            continue
+
+        event_id    = ev.get("id") or (away_en + "@" + home_en)
+        status      = ((comp.get("status") or {}).get("type") or {})
+        game_state  = status.get("state")  # "pre" / "in" / "post"
+        matchup_cn  = "%s @ %s" % (TEAM_CN.get(away_en, away_en), TEAM_CN.get(home_en, home_en))
+        prev        = state.get(event_id, {})
+
+        if game_state == "in" and not prev.get("notified_start"):
+            send_ntfy(
+                "🏀 開賽：%s" % matchup_cn,
+                "這場比賽有模型推薦，現在開打了。",
+            )
+            prev["notified_start"] = True
+            state[event_id] = prev
+            changed = True
+
+        if game_state == "post" and not prev.get("notified_final"):
+            score_line = "%s %s - %s %s" % (
+                TEAM_CN.get(away_en, away_en), away.get("score"),
+                home.get("score"), TEAM_CN.get(home_en, home_en),
+            )
+            send_ntfy(
+                "🏁 已完賽：%s" % matchup_cn,
+                "最終比分 %s" % score_line,
+            )
+            prev["notified_final"] = True
+            state[event_id] = prev
+            changed = True
+
+    if changed:
+        save_live_alert_state(state)
+
+
 if __name__ == "__main__":
-    run()
+    if "--live-alerts" in sys.argv:
+        check_live_alerts()
+    else:
+        run()
