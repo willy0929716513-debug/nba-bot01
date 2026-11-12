@@ -1326,6 +1326,12 @@
     var html = renderTrendChart(data.performance_trend);
     if (byMarket.spread) html += renderCalibrationCard("讓分（Model A/B）", byMarket.spread);
     if (byMarket.total) html += renderCalibrationCard("大小分（Model C）", byMarket.total);
+    var sinceFix = (data.performance || {}).total_since_fix;
+    if (sinceFix) {
+      html += renderCalibrationCard("大小分（修復後，自 " + esc(sinceFix.since) + "）", sinceFix) +
+        '<div class="note-box">' + svg("info") +
+        '<span>2026-11-10 修復大小分機率完全沒參考市場共識的問題，上面這張卡只統計修復後才下的注，跟上面「大小分（Model C）」那張混合新舊邏輯的全期數字分開看，比較看得出修復有沒有真的有效。</span></div>';
+    }
     html += '<div class="card row-list hoverable">';
     history.forEach(function (h) {
       var isSummer = h.league === "summer";
