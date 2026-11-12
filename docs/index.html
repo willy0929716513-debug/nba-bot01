@@ -400,6 +400,42 @@
   .badge-loss { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
   .badge-pending { color: var(--ink-3); background: var(--surface); }
 
+  .chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10.5px; padding: 3px 8px; border-radius: 6px;
+    background: var(--surface); border: 1px solid var(--hairline);
+    color: var(--ink-3); white-space: nowrap;
+  }
+  .chip b { color: var(--ink-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* Calibration buckets (predicted-vs-actual hit rate): two thin bars per
+     row instead of a run-on sentence of "60-70% 預測65.3%/實際42.1%(n=19)"
+     text -- the bar-length gap between predicted and actual is the whole
+     point of this diagnostic, and a sentence makes that gap something you
+     have to do arithmetic on instead of just seeing. */
+  .calib-bucket { margin-top: 10px; }
+  .calib-bucket-label { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-2); margin-bottom: 4px; }
+  .calib-bar-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+  .calib-bar-row .cb-tag { font-size: 10px; width: 26px; flex: 0 0 auto; color: var(--ink-3); }
+  .calib-bar-row .cb-track { flex: 1; height: 6px; border-radius: 3px; background: var(--surface); overflow: hidden; }
+  .calib-bar-row .cb-fill { height: 100%; border-radius: 3px; }
+  .calib-bar-row .cb-val { font-size: 11px; font-variant-numeric: tabular-nums; width: 42px; text-align: right; flex: 0 0 auto; color: var(--ink-2); }
+
+  /* A real (meets_threshold) recommendation gets a colored accent border
+     and the full detail treatment below; a sub-threshold "best bet shown
+     anyway" entry is visually quiet instead -- without this distinction
+     every row reads with equal weight, and a page that's mostly "Edge
+     didn't clear the bar" entries buries the handful that actually do. */
+  .row.qualifies { padding-left: 11px; border-left: 3px solid var(--hairline); }
+  .row.qualifies.tier-top    { border-left-color: #A78BFA; }
+  .row.qualifies.tier-strong { border-left-color: var(--warning); }
+  .row.qualifies.tier-stable { border-left-color: #2DD4BF; }
+  .row.watch { opacity: .62; }
+  .row.watch .row-title { font-weight: 600; font-size: 13.5px; }
+  .row.watch .row-compact { color: var(--ink-3); font-size: 12px; margin-top: 4px; }
+  .row.watch .row-compact b { color: var(--ink-2); font-weight: 600; font-variant-numeric: tabular-nums; }
+
   .bar-track { position: relative; width: 100px; height: 6px; background: var(--surface); border-radius: 4px; overflow: hidden; flex: 0 0 auto; }
   .bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; }
 
@@ -965,6 +1001,13 @@
     if (tier.indexOf("觀察") !== -1) return "badge-status";
     return "badge-tier-stable";
   }
+  function rowAccentClass(tier) {
+    if (!tier) return "";
+    if (tier.indexOf("頂級") !== -1) return "tier-top";
+    if (tier.indexOf("強力") !== -1) return "tier-strong";
+    if (tier.indexOf("觀察") !== -1) return "";
+    return "tier-stable";
+  }
   function resultBadgeClass(result) {
     if (result === "獲勝") return "badge-win";
     if (result === "落敗") return "badge-loss";
@@ -1130,7 +1173,28 @@
       html += '<div class="subhead">' + esc(day.label) + '</div>';
       html += '<div class="card row-list hoverable">';
       (day.picks || []).forEach(function (p) {
-        html += '<div class="row">' +
+        if (!p.meets_threshold) {
+          // Sub-threshold "best bet shown anyway" entry -- not an actual
+          // recommendation, so it gets a quiet, compact treatment instead
+          // of the same visual weight as a real pick. No Kelly stake shown
+          // here at all: suggesting a stake size on something that didn't
+          // clear the edge bar would read as "bet this" when the point is
+          // the opposite.
+          html += '<div class="row watch">' +
+            '<div class="row-top">' +
+              '<span class="row-title">' + matchupWithLogos(p.matchup) + '</span>' +
+              '<span class="row-time">' + esc(p.start_time) + '</span>' +
+            '</div>' +
+            '<div class="row-compact">' +
+              '<span class="badge badge-status" style="margin-right:6px;">👀 觀察中</span>' +
+              '今日最佳盤口：<b>' + esc(p.bet) + '</b> @ ' + Number(p.price).toFixed(2) +
+              '（' + esc(p.book) + '）｜ 勝率 <b>' + Number(p.prob).toFixed(1) + '%</b>' +
+              ' ｜ Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b>' +
+            '</div>' +
+          '</div>';
+          return;
+        }
+        html += '<div class="row qualifies ' + rowAccentClass(p.tier) + '">' +
           '<div class="row-top">' +
             '<span class="row-title">' + matchupWithLogos(p.matchup) + '</span>' +
             '<span class="row-time">' + esc(p.start_time) + '</span>' +
@@ -1151,7 +1215,22 @@
         '</div>';
       });
       (day.totals || []).forEach(function (t) {
-        html += '<div class="row">' +
+        if (!t.meets_threshold) {
+          html += '<div class="row watch">' +
+            '<div class="row-top">' +
+              '<span class="row-title">' + matchupWithLogos(t.matchup) + '</span>' +
+              '<span class="row-time">' + esc(t.start_time) + '</span>' +
+            '</div>' +
+            '<div class="row-compact">' +
+              '<span class="badge badge-status" style="margin-right:6px;">👀 觀察中</span>' +
+              '今日最佳盤口：<b>' + esc(t.bet) + '</b> @ ' + Number(t.price).toFixed(2) +
+              '（' + esc(t.book) + '）｜ 機率 <b>' + Number(t.prob).toFixed(1) + '%</b>' +
+              ' ｜ Edge <b>' + (t.edge >= 0 ? "+" : "") + Number(t.edge).toFixed(1) + '%</b>' +
+            '</div>' +
+          '</div>';
+          return;
+        }
+        html += '<div class="row qualifies ' + rowAccentClass(t.tier) + '">' +
           '<div class="row-top">' +
             '<span class="row-title">' + matchupWithLogos(t.matchup) + '</span>' +
             '<span class="row-time">' + esc(t.start_time) + '</span>' +
@@ -1191,6 +1270,10 @@
       '%;background:' + color + ';"></div></div><span class="pct">' + pct.toFixed(0) + '%</span></div>';
   }
 
+  function chip(label, value) {
+    return '<span class="chip">' + esc(label) + ' <b>' + esc(value) + '</b></span>';
+  }
+
   function renderPowerRankings(data) {
     var rankings = data.power_rankings || [];
     var body = document.getElementById("power-rankings-body");
@@ -1208,11 +1291,13 @@
         : (r.form < -0.15 ? '近期手感 <b style="color:var(--danger);">↓ ' + Math.abs(r.form).toFixed(1) + '</b>' : '近期手感持平');
       var elo = eloByTeam[r.team];
       var ffHtml = (r.efg != null)
-        ? '<div class="team-stats-line">真實命中率 eFG% <b style="color:var(--ink);">' + Number(r.efg).toFixed(1) + '%</b>' +
-          ' ｜ 失誤率 <b style="color:var(--ink);">' + Number(r.tov_pct).toFixed(1) + '%</b>' +
-          ' ｜ 進攻籃板率 <b style="color:var(--ink);">' + Number(r.oreb_rate).toFixed(1) + '%</b>' +
-          ' ｜ 罰球率 <b style="color:var(--ink);">' + Number(r.ft_rate).toFixed(1) + '%</b>' +
-          ' ｜ 節奏 <b style="color:var(--ink);">' + Number(r.pace).toFixed(1) + '</b></div>'
+        ? '<div class="chip-row">' +
+            chip("eFG%", Number(r.efg).toFixed(1) + "%") +
+            chip("失誤率", Number(r.tov_pct).toFixed(1) + "%") +
+            chip("進攻籃板率", Number(r.oreb_rate).toFixed(1) + "%") +
+            chip("罰球率", Number(r.ft_rate).toFixed(1) + "%") +
+            chip("節奏", Number(r.pace).toFixed(1)) +
+          '</div>'
         : '';
       html += '<div class="row">' +
         '<div class="row-top">' +
@@ -1455,13 +1540,34 @@
       html += '<div class="row-sub" style="margin-top:6px;opacity:.75;">樣本數 &lt; 10 場，統計僅供參考，不代表長期表現</div>';
     }
     if (calib.buckets && calib.buckets.length) {
-      html += '<div class="row-sub" style="margin-top:8px;">機率校準（預測機率 vs 實際命中率）：' +
-        calib.buckets.map(function (b) {
-          return esc(b.range) + ' 預測' + b.avg_predicted + '%/實際' + b.actual_rate + '%(n=' + b.n + ')';
-        }).join('， ') + '</div>';
+      html += '<div class="calib-bucket">' +
+        '<div class="calib-bucket-label"><span>機率校準（模型說的信心 vs 真正命中率）</span></div>' +
+        calib.buckets.map(calibBucketRow).join("") +
+      '</div>';
     }
     html += '</div>';
     return html;
+  }
+
+  function calibBucketRow(b) {
+    // diff < 0 means the model is overconfident at this band (claims a
+    // higher win rate than it actually delivers here) -- color the actual
+    // bar by how far short it falls, not just whether it's "good".
+    var diff = b.actual_rate - b.avg_predicted;
+    var actualColor = diff >= -5 ? "var(--success)" : (diff >= -15 ? "var(--warning)" : "var(--danger)");
+    return '<div style="margin-bottom:8px;">' +
+      '<div class="calib-bucket-label"><span>' + esc(b.range) + '</span><span>n=' + b.n + '</span></div>' +
+      '<div class="calib-bar-row">' +
+        '<span class="cb-tag">模型</span>' +
+        '<div class="cb-track"><div class="cb-fill" style="width:' + b.avg_predicted + '%;background:var(--brand);"></div></div>' +
+        '<span class="cb-val">' + b.avg_predicted + '%</span>' +
+      '</div>' +
+      '<div class="calib-bar-row">' +
+        '<span class="cb-tag">實際</span>' +
+        '<div class="cb-track"><div class="cb-fill" style="width:' + b.actual_rate + '%;background:' + actualColor + ';"></div></div>' +
+        '<span class="cb-val">' + b.actual_rate + '%</span>' +
+      '</div>' +
+    '</div>';
   }
 
   function renderHistory(data) {
