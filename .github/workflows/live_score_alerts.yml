@@ -1,0 +1,27 @@
+name: Live Score Alerts
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 minutes, all day (repo is public: free/unlimited Actions minutes)
+  workflow_dispatch:
+
+jobs:
+  check-live-scores:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Check live scores and push alerts
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python nba_bot.py --live-alerts

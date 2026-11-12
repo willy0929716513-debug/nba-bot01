@@ -884,10 +884,16 @@
 
   var recommendedMatchups = {};
   function computeRecommendedMatchups(data) {
+    // meets_threshold=true only -- every game gets a "best bet" entry
+    // regardless of whether it actually clears EDGE_THRESHOLD (the "show
+    // every game's best bet" design), so without this filter every single
+    // game would count as "recommended" here, which defeats the entire
+    // point of sorting recommended games first on the live ticker.
     var out = {};
     var days = (data.regular_season || {}).days || [];
     days.forEach(function (d) {
       (d.picks || []).concat(d.totals || []).forEach(function (p) {
+        if (!p.meets_threshold) return;
         var parts = String(p.matchup || "").split(" @ ");
         if (parts.length === 2) out[matchupKey(parts[0], parts[1])] = true;
       });
