@@ -2294,7 +2294,7 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
         totals = sorted(daily_totals.get(date, {}).values(), key=lambda x: x["edge"], reverse=True)
         days.append({
             "date":  date,
-            "label": "今日賽事" if date == today_s else ("預告 %s" % date),
+            "label": "今日賽事",
             "picks": [
                 {
                     "tier":             p["tier"],
@@ -2483,7 +2483,16 @@ def run():
         if c_time_utc < REGULAR_SEASON_START:
             continue
 
-        g_date     = c_time_tw.strftime("%Y-%m-%d")
+        g_date = c_time_tw.strftime("%Y-%m-%d")
+        if g_date != today_s:
+            # Only today's games become picks -- a future day's game used
+            # to show up as a "預告" (preview) entry on the website/Discord
+            # output days ahead of when it'd actually be bet on, which was
+            # confusing rather than useful: by the time that day arrives,
+            # the odds/injuries/model have moved on and it gets recomputed
+            # fresh anyway, so showing it early added noise, not signal.
+            continue
+
         home       = normalize_team(g.get("home_team", ""))
         away       = normalize_team(g.get("away_team", ""))
         game_id    = "%s@%s_%s" % (away, home, g_date)
@@ -2824,7 +2833,7 @@ def run():
         output += "\n今日無賽事資料。\n"
     else:
         for date in sorted(set(daily_picks) | set(daily_totals)):
-            label = "📅 今日賽事" if date == today_s else ("⏭ 預告 %s" % date)
+            label = "📅 今日賽事"
             output += "\n%s\n" % label
             for p in sorted(daily_picks.get(date, {}).values(), key=lambda x: x["edge"], reverse=True):
                 output += p["msg"]
