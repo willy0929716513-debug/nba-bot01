@@ -1126,8 +1126,13 @@
   function renderParlay(data) {
     var body = document.getElementById("parlay-body");
     var p = data.parlay;
-    if (!p || !p.legs || !p.legs.length) { body.innerHTML = ""; return; }
-    var html = '<div class="subhead">🔗 串關推薦（僅取今日💎頂級，最多 ' + p.legs.length + ' 腿，求穩不求大）</div>';
+    if (!p || !p.legs || !p.legs.length) {
+      body.innerHTML = data.parlay_note
+        ? '<div class="note-box">' + svg("info") + '<span>' + esc(data.parlay_note) + '</span></div>'
+        : "";
+      return;
+    }
+    var html = '<div class="subhead">🔗 串關推薦（只選歷史校準上實際命中率落在 65-70% 的機率區間，最多 ' + p.legs.length + ' 腿，求穩不求大）</div>';
     html += '<div class="card row-list hoverable">';
     p.legs.forEach(function (leg) {
       html += '<div class="row">' +
