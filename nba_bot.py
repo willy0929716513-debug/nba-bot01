@@ -3084,8 +3084,25 @@ def check_live_alerts():
         save_live_alert_state(state)
 
 
+def send_test_ntfy():
+    """Sends one unconditional push, bypassing the "only on a real
+    tip-off/final" logic entirely -- a way to confirm the whole chain
+    (NTFY_TOPIC secret wired correctly, the Actions runner can reach
+    ntfy.sh, the phone is actually subscribed) works, without needing to
+    wait for a live game with a real recommendation to line up."""
+    if not NTFY_TOPIC:
+        log.warning("NTFY_TOPIC not set -- nothing to test. Add the secret first.")
+        return
+    send_ntfy(
+        "🏀 NBA Bot 測試通知",
+        "如果手機上看到這則通知，代表 NTFY_TOPIC 設定成功，推播功能可以正常運作。",
+    )
+
+
 if __name__ == "__main__":
-    if "--live-alerts" in sys.argv:
+    if "--live-alerts-test" in sys.argv:
+        send_test_ntfy()
+    elif "--live-alerts" in sys.argv:
         check_live_alerts()
     else:
         run()
