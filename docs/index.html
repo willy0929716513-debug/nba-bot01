@@ -133,9 +133,45 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .icon-btn.spinning svg { animation: spin .8s linear infinite; }
 
+  /* ---------- sticky stack (live ticker + segmented control) ---------- */
+  .sticky-stack { position: sticky; top: 0; z-index: 30; }
+
+  /* ---------- live scores ticker ---------- */
+  .live-ticker-wrap {
+    margin: 0 calc(var(--gap-page) * -1);
+    padding: 8px var(--gap-page) 0;
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: blur(14px) saturate(1.4);
+    -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  }
+  .live-ticker {
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    padding-bottom: 8px;
+  }
+  .live-ticker::-webkit-scrollbar { display: none; }
+  .live-card {
+    flex: 0 0 auto;
+    display: flex; flex-direction: column; gap: 4px;
+    min-width: 108px;
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+  }
+  .live-card.has-pick { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
+  .live-card .lc-status { font-size: 10px; color: var(--ink-2); display: flex; align-items: center; gap: 4px; }
+  .live-card .lc-team-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 600; }
+  .live-card .lc-team-row .lc-name { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live-card .lc-team-row .lc-score { font-size: 13px; font-weight: 700; flex: 0 0 auto; }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--danger);
+    display: inline-block; flex: 0 0 auto;
+    animation: livepulse 1.4s ease-in-out infinite;
+  }
+  @keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
   /* ---------- segmented control ---------- */
   .seg-wrap {
-    position: sticky; top: 0; z-index: 30;
     margin: 0 calc(var(--gap-page) * -1) 24px;
     padding: 10px var(--gap-page);
     background: color-mix(in srgb, var(--bg) 78%, transparent);
@@ -510,16 +546,22 @@
     <span class="pill">載入中…</span>
   </div>
 
-  <nav class="seg-wrap fade-in" aria-label="區塊導覽">
-    <div class="seg" id="seg" role="tablist">
-      <div class="seg-indicator" id="seg-indicator"></div>
-      <a class="seg-btn" href="#regular-season-section" data-target="regular-season-section" id="ic-tab-cal"><span></span>推薦</a>
-      <a class="seg-btn" href="#power-rankings-section" data-target="power-rankings-section" id="ic-tab-rank"><span></span>戰力排行</a>
-      <a class="seg-btn" href="#schedule-section" data-target="schedule-section" id="ic-tab-schedule"><span></span>賽程</a>
-      <a class="seg-btn" href="#summer-league-section" data-target="summer-league-section" id="ic-tab-sun"><span></span>夏季聯賽</a>
-      <a class="seg-btn" href="#history-section" data-target="history-section" id="ic-tab-hist"><span></span>歷史紀錄</a>
+  <div class="sticky-stack">
+    <div class="live-ticker-wrap fade-in" id="live-ticker-wrap" style="display:none;">
+      <div class="live-ticker" id="live-ticker"></div>
     </div>
-  </nav>
+
+    <nav class="seg-wrap fade-in" aria-label="區塊導覽">
+      <div class="seg" id="seg" role="tablist">
+        <div class="seg-indicator" id="seg-indicator"></div>
+        <a class="seg-btn" href="#regular-season-section" data-target="regular-season-section" id="ic-tab-cal"><span></span>推薦</a>
+        <a class="seg-btn" href="#power-rankings-section" data-target="power-rankings-section" id="ic-tab-rank"><span></span>戰力排行</a>
+        <a class="seg-btn" href="#schedule-section" data-target="schedule-section" id="ic-tab-schedule"><span></span>賽程</a>
+        <a class="seg-btn" href="#summer-league-section" data-target="summer-league-section" id="ic-tab-sun"><span></span>夏季聯賽</a>
+        <a class="seg-btn" href="#history-section" data-target="history-section" id="ic-tab-hist"><span></span>歷史紀錄</a>
+      </div>
+    </nav>
+  </div>
 
   <div class="stat-grid fade-in" id="stat-grid"></div>
 
@@ -820,6 +862,94 @@
   function teamNameFromBet(bet) {
     var m = String(bet || "").match(/^(.*?)\s[+-]?\d/);
     return m ? m[1] : bet;
+  }
+
+  /* ============ live scores ticker ============
+   * Client-side only -- the backend only updates data/latest.json about
+   * once a day, so "live" scores can't come from that file. Polls ESPN's
+   * free, keyless, CORS-enabled scoreboard endpoint directly from the
+   * browser instead (same data source nba_bot.py's four-factors fetch
+   * already uses server-side), independent of the once-daily backend
+   * refresh cycle. If this endpoint is ever unreachable (network policy,
+   * ESPN outage, CORS change), the ticker just stays hidden -- the rest
+   * of the dashboard (which only depends on data/latest.json) is
+   * unaffected either way.
+   */
+  var CODE_TO_TEAM_CN = {};
+  for (var __cn in TEAM_LOGO_CODE) { CODE_TO_TEAM_CN[TEAM_LOGO_CODE[__cn]] = __cn; }
+
+  function matchupKey(a, b) {
+    return [a, b].sort().join("|");
+  }
+
+  var recommendedMatchups = {};
+  function computeRecommendedMatchups(data) {
+    var out = {};
+    var days = (data.regular_season || {}).days || [];
+    days.forEach(function (d) {
+      (d.picks || []).concat(d.totals || []).forEach(function (p) {
+        var parts = String(p.matchup || "").split(" @ ");
+        if (parts.length === 2) out[matchupKey(parts[0], parts[1])] = true;
+      });
+    });
+    return out;
+  }
+
+  var LIVE_STATUS_RANK = { "in": 0, "pre": 1, "post": 2 };
+  function renderLiveTicker(events) {
+    var wrap = document.getElementById("live-ticker-wrap");
+    var body = document.getElementById("live-ticker");
+    if (!events || !events.length) { wrap.style.display = "none"; return; }
+
+    var rows = events.map(function (ev) {
+      var comp = (ev.competitions || [])[0];
+      if (!comp) return null;
+      var competitors = comp.competitors || [];
+      var home = competitors.filter(function (c) { return c.homeAway === "home"; })[0];
+      var away = competitors.filter(function (c) { return c.homeAway === "away"; })[0];
+      if (!home || !away) return null;
+      var homeName = CODE_TO_TEAM_CN[String((home.team || {}).abbreviation || "").toLowerCase()];
+      var awayName = CODE_TO_TEAM_CN[String((away.team || {}).abbreviation || "").toLowerCase()];
+      if (!homeName || !awayName) return null;
+      var status = (comp.status || {}).type || {};
+      var hasPick = !!recommendedMatchups[matchupKey(homeName, awayName)];
+      return {
+        homeName: homeName, awayName: awayName,
+        homeScore: home.score, awayScore: away.score,
+        state: status.state, detail: status.detail || status.description || "",
+        hasPick: hasPick,
+      };
+    }).filter(Boolean);
+
+    if (!rows.length) { wrap.style.display = "none"; return; }
+
+    rows.sort(function (a, b) {
+      if (a.hasPick !== b.hasPick) return a.hasPick ? -1 : 1;
+      var ra = LIVE_STATUS_RANK[a.state] != null ? LIVE_STATUS_RANK[a.state] : 1;
+      var rb = LIVE_STATUS_RANK[b.state] != null ? LIVE_STATUS_RANK[b.state] : 1;
+      return ra - rb;
+    });
+
+    body.innerHTML = rows.map(function (r) {
+      var statusHtml = r.state === "in"
+        ? '<span class="live-dot"></span>' + esc(r.detail)
+        : (r.state === "post" ? "已完賽" : esc(r.detail || "未開始"));
+      return '<div class="live-card' + (r.hasPick ? ' has-pick' : '') + '">' +
+        '<div class="lc-status">' + statusHtml + (r.hasPick ? ' ｜ <span style="color:var(--brand);">★推薦</span>' : '') + '</div>' +
+        '<div class="lc-team-row"><span class="lc-name">' + teamLogo(r.awayName, 16) + esc(r.awayName) + '</span>' +
+          '<span class="lc-score">' + (r.awayScore != null ? esc(r.awayScore) : "-") + '</span></div>' +
+        '<div class="lc-team-row"><span class="lc-name">' + teamLogo(r.homeName, 16) + esc(r.homeName) + '</span>' +
+          '<span class="lc-score">' + (r.homeScore != null ? esc(r.homeScore) : "-") + '</span></div>' +
+      '</div>';
+    }).join("");
+    wrap.style.display = "";
+  }
+
+  function fetchLiveScores() {
+    fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard")
+      .then(function (r) { return r.json(); })
+      .then(function (d) { renderLiveTicker(d.events || []); })
+      .catch(function () { /* ESPN unreachable this poll -- leave ticker as is */ });
   }
 
   function tierBadgeClass(tier) {
@@ -1389,6 +1519,7 @@
       '<span>更新於 ' + updated + '</span>';
     document.getElementById("status-time").textContent = data.generated_at ? data.generated_at : "尚未執行";
     document.getElementById("status-dot").style.background = data.generated_at ? "var(--success)" : "var(--ink-3)";
+    recommendedMatchups = computeRecommendedMatchups(data);
     renderStats(data);
     renderRegularSeasonTrio(data);
     renderParlay(data);
@@ -1506,7 +1637,25 @@
     }
   });
 
+  // Independent, much faster poll for the live-scores ticker -- this one
+  // doesn't wait on loadData()'s once-a-day cadence at all, since it hits
+  // ESPN directly rather than data/latest.json.
+  var LIVE_REFRESH_MS = 30 * 1000;
+  var lastLiveFetchAt = 0;
+  function pollLiveScores() {
+    lastLiveFetchAt = Date.now();
+    fetchLiveScores();
+  }
+  setInterval(function () {
+    if (document.visibilityState === "visible") pollLiveScores();
+  }, LIVE_REFRESH_MS);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && Date.now() - lastLiveFetchAt > LIVE_REFRESH_MS) {
+      pollLiveScores();
+    }
+  });
+
   showSkeletons();
-  loadData();
+  loadData().then(pollLiveScores);
 })();
 </script>
