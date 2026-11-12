@@ -2439,7 +2439,7 @@ def run():
     if github_event:
         is_official_run = (github_event == "schedule")
     else:
-        is_official_run = (now_utc.hour == 14)
+        is_official_run = (now_utc.hour == 12)
     log.info("Official run: %s (event: %s, UTC hour: %d)", is_official_run, github_event or "n/a", now_utc.hour)
 
     season_games = fetch_season_games()
