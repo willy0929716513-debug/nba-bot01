@@ -3174,6 +3174,28 @@ def check_live_alerts():
         save_live_alert_state(state)
 
 
+def run_live_alerts_loop(budget_minutes=340, interval_seconds=180):
+    """Keep calling check_live_alerts() inside this one job run instead of
+    relying on GitHub Actions to actually start the next scheduled run on
+    time. GitHub's '*/10 * * * *' schedule is documented as best-effort,
+    and in practice on this repo it has been observed firing hours apart
+    rather than every 10 minutes -- a GitHub Actions platform behavior,
+    not something a cron expression can fix. By polling repeatedly for
+    most of a job's 6-hour hard limit, a single run that does manage to
+    start covers nearly all of the gap until the next one, so tip-off/
+    final pushes stay close to real-time even when the external
+    scheduling isn't."""
+    deadline = time.time() + budget_minutes * 60
+    poll_count = 0
+    while True:
+        check_live_alerts()
+        poll_count += 1
+        if time.time() + interval_seconds >= deadline:
+            break
+        time.sleep(interval_seconds)
+    log.info("Live alerts loop finished after %d polls (~%d min budget)", poll_count, budget_minutes)
+
+
 def send_test_ntfy():
     """Sends one unconditional push, bypassing the "only on a real
     tip-off/final" logic entirely -- a way to confirm the whole chain
@@ -3193,6 +3215,6 @@ if __name__ == "__main__":
     if "--live-alerts-test" in sys.argv:
         send_test_ntfy()
     elif "--live-alerts" in sys.argv:
-        check_live_alerts()
+        run_live_alerts_loop()
     else:
         run()
