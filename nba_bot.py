@@ -2440,18 +2440,24 @@ def run():
     now_tw  = now_utc + timedelta(hours=8)
     today_s = now_tw.strftime("%Y-%m-%d")
 
-    # GITHUB_EVENT_NAME ("schedule" vs "workflow_dispatch") is set automatically
-    # by GitHub Actions and is a reliable signal. Falling back to a wall-clock
-    # hour check (as before) only when that env var is absent -- e.g. running
-    # locally -- since GH Actions cron runs can be delayed past the exact
-    # minute/hour they were scheduled for, which silently turned "official"
-    # runs into untracked ones under the old hour==22 check.
+    # There is no `schedule:` trigger on this workflow any more -- GitHub's
+    # own cron scheduling for this repo was confirmed (via real run history)
+    # to fire 5-11 hours late every day, so the daily run is instead
+    # dispatched externally via workflow_dispatch with official_run=true,
+    # forwarded here as FORCE_OFFICIAL_RUN. A plain manual run from the
+    # Actions UI (official_run left unchecked) stays a test run, same as
+    # before. Falling back to a wall-clock hour check only when neither
+    # signal is present -- e.g. running locally.
     github_event = os.getenv("GITHUB_EVENT_NAME", "")
+    force_official = os.getenv("FORCE_OFFICIAL_RUN", "").strip().lower() == "true"
     if github_event:
-        is_official_run = (github_event == "schedule")
+        is_official_run = (github_event == "schedule") or force_official
     else:
         is_official_run = (now_utc.hour == 12)
-    log.info("Official run: %s (event: %s, UTC hour: %d)", is_official_run, github_event or "n/a", now_utc.hour)
+    log.info(
+        "Official run: %s (event: %s, forced: %s, UTC hour: %d)",
+        is_official_run, github_event or "n/a", force_official, now_utc.hour,
+    )
 
     season_games = fetch_season_games()
     live_ratings = build_live_ratings(season_games)
