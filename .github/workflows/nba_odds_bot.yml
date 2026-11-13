@@ -28,6 +28,7 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python nba_bot.py
 
       - name: Publish site data
