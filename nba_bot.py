@@ -2995,25 +2995,45 @@ def send_ntfy(title, message, priority=3):
     reliable place to put non-ASCII text, but a JSON body is. No-ops
     (logged, not an error) when NTFY_TOPIC isn't configured, since an
     unset topic means this feature was never set up, not that it's
-    broken."""
+    broken.
+
+    Retries on 429 (rate limit) and 5xx: GitHub Actions runners share a
+    pool of IPs across many unrelated repos' workflows, so ntfy.sh's
+    public server occasionally rate-limits a request that has nothing to
+    do with this bot's own traffic. A short retry absorbs that instead of
+    silently dropping the notification."""
     if not NTFY_TOPIC:
         log.warning("NTFY_TOPIC not set -- skipping push notification: %s", title)
         return
-    try:
-        resp = requests.post(
-            NTFY_BASE_URL + "/",
-            json={"topic": NTFY_TOPIC, "title": title, "message": message, "priority": priority},
-            timeout=10,
-        )
-        if resp.status_code >= 300:
-            log.error(
-                "ntfy push REJECTED (HTTP %d): %s -- %s",
-                resp.status_code, title, resp.text[:500],
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = requests.post(
+                NTFY_BASE_URL + "/",
+                json={"topic": NTFY_TOPIC, "title": title, "message": message, "priority": priority},
+                timeout=10,
             )
+            if resp.status_code >= 300:
+                if resp.status_code in (429, 500, 502, 503, 504) and attempt < attempts:
+                    log.warning(
+                        "ntfy push rejected (HTTP %d, attempt %d/%d), retrying: %s -- %s",
+                        resp.status_code, attempt, attempts, title, resp.text[:200],
+                    )
+                    time.sleep(attempt * 5)
+                    continue
+                log.error(
+                    "ntfy push REJECTED (HTTP %d): %s -- %s",
+                    resp.status_code, title, resp.text[:500],
+                )
+                return
+            log.info("ntfy push sent: %s", title)
             return
-        log.info("ntfy push sent: %s", title)
-    except Exception as e:
-        log.error("Failed to send ntfy push: %s", e)
+        except Exception as e:
+            if attempt < attempts:
+                log.warning("ntfy push error (attempt %d/%d), retrying: %s", attempt, attempts, e)
+                time.sleep(attempt * 5)
+                continue
+            log.error("Failed to send ntfy push: %s", e)
 
 
 def notify_new_recommendations(daily_picks, daily_totals, target_date):
