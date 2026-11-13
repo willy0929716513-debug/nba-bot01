@@ -1952,23 +1952,23 @@ def display_player_name(key):
 
 
 
-def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks, daily_totals=None):
-    """Every regular-season game on the next upcoming slate, not just the
-    ones with a qualifying recommendation -- a full card so the dashboard's
-    "賽程" tab answers "what's coming up" by itself. Final scores are filled
-    in via find_final_score() once a game's actually finished (relevant
-    when this runs from a manual mid-day/evening trigger rather than the
-    early-morning scheduled run).
+def compute_target_date(odds_games, today_s):
+    """Which Taiwan date actually is "the next slate to analyze" -- not
+    always literally today_s: the-odds-api only lists current/upcoming
+    games, and a US evening slate converts to *tomorrow's* Taiwan date
+    (see REGULAR_SEASON_START's note on the same ET-to-PT-vs-UTC+8 gap).
+    On a typical run, today_s itself usually has nothing left to show --
+    its games either already tipped off hours earlier in Taiwan time, or
+    the real next slate simply lands on tomorrow's Taiwan calendar date.
+    Picks whichever date is nearest at or after today_s that actually has
+    games listed in odds_games, falling back to today_s itself (an empty
+    result) only if nothing at all is upcoming.
 
-    "Next upcoming slate" is not always literally today_s: the-odds-api
-    only lists current/upcoming games, and a US evening slate converts to
-    *tomorrow's* Taiwan date (see REGULAR_SEASON_START's note on the same
-    ET-to-PT-vs-UTC+8 gap) -- so on a typical early-morning run, today_s
-    itself usually has nothing left to show, and locking the schedule to
-    that exact date made it come back empty on literally the season's
-    opening night. Picks whichever date is nearest at or after today_s
-    that actually has games listed, falling back to today_s itself (an
-    empty result) only if nothing at all is upcoming.
+    Shared by build_schedule() and run()'s own per-game loop -- both were
+    independently solving the exact same "today_s is usually the wrong
+    date" problem, and having only one of them actually do it (the loop
+    used a bare today_s for a while) meant the other silently filtered
+    out every game on most runs.
     """
     dates_present = set()
     for g in odds_games:
@@ -1977,8 +1977,19 @@ def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks,
         except (KeyError, ValueError):
             continue
         dates_present.add((c_time_utc + timedelta(hours=8)).strftime("%Y-%m-%d"))
-    candidates  = [d for d in dates_present if d >= today_s]
-    target_date = min(candidates) if candidates else today_s
+    candidates = [d for d in dates_present if d >= today_s]
+    return min(candidates) if candidates else today_s
+
+
+def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks, daily_totals=None):
+    """Every regular-season game on the next upcoming slate (compute_target_date),
+    not just the ones with a qualifying recommendation -- a full card so the
+    dashboard's "賽程" tab answers "what's coming up" by itself. Final scores
+    are filled in via find_final_score() once a game's actually finished
+    (relevant when this runs from a manual mid-day/evening trigger rather
+    than the early-morning scheduled run).
+    """
+    target_date = compute_target_date(odds_games, today_s)
     picks_for_date = {
         gid for gid, p in daily_picks.get(target_date, {}).items() if p["meets_threshold"]
     }
@@ -2282,7 +2293,7 @@ def build_elo_rankings(elo_ratings):
     return rows
 
 
-def export_site_data(now_tw, data_source, is_official_run, daily_picks, today_s,
+def export_site_data(now_tw, data_source, is_official_run, daily_picks,
                       total_rec, wins, win_rate, profit, summer_league, history,
                       schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None,
                       parlay_note=None):
@@ -2459,6 +2470,11 @@ def run():
     league_avg_pace = (sum(_paces) / len(_paces)) if _paces else None
     injuries     = get_injury_report()
     games        = fetch_odds()
+    # See compute_target_date(): the next slate to actually analyze is
+    # usually NOT today_s itself (a US evening slate converts to
+    # tomorrow's Taiwan date), so this -- not today_s -- is what every
+    # per-game filter/lookup below keys off of.
+    target_date  = compute_target_date(games, today_s)
     history      = load_history()
     grade_pending_history(history, season_games)
     summer_league = analyze_summer_league(now_utc=now_utc)
@@ -2484,13 +2500,14 @@ def run():
             continue
 
         g_date = c_time_tw.strftime("%Y-%m-%d")
-        if g_date != today_s:
-            # Only today's games become picks -- a future day's game used
-            # to show up as a "預告" (preview) entry on the website/Discord
-            # output days ahead of when it'd actually be bet on, which was
-            # confusing rather than useful: by the time that day arrives,
-            # the odds/injuries/model have moved on and it gets recomputed
-            # fresh anyway, so showing it early added noise, not signal.
+        if g_date != target_date:
+            # Only the next slate's games become picks -- a day further
+            # out than that used to show up as a "預告" (preview) entry on
+            # the website/Discord output days ahead of when it'd actually
+            # be bet on, which was confusing rather than useful: by the
+            # time that day arrives, the odds/injuries/model have moved on
+            # and it gets recomputed fresh anyway, so showing it early
+            # added noise, not signal.
             continue
 
         home       = normalize_team(g.get("home_team", ""))
@@ -2623,7 +2640,7 @@ def run():
                             "market_implied_prob": market_implied_prob,
                         }
 
-                    if in_range and edge > 0.12 and is_official_run and g_date == today_s:
+                    if in_range and edge > 0.12 and is_official_run and g_date == target_date:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
@@ -2744,7 +2761,7 @@ def run():
                     # a spread pick and a totals pick for the same game are
                     # two different bets and must not overwrite each other
                     # in the same history dict.
-                    if t_in_range and t_edge > 0.12 and is_official_run and g_date == today_s:
+                    if t_in_range and t_edge > 0.12 and is_official_run and g_date == target_date:
                         total_hist_id = game_id + "_total"
                         existing_th = history.get(total_hist_id)
                         if existing_th is None or t_edge > existing_th.get("edge", 0):
@@ -2841,7 +2858,7 @@ def run():
                 output += p["msg"]
             output += "-" * 30 + "\n"
 
-    parlay = build_parlay(list(daily_picks.get(today_s, {}).values()), spread_calib=spread_calib)
+    parlay = build_parlay(list(daily_picks.get(target_date, {}).values()), spread_calib=spread_calib)
     parlay_note = None
     if parlay:
         output += (
@@ -2884,7 +2901,7 @@ def run():
 
     export_site_data(
         now_tw=now_tw, data_source=data_source, is_official_run=is_official_run,
-        daily_picks=daily_picks, today_s=today_s,
+        daily_picks=daily_picks,
         total_rec=total_rec, wins=wins, win_rate=win_rate, profit=profit,
         summer_league=summer_league, history=history,
         schedule=schedule, parlay=parlay, parlay_note=parlay_note,
@@ -2895,7 +2912,7 @@ def run():
 
     log.info("Sending to Discord, length: %d", len(output))
     chunked_send(output, WEBHOOK)
-    notify_new_recommendations(daily_picks, daily_totals, today_s)
+    notify_new_recommendations(daily_picks, daily_totals, target_date)
     log.info("Done")
 
 
@@ -2993,30 +3010,26 @@ def send_ntfy(title, message, priority=3):
         log.error("Failed to send ntfy push: %s", e)
 
 
-def notify_new_recommendations(daily_picks, daily_totals, today_s):
-    """Push an immediate ntfy alert the moment today's REAL
+def notify_new_recommendations(daily_picks, daily_totals, target_date):
+    """Push an immediate ntfy alert the moment the next slate's REAL
     (meets_threshold) recommendations are generated by this run -- not
     waiting for a game to tip off/go final, which is check_live_alerts()'
     separate job (that one polls every ~10 minutes all day; this one
     fires once, right when run() produces the picks).
 
-    Simply: if there's a real qualifying recommendation for today, this
-    pushes -- no gating by time of day or by how the run was triggered
-    (schedule vs. a manual run from the website's "手動觸發最新分析"
-    button). An earlier version only fired between 20:00-06:00 Taiwan
-    time; that was dropped because it was one more way a genuine
-    recommendation could silently fail to notify for a reason that had
-    nothing to do with whether the recommendation was real.
-
-    Only looks at TODAY's games specifically, not the 預告 (preview)
-    entries for a future day that are also in daily_picks/daily_totals --
-    a preview pick already got its own push on the day it was "today", so
-    it doesn't need to be re-announced every day it remains in the
-    preview window.
+    Simply: if there's a real qualifying recommendation for the slate
+    being analyzed (target_date -- see compute_target_date(); usually
+    NOT the literal current calendar date), this pushes -- no gating by
+    time of day or by how the run was triggered (schedule vs. a manual
+    run from the website's "手動觸發最新分析" button). An earlier version
+    only fired between 20:00-06:00 Taiwan time; that was dropped because
+    it was one more way a genuine recommendation could silently fail to
+    notify for a reason that had nothing to do with whether the
+    recommendation was real.
     """
     qualifying = (
-        [p for p in daily_picks.get(today_s, {}).values() if p["meets_threshold"]] +
-        [t for t in daily_totals.get(today_s, {}).values() if t["meets_threshold"]]
+        [p for p in daily_picks.get(target_date, {}).values() if p["meets_threshold"]] +
+        [t for t in daily_totals.get(target_date, {}).values() if t["meets_threshold"]]
     )
     if not qualifying:
         return
