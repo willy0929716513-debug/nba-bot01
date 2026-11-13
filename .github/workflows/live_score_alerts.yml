@@ -10,9 +10,14 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: live-score-alerts
+  cancel-in-progress: false
+
 jobs:
   check-live-scores:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
