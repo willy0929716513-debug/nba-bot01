@@ -1,9 +1,22 @@
 name: NBA Odds Bot
 
 on:
-  schedule:
-    - cron: '30 12 * * *'   # 12:30 UTC = 20:30 Taiwan time
+  # No `schedule:` trigger here on purpose. GitHub's own cron scheduling for
+  # public-repo free-tier Actions is documented as best-effort and, confirmed
+  # against this repo's real run history over 3+ weeks, was firing 5-11 hours
+  # late every single day -- not an occasional blip, a consistent multi-hour
+  # delay regardless of what time the cron was set to. There's no cron
+  # expression that fixes a platform-level queuing delay. Instead, the daily
+  # run is triggered externally via workflow_dispatch (the `official_run`
+  # input marks it as the real daily run, not an ad hoc manual test) by a
+  # scheduler outside GitHub Actions entirely, which isn't subject to this
+  # throttling.
   workflow_dispatch:
+    inputs:
+      official_run:
+        description: '這是外部排程觸發的正式每日執行（手動測試請不要勾選）'
+        type: boolean
+        default: false
 
 jobs:
   run-bot:
@@ -29,6 +42,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          FORCE_OFFICIAL_RUN: ${{ inputs.official_run }}
         run: python nba_bot.py
 
       - name: Publish site data
