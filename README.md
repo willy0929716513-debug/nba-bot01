@@ -28,7 +28,7 @@ NBA 賠率分析機器人：抓取即時賠率與球隊戰績，套用蒙地卡�
 
 ## 執行方式
 
-`.github/workflows/nba_odds_bot.yml` 沒有設定 GitHub 的 `schedule:` 排程——實測發現 GitHub 對公開 repo 免費方案的 cron 排程只是「盡力而為」，每天固定會晚 5~11 小時才真正執行（不是偶發，是每天都這樣），改排程時間也沒用，這是平台限制。改成每日台灣時間晚上 20:30，由外部排程系統（不受 GitHub Actions 這個限制影響）呼叫 GitHub API 觸發 `workflow_dispatch`，並勾選 `official_run` 這個輸入值，標記這是正式的每日執行。
+`.github/workflows/nba_odds_bot.yml` 沒有設定 GitHub 的 `schedule:` 排程——實測發現 GitHub 對公開 repo 免費方案的 cron 排程只是「盡力而為」，每天固定會晚 5~11 小時才真正執行（不是偶發，是每天都這樣），改排程時間也沒用，這是平台限制。改成每日台灣時間晚上 22:30，由外部排程系統（不受 GitHub Actions 這個限制影響）呼叫 GitHub API 觸發 `workflow_dispatch`，並勾選 `official_run` 這個輸入值，標記這是正式的每日執行。
 
 也可以自己到 **Actions** 分頁手動觸發 `workflow_dispatch`（不勾 `official_run`）做測試——測試執行不會寫入歷史紀錄，也會標示為「測試版本」。
 
