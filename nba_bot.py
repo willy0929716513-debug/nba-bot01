@@ -3000,11 +3000,17 @@ def send_ntfy(title, message, priority=3):
         log.warning("NTFY_TOPIC not set -- skipping push notification: %s", title)
         return
     try:
-        requests.post(
+        resp = requests.post(
             NTFY_BASE_URL + "/",
             json={"topic": NTFY_TOPIC, "title": title, "message": message, "priority": priority},
             timeout=10,
         )
+        if resp.status_code >= 300:
+            log.error(
+                "ntfy push REJECTED (HTTP %d): %s -- %s",
+                resp.status_code, title, resp.text[:500],
+            )
+            return
         log.info("ntfy push sent: %s", title)
     except Exception as e:
         log.error("Failed to send ntfy push: %s", e)
