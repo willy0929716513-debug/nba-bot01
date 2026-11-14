@@ -2646,7 +2646,7 @@ def run():
                             "market_implied_prob": market_implied_prob,
                         }
 
-                    if in_range and edge > 0.12 and is_official_run and g_date == target_date:
+                    if meets_threshold and is_official_run and g_date == target_date:
                         existing_h = history.get(game_id)
                         if existing_h is None or edge > existing_h.get("edge", 0):
                             history[game_id] = {
@@ -2767,7 +2767,7 @@ def run():
                     # a spread pick and a totals pick for the same game are
                     # two different bets and must not overwrite each other
                     # in the same history dict.
-                    if t_in_range and t_edge > 0.12 and is_official_run and g_date == target_date:
+                    if t_meets_threshold and is_official_run and g_date == target_date:
                         total_hist_id = game_id + "_total"
                         existing_th = history.get(total_hist_id)
                         if existing_th is None or t_edge > existing_th.get("edge", 0):
