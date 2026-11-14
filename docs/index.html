@@ -843,8 +843,37 @@
     history.replaceState(null, "", window.location.pathname + window.location.search);
   }
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-  window.scrollTo(0, 0);
-  window.addEventListener("load", function () { window.scrollTo(0, 0); });
+  // Plain scrollTo(x, y) resolves to behavior:"auto", which respects the
+  // page's CSS "scroll-behavior: smooth" (set further down) -- so it would
+  // visibly animate from wherever the page is scrolled all the way back up
+  // every time this fires. That's not a snap-to-top, explicitly instant.
+  function scrollTopNow() {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }
+  scrollTopNow();
+  window.addEventListener("load", scrollTopNow);
+  // "load" alone doesn't cover it when this is added to the home screen
+  // (apple-mobile-web-app-capable, above) -- iOS/Android often just
+  // resume the suspended page exactly where it was left scrolled instead
+  // of actually reloading it, so "load" never fires again. "pageshow"
+  // fires both on a real load AND when the page is restored from
+  // suspend/bfcache, which is the actual case this needs to catch.
+  // visibilitychange is a second catch-all for whenever the OS resume
+  // path doesn't fire pageshow either -- but only after being hidden for
+  // a real while, so briefly switching away mid-read (checking a
+  // notification, copying something) doesn't yank the user back to the
+  // top of a page they're actively scrolled through.
+  window.addEventListener("pageshow", scrollTopNow);
+  var HIDDEN_RESET_MS = 5000;
+  var hiddenAt = null;
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") {
+      hiddenAt = Date.now();
+    } else if (document.visibilityState === "visible") {
+      if (hiddenAt && Date.now() - hiddenAt > HIDDEN_RESET_MS) scrollTopNow();
+      hiddenAt = null;
+    }
+  });
 
   /* ============ icon set (inline SVG, Lucide-style: 24x24, stroke 2, round caps) ============ */
   var ICONS = {
