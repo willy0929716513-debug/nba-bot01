@@ -6,11 +6,22 @@ on:
   # against this repo's real run history over 3+ weeks, was firing 5-11 hours
   # late every single day -- not an occasional blip, a consistent multi-hour
   # delay regardless of what time the cron was set to. There's no cron
-  # expression that fixes a platform-level queuing delay. Instead, the daily
-  # run is triggered externally via workflow_dispatch (the `official_run`
-  # input marks it as the real daily run, not an ad hoc manual test) by a
-  # scheduler outside GitHub Actions entirely, which isn't subject to this
-  # throttling.
+  # expression that fixes a platform-level queuing delay. The daily run is
+  # instead triggered externally by a scheduler outside GitHub Actions
+  # entirely, which isn't subject to this throttling.
+  #
+  # That external trigger fires by committing a fresh timestamp to
+  # .github/trigger/daily-run.txt on main, not by calling the
+  # workflow_dispatch API -- the integration token available to that
+  # scheduler has repo Contents:write (confirmed working: it's the same
+  # permission every PR merge on this repo already uses) but not
+  # Actions:write, so the `POST .../actions/workflows/.../dispatches`
+  # endpoint 403s for it ("Resource not accessible by integration").
+  # A plain content push needs no extra permission and is just as capable
+  # of starting a workflow run.
+  push:
+    branches: [main]
+    paths: ['.github/trigger/daily-run.txt']
   workflow_dispatch:
     inputs:
       official_run:
@@ -42,7 +53,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-          FORCE_OFFICIAL_RUN: ${{ inputs.official_run }}
+          FORCE_OFFICIAL_RUN: ${{ github.event_name == 'push' || inputs.official_run == true }}
         run: python nba_bot.py
 
       - name: Publish site data

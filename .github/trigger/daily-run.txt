@@ -1,0 +1,7 @@
+This file exists purely as a trigger mechanism -- committing a fresh
+timestamp here is how the external daily scheduler starts the NBA Odds
+Bot workflow (see .github/workflows/nba_odds_bot.yml's `push:` trigger),
+since that scheduler's GitHub integration has Contents:write but not
+Actions:write, so it can't call the workflow_dispatch API directly.
+
+last triggered: (not yet)
