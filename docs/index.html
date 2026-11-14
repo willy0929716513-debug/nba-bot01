@@ -604,7 +604,8 @@
   }
   .hero-spotlight-label svg { width: 13px; height: 13px; color: #FBBF24; }
   .hero-spotlight-matchup { display: flex; justify-content: center; margin-bottom: 16px; }
-  .hero-spotlight-matchup .matchup-line { font-size: 13.5px; font-weight: 700; }
+  .hero-spotlight-matchup .matchup-line-logos { display: inline-flex; align-items: center; gap: 14px; }
+  .hero-spotlight-matchup .matchup-vs { font-size: 13px; font-weight: 700; margin: 0; }
   .hero-spotlight-main { display: flex; align-items: center; gap: 18px; }
   .hero-spotlight-pick { flex: 1; min-width: 0; }
   .hero-spotlight-pick .bet { font-size: 16.5px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.01em; }
@@ -1023,6 +1024,14 @@
     if (parts.length !== 2) return esc(matchup);
     return '<span class="matchup-line">' + teamLogo(parts[0], size) + esc(parts[0]) +
       '<span class="matchup-vs">@</span>' + teamLogo(parts[1], size) + esc(parts[1]) + '</span>';
+  }
+  // Logos only, no team-name text -- for spots where the matchup is more of
+  // a visual mark than something that needs to be read as text.
+  function matchupLogosOnly(matchup, size) {
+    var parts = String(matchup || "").split(" @ ");
+    if (parts.length !== 2) return esc(matchup);
+    return '<span class="matchup-line matchup-line-logos">' + teamLogo(parts[0], size) +
+      '<span class="matchup-vs">@</span>' + teamLogo(parts[1], size) + '</span>';
   }
   function teamNameFromBet(bet) {
     var m = String(bet || "").match(/^(.*?)\s[+-]?\d/);
@@ -1876,7 +1885,7 @@
     var score = confidenceScore(best.edge);
     el.innerHTML =
       '<div class="hero-spotlight-label">' + svg("star") + ' Today’s Top Pick</div>' +
-      '<div class="hero-spotlight-matchup">' + matchupWithLogos(best.matchup, 36) + '</div>' +
+      '<div class="hero-spotlight-matchup">' + matchupLogosOnly(best.matchup, 56) + '</div>' +
       '<div class="hero-spotlight-main">' +
         confidenceRing(score, 92, true) +
         '<div class="hero-spotlight-pick">' +
