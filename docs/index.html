@@ -829,6 +829,23 @@
 (function () {
   "use strict";
 
+  /* ============ always land at the top on open ============
+   * Clicking a nav tab used to write "#section-id" into the URL (native
+   * anchor behavior). A bookmarked/home-screen-saved link, or the browser
+   * just restoring the last URL, could carry that hash back in on a fresh
+   * open, making the browser auto-jump straight to that section instead
+   * of the top. Tab clicks no longer touch the URL at all (see setupSeg
+   * below), but this strips any hash left over from an old saved link and
+   * forces scroll position back to the top, so opening the page always
+   * shows the top regardless of what URL it was opened from.
+   */
+  if (window.location.hash) {
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  window.scrollTo(0, 0);
+  window.addEventListener("load", function () { window.scrollTo(0, 0); });
+
   /* ============ icon set (inline SVG, Lucide-style: 24x24, stroke 2, round caps) ============ */
   var ICONS = {
     activity:   '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
@@ -925,7 +942,16 @@
       if (active) moveIndicatorTo(active);
     });
     btns.forEach(function (btn) {
-      btn.addEventListener("click", function () { setActive(btn); });
+      // preventDefault so clicking a tab never writes "#section-id" into
+      // the URL -- a saved/bookmarked/home-screen link with that hash
+      // still in it is exactly what makes the page reopen scrolled to
+      // the middle instead of the top. Scroll manually instead.
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        setActive(btn);
+        var target = document.getElementById(btn.dataset.target);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     });
 
     var sections = btns.map(function (b) { return document.getElementById(b.dataset.target); });
