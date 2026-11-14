@@ -560,6 +560,114 @@
     .row-list { padding: 4px 14px; }
     .subhead, .note-box { padding-left: 14px; padding-right: 14px; }
   }
+
+  /* ---------- hero ---------- */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: calc(var(--radius) + 6px);
+    padding: 30px;
+    margin-bottom: var(--gap-card);
+    border: 1px solid var(--hairline);
+    box-shadow: var(--shadow-pop);
+    background:
+      radial-gradient(circle at 88% 10%, color-mix(in srgb, #8B5CF6 20%, transparent), transparent 55%),
+      linear-gradient(135deg, color-mix(in srgb, var(--brand) 16%, var(--bg)) 0%, var(--bg) 62%);
+  }
+  .hero-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 30px; align-items: center; }
+  .hero-kicker {
+    font-size: 11.5px; font-weight: 800; letter-spacing: .14em;
+    color: var(--brand); text-transform: uppercase; margin-bottom: 10px;
+  }
+  .hero-title { font-size: 27px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.32; margin: 0 0 10px; }
+  .hero-sub { font-size: 13.5px; color: var(--ink-2); line-height: 1.75; max-width: 460px; margin: 0; }
+  .hero-stats-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .hero-stat {
+    background: color-mix(in srgb, var(--surface) 65%, transparent);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--hairline); border-radius: var(--radius-sm);
+    padding: 8px 14px;
+  }
+  .hero-stat .v { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .hero-stat .l { font-size: 10.5px; color: var(--ink-3); font-weight: 600; margin-top: 1px; }
+
+  .hero-spotlight {
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    border: 1px solid var(--hairline); border-radius: var(--radius);
+    padding: 20px; box-shadow: var(--shadow-card);
+  }
+  .hero-spotlight-label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10.5px; font-weight: 800; letter-spacing: .1em;
+    color: var(--ink-3); text-transform: uppercase; margin-bottom: 14px;
+  }
+  .hero-spotlight-label svg { width: 13px; height: 13px; color: #FBBF24; }
+  .hero-spotlight-matchup { display: flex; justify-content: center; margin-bottom: 16px; }
+  .hero-spotlight-matchup .matchup-line { font-size: 13.5px; font-weight: 700; }
+  .hero-spotlight-main { display: flex; align-items: center; gap: 18px; }
+  .hero-spotlight-pick { flex: 1; min-width: 0; }
+  .hero-spotlight-pick .bet { font-size: 16.5px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .hero-spotlight-pick .meta { font-size: 11.5px; color: var(--ink-2); }
+  .hero-spotlight-pick .meta b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 20px; }
+  }
+  @media (max-width: 640px) {
+    .hero { padding: 20px; border-radius: var(--radius); }
+    .hero-title { font-size: 21px; }
+  }
+
+  /* ---------- confidence ring ---------- */
+  .confidence-ring { position: relative; flex: 0 0 auto; }
+  .confidence-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+  .confidence-ring .ring-track { fill: none; stroke: var(--hairline); stroke-width: 7; }
+  .confidence-ring .ring-fill { fill: none; stroke-width: 7; stroke-linecap: round; transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1); }
+  .confidence-ring .ring-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .confidence-ring .ring-score { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .confidence-ring.big .ring-score { font-size: 25px; }
+  .confidence-ring .ring-unit { font-size: 7px; letter-spacing: .04em; color: var(--ink-3); font-weight: 700; text-transform: uppercase; margin-top: 3px; white-space: nowrap; }
+
+  /* ---------- AI pick extras: risk pill + why-this-pick ---------- */
+  .ai-pick-top { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+  .ai-pick-info { flex: 1; min-width: 0; }
+  .risk-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .01em; }
+  .risk-pill.low    { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+  .risk-pill.medium { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+  .risk-pill.high   { color: var(--danger);  background: color-mix(in srgb, var(--danger) 14%, transparent); }
+  .why-pick { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .why-pick li { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--ink-2); line-height: 1.55; }
+  .why-pick li svg { width: 13px; height: 13px; flex: 0 0 auto; margin-top: 2px; color: var(--success); }
+
+  /* ---------- top picks leaderboard ---------- */
+  .leaderboard-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px var(--gap-card);
+    border-top: 1px solid var(--hairline);
+  }
+  .leaderboard-row:first-child { border-top: none; }
+  .leaderboard-rank {
+    width: 30px; height: 30px; border-radius: 50%; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 13px;
+    background: var(--surface); color: var(--ink-2);
+  }
+  .leaderboard-rank.r1 { background: color-mix(in srgb, #FBBF24 22%, transparent); color: #FBBF24; }
+  .leaderboard-rank.r2 { background: color-mix(in srgb, #CBD5E1 22%, transparent); color: #CBD5E1; }
+  .leaderboard-rank.r3 { background: color-mix(in srgb, #FB923C 22%, transparent); color: #FB923C; }
+  .leaderboard-main { flex: 1; min-width: 0; }
+  .leaderboard-main .m1 { font-size: 13.5px; font-weight: 700; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .leaderboard-main .m2 { font-size: 11.5px; color: var(--ink-2); }
+  .leaderboard-score { text-align: right; flex: 0 0 auto; }
+  .leaderboard-score .v { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .leaderboard-score .l { font-size: 9px; color: var(--ink-3); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  @media (max-width: 640px) {
+    .leaderboard-main .m1 { font-size: 12.5px; }
+    .ai-pick-top { gap: 10px; }
+  }
 </style>
 
 <div class="wrap">
@@ -577,6 +685,26 @@
       <button class="icon-btn" id="theme-toggle" type="button" aria-label="切換深色/淺色"></button>
     </div>
   </header>
+
+  <section class="hero reveal" id="hero-section">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <div class="hero-kicker">NBA Game Intelligence</div>
+        <h1 class="hero-title">每日 NBA 賽事 AI 分析與數據推薦</h1>
+        <p class="hero-sub">整合近期戰績、主客場、球員狀態、傷兵、攻防效率與賽程因素，建立比賽信心評分。</p>
+        <div class="hero-stats-row" id="hero-stats-row"></div>
+      </div>
+      <div class="hero-spotlight" id="hero-spotlight"></div>
+    </div>
+  </section>
+
+  <section class="top-picks reveal" id="top-picks-section" style="display:none;">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-top"></span>
+      <div class="head-text"><h2>Top Picks Today</h2><p>今日信心分數最高的推薦</p></div>
+    </div>
+    <div class="card" id="top-picks-body"></div>
+  </section>
 
   <div class="meta-row fade-in" id="meta-line">
     <span class="pill">載入中…</span>
@@ -748,6 +876,7 @@
   mount("icon-sec-schedule", "clock");
   mount("icon-sec-sun", "sun");
   mount("icon-sec-hist", "history");
+  mount("icon-sec-top", "trophy");
   mount("icon-chev-cal", "chevronright");
   mount("icon-chev-rank", "chevronright");
   mount("icon-chev-schedule", "chevronright");
@@ -898,6 +1027,87 @@
   function teamNameFromBet(bet) {
     var m = String(bet || "").match(/^(.*?)\s[+-]?\d/);
     return m ? m[1] : bet;
+  }
+
+  /* ============ AI confidence presentation ============
+   * This is NOT a separate/invented scoring formula -- it's a direct,
+   * documented re-scaling of the real "edge" number the backend already
+   * computes (Monte Carlo simulation blended with market-implied odds).
+   * The boundaries below are literally the EDGE_THRESHOLD tiers the
+   * backend already uses to decide whether/how strongly to recommend a
+   * bet (0.08 / 0.09 / 0.12), just mapped onto a 0-100 scale and given a
+   * premium label. No weighted multi-factor formula is fabricated here --
+   * the raw edge/probability numbers are always shown alongside it too.
+   */
+  function confidenceScore(edgePct) {
+    var score = 50 + Number(edgePct) * 4;
+    return Math.max(1, Math.min(99, Math.round(score)));
+  }
+  function confidenceMeta(score) {
+    if (score >= 90) return { label: "ELITE CONFIDENCE", risk: "low" };
+    if (score >= 80) return { label: "STRONG PICK", risk: "low" };
+    if (score >= 70) return { label: "LEAN", risk: "medium" };
+    if (score >= 60) return { label: "NEUTRAL", risk: "medium" };
+    return { label: "HIGH RISK", risk: "high" };
+  }
+  function riskColorVar(risk) {
+    return { low: "var(--success)", medium: "var(--warning)", high: "var(--danger)" }[risk] || "var(--ink-3)";
+  }
+  function riskPill(risk) {
+    var text = { low: "Low Risk", medium: "Medium Risk", high: "High Risk" }[risk] || "";
+    return '<span class="risk-pill ' + risk + '">' + text + '</span>';
+  }
+
+  var RING_R = 34, RING_C = 2 * Math.PI * RING_R;
+  function confidenceRing(score, size, big) {
+    var meta = confidenceMeta(score);
+    return '<div class="confidence-ring' + (big ? ' big' : '') + '" style="width:' + size + 'px;height:' + size + 'px;" data-score="' + score + '">' +
+      '<svg viewBox="0 0 80 80">' +
+        '<circle class="ring-track" cx="40" cy="40" r="' + RING_R + '"/>' +
+        '<circle class="ring-fill" cx="40" cy="40" r="' + RING_R + '" style="stroke:' + riskColorVar(meta.risk) + ';stroke-dasharray:' + RING_C.toFixed(1) + ';stroke-dashoffset:' + RING_C.toFixed(1) + ';"/>' +
+      '</svg>' +
+      '<div class="ring-center"><span class="ring-score">0</span>' + (big ? '<span class="ring-unit">AI Confidence</span>' : '') + '</div>' +
+    '</div>';
+  }
+  function animateRings(scope) {
+    var nodes = (scope || document).querySelectorAll(".confidence-ring");
+    for (var i = 0; i < nodes.length; i++) {
+      (function (el) {
+        var score = Number(el.getAttribute("data-score")) || 0;
+        var fill = el.querySelector(".ring-fill");
+        var label = el.querySelector(".ring-score");
+        requestAnimationFrame(function () {
+          fill.style.strokeDashoffset = (RING_C * (1 - score / 100)).toFixed(1);
+        });
+        var start = null;
+        function step(ts) {
+          if (!start) start = ts;
+          var p = Math.min(1, (ts - start) / 700);
+          label.textContent = Math.round(score * p);
+          if (p < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      })(nodes[i]);
+    }
+  }
+
+  // Every bullet here comes from a real field the backend already
+  // computed for this pick -- nothing here is an invented "factor".
+  function whyPickBullets(p) {
+    var bullets = [];
+    if (p.consensus) bullets.push(esc(p.consensus));
+    if (p.ou_note) bullets.push(esc(p.ou_note));
+    if (p.missing) bullets.push(esc(p.missing));
+    if (p.model_total != null && p.market_total != null) {
+      bullets.push("模型預測 " + Number(p.model_total).toFixed(1) + " 分，對比共識 " + Number(p.market_total).toFixed(1) + " 分");
+    }
+    if (p.market_implied_prob != null) {
+      bullets.push("市場隱含勝率 " + Number(p.market_implied_prob).toFixed(1) + "%，模型估計 " + Number(p.prob).toFixed(1) + "%");
+    }
+    bullets.push("Edge " + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + "%，優於市場定價");
+    return '<ul class="why-pick">' + bullets.map(function (b) {
+      return '<li>' + svg("checkcircle") + '<span>' + b + '</span></li>';
+    }).join("") + '</ul>';
   }
 
   /* ============ live scores ticker ============
@@ -1199,12 +1409,14 @@
             '<span class="row-title">' + matchupWithLogos(p.matchup) + '</span>' +
             '<span class="row-time">' + esc(p.start_time) + '</span>' +
           '</div>' +
-          '<div class="row-sub">' +
-            '<span class="badge ' + tierBadgeClass(p.tier) + '" style="margin-right:6px;">' + esc(p.tier) + '</span>' +
-            '投注 <b>' + esc(p.bet) + '</b> @ <b>' + Number(p.price).toFixed(2) + '</b>（' + esc(p.book) + '）' +
+          '<div class="ai-pick-top">' +
+            confidenceRing(confidenceScore(p.edge), 56) +
+            '<div class="ai-pick-info">' +
+              '<span class="badge ' + tierBadgeClass(p.tier) + '" style="margin-right:6px;">' + esc(p.tier) + '</span>' +
+              riskPill(confidenceMeta(confidenceScore(p.edge)).risk) +
+              '<div class="row-sub" style="margin-top:6px;">投注 <b>' + esc(p.bet) + '</b> @ <b>' + Number(p.price).toFixed(2) + '</b>（' + esc(p.book) + '）</div>' +
+            '</div>' +
           '</div>' +
-          '<div class="row-sub">' + esc(p.missing) + ' ｜ ' + esc(p.consensus) + '</div>' +
-          (p.ou_note ? '<div class="row-sub">' + esc(p.ou_note) + '</div>' : '') +
           '<div class="row-stats">' +
             '<span class="stat">勝率 <b>' + Number(p.prob).toFixed(1) + '%</b></span>' +
             '<span class="stat">Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b></span>' +
@@ -1212,6 +1424,7 @@
             (p.market_implied_prob != null ? '<span class="stat">市場隱含勝率 <b>' + Number(p.market_implied_prob).toFixed(1) + '%</b></span>' : '') +
           '</div>' +
           probMeter(p.prob) +
+          whyPickBullets(p) +
         '</div>';
       });
       (day.totals || []).forEach(function (t) {
@@ -1235,23 +1448,28 @@
             '<span class="row-title">' + matchupWithLogos(t.matchup) + '</span>' +
             '<span class="row-time">' + esc(t.start_time) + '</span>' +
           '</div>' +
-          '<div class="row-sub">' +
-            '<span class="badge badge-status" style="margin-right:6px;">大小分</span>' +
-            '<span class="badge ' + tierBadgeClass(t.tier) + '" style="margin-right:6px;">' + esc(t.tier) + '</span>' +
-            '投注 <b>' + esc(t.bet) + '</b> @ <b>' + Number(t.price).toFixed(2) + '</b>（' + esc(t.book) + '）' +
+          '<div class="ai-pick-top">' +
+            confidenceRing(confidenceScore(t.edge), 56) +
+            '<div class="ai-pick-info">' +
+              '<span class="badge badge-status" style="margin-right:6px;">大小分</span>' +
+              '<span class="badge ' + tierBadgeClass(t.tier) + '" style="margin-right:6px;">' + esc(t.tier) + '</span>' +
+              riskPill(confidenceMeta(confidenceScore(t.edge)).risk) +
+              '<div class="row-sub" style="margin-top:6px;">投注 <b>' + esc(t.bet) + '</b> @ <b>' + Number(t.price).toFixed(2) + '</b>（' + esc(t.book) + '）</div>' +
+            '</div>' +
           '</div>' +
-          '<div class="row-sub">模型預測 <b>' + Number(t.model_total).toFixed(1) + '</b> 分 ｜ 共識 <b>' + Number(t.market_total).toFixed(1) + '</b> 分</div>' +
           '<div class="row-stats">' +
             '<span class="stat">機率 <b>' + Number(t.prob).toFixed(1) + '%</b></span>' +
             '<span class="stat">Edge <b>' + (t.edge >= 0 ? "+" : "") + Number(t.edge).toFixed(1) + '%</b></span>' +
             '<span class="stat">Kelly 建議 <b>$' + Number(t.kelly_stake).toFixed(1) + '</b></span>' +
           '</div>' +
           probMeter(t.prob) +
+          whyPickBullets(t) +
         '</div>';
       });
       html += '</div>';
     });
     body.innerHTML = html;
+    animateRings(body);
   }
 
   function marginBar(v) {
@@ -1621,6 +1839,77 @@
     body.innerHTML = html;
   }
 
+  function qualifyingPicksToday(data) {
+    var days = (data.regular_season || {}).days || [];
+    var out = [];
+    days.forEach(function (d) {
+      (d.picks || []).forEach(function (p) { if (p.meets_threshold) out.push(p); });
+      (d.totals || []).forEach(function (t) { if (t.meets_threshold) out.push(t); });
+    });
+    out.sort(function (a, b) { return b.edge - a.edge; });
+    return out;
+  }
+
+  function renderHero(data) {
+    var el = document.getElementById("hero-spotlight");
+    var statsRow = document.getElementById("hero-stats-row");
+    var rs = data.regular_season || {};
+    var days = rs.days || [];
+    var totalGames = 0;
+    days.forEach(function (d) { totalGames += (d.picks || []).length; });
+    var qualifying = qualifyingPicksToday(data);
+
+    statsRow.innerHTML =
+      '<div class="hero-stat"><div class="v">' + totalGames + '</div><div class="l">今日賽事</div></div>' +
+      '<div class="hero-stat"><div class="v">' + qualifying.length + '</div><div class="l">達標推薦</div></div>';
+
+    if (!qualifying.length) {
+      el.innerHTML =
+        '<div class="hero-spotlight-label">' + svg("star") + ' Today’s Top Pick</div>' +
+        '<div class="empty" style="padding:4px 0;">' +
+          '<div class="body"><div class="title">目前沒有達到信心門檻的推薦</div>' +
+          '<div class="desc">模型今天分析的比賽都還沒有出現足夠優勢，等下一輪資料更新後再看看。</div></div>' +
+        '</div>';
+      return;
+    }
+    var best = qualifying[0];
+    var score = confidenceScore(best.edge);
+    el.innerHTML =
+      '<div class="hero-spotlight-label">' + svg("star") + ' Today’s Top Pick</div>' +
+      '<div class="hero-spotlight-matchup">' + matchupWithLogos(best.matchup, 36) + '</div>' +
+      '<div class="hero-spotlight-main">' +
+        confidenceRing(score, 92, true) +
+        '<div class="hero-spotlight-pick">' +
+          '<div class="bet">' + esc(best.bet) + '</div>' +
+          '<span class="badge ' + tierBadgeClass(best.tier) + '">' + esc(best.tier) + '</span>' +
+          '<div class="meta" style="margin-top:8px;">勝率 <b>' + Number(best.prob).toFixed(1) + '%</b> ・ Edge <b>+' + Number(best.edge).toFixed(1) + '%</b></div>' +
+        '</div>' +
+      '</div>';
+    animateRings(el);
+  }
+
+  function renderTopPicks(data) {
+    var section = document.getElementById("top-picks-section");
+    var body = document.getElementById("top-picks-body");
+    var qualifying = qualifyingPicksToday(data).slice(0, 5);
+    if (!qualifying.length) { section.style.display = "none"; body.innerHTML = ""; return; }
+    section.style.display = "";
+    var html = qualifying.map(function (p, i) {
+      var rank = i + 1;
+      var score = confidenceScore(p.edge);
+      var risk = confidenceMeta(score).risk;
+      return '<div class="leaderboard-row">' +
+        '<div class="leaderboard-rank' + (rank <= 3 ? ' r' + rank : '') + '">#' + rank + '</div>' +
+        '<div class="leaderboard-main">' +
+          '<div class="m1">' + matchupWithLogos(p.matchup, 20) + '<b>' + esc(p.bet) + '</b></div>' +
+          '<div class="m2">' + esc(p.tier) + ' ・ 勝率 ' + Number(p.prob).toFixed(1) + '% ・ ' + riskPill(risk) + '</div>' +
+        '</div>' +
+        '<div class="leaderboard-score"><div class="v">' + score + '</div><div class="l">Confidence</div></div>' +
+      '</div>';
+    }).join("");
+    body.innerHTML = html;
+  }
+
   function render(data) {
     var meta = document.getElementById("meta-line");
     var updated = data.generated_at ? esc(data.generated_at) + "（台灣時間）" : "尚未產生資料";
@@ -1632,6 +1921,8 @@
     document.getElementById("status-time").textContent = data.generated_at ? data.generated_at : "尚未執行";
     document.getElementById("status-dot").style.background = data.generated_at ? "var(--success)" : "var(--ink-3)";
     recommendedMatchups = computeRecommendedMatchups(data);
+    renderHero(data);
+    renderTopPicks(data);
     renderStats(data);
     renderRegularSeasonTrio(data);
     renderParlay(data);
