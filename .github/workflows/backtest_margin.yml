@@ -1,0 +1,32 @@
+name: Backtest Margin Calibration
+
+# Manual diagnostic, not part of the daily pipeline. Triggers on a push
+# that touches the backtest script itself (same push-trigger mechanism
+# nba_odds_bot.yml uses, since the external scheduler's GitHub
+# integration can dispatch via a content push but not via the
+# workflow_dispatch API), or a manual click in the Actions UI.
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/backtest_margin_calibration.py']
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run backtest
+        env:
+          BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
+        run: python scripts/backtest_margin_calibration.py
