@@ -80,7 +80,20 @@ SIMS             = 50000
 EDGE_THRESHOLD   = 0.08
 MODEL_WEIGHT     = 0.35
 MARKET_WEIGHT    = 0.65
-DYNAMIC_STD_BASE = 13.0
+# Raised from 13.0 to 15.71 -- not a guess, and not picked to make any
+# backtest look more profitable (that would just be fitting noise on a
+# small sample). scripts/backtest_margin_calibration.py measured the
+# REAL std of predict_margin()'s residuals against 110 out-of-sample
+# games this season (ratings computed only from strictly earlier
+# games, never the game's own result), independent of which games were
+# actually recommended: empirical std 15.71 against this 13.0
+# assumption, with only 61.8% of games landing within +/-13 where a
+# well-calibrated std would put ~68%. A too-narrow std is exactly what
+# makes a probability model overconfident -- this isn't claiming the
+# model got more accurate, it's correcting the simulation's own
+# acknowledgment of how much it doesn't know, the same role
+# EDGE_THRESHOLD's earlier increase played from the opposite direction.
+DYNAMIC_STD_BASE = 15.71
 HOME_ADVANTAGE   = 2.8
 MAX_SPREAD       = 15.0
 MIN_SPREAD       = 3.0
