@@ -2380,6 +2380,7 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks,
                     "kelly_stake":      t["kelly_stake"],
                     "model_total":      t["model_total"],
                     "market_total":     t["market_total"],
+                    "missing":          t["missing"],
                 }
                 for t in totals
             ],
@@ -2770,15 +2771,26 @@ def run():
                         t_tier = "⭐ 穩定"
 
                     side_cn = "大分 Over" if side == "over" else "小分 Under"
+                    # A total depends on BOTH teams' offense/defense (unlike a
+                    # spread pick, which is directional per side), so the
+                    # relevant missing-player list is both teams' combined --
+                    # predict_total() has been factoring these into
+                    # model_total since the injury-data fix above, but the
+                    # message/export never actually said so, same blind spot
+                    # the totals pipeline had before that fix.
+                    totals_missing = h_missing + a_missing
+                    totals_missing_str = "狀況: " + ", ".join(totals_missing) if totals_missing else "陣容完整"
                     t_msg = (
                         "**[%s] %s @ %s** (%s)\n"
                         "投注: `%s %.1f` @ **%.2f** (%s)\n"
+                        "> %s\n"
                         "> 模型預測 %.1f 分 | 共識 %.1f 分\n"
                         "> 機率: %.1f%% | Edge: %+.1f%% | Kelly建議: $%.1f\n"
                     ) % (
                         t_tier, away_cn, home_cn,
                         c_time_tw.strftime("%m/%d %H:%M"),
                         side_cn, total_line, t_price, book.get("title", "?"),
+                        totals_missing_str,
                         model_total, t_consensus,
                         t_prob * 100, t_edge * 100, t_stake,
                     )
@@ -2797,6 +2809,7 @@ def run():
                             "start_time":      c_time_tw.strftime("%m/%d %H:%M"),
                             "bet":             "%s %.1f" % (side_cn, total_line),
                             "book":            book.get("title", "?"),
+                            "missing":         totals_missing_str,
                             "model_total":     model_total,
                             "market_total":    t_consensus,
                         }
