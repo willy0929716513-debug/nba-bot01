@@ -1279,35 +1279,44 @@ B2B_HOME_PENALTY = 1.3
 B2B_AWAY_PENALTY = 2.0
 
 
+def get_missing_players(team, injury_data):
+    """Which of this team's IMPACT_PLAYERS are out/limited right now, per
+    the injury report. Shared by predict_margin and predict_total so a
+    missing star affects both the SAME way instead of totals silently
+    ignoring injuries entirely (it used to -- predict_total took no
+    injury_data param at all)."""
+    out_lower = [p.lower() for p in injury_data.get("out", {}).get(team, [])]
+    q_lower   = [p.lower() for p in injury_data.get("questionable", {}).get(team, [])]
+    result = []
+    for k in IMPACT_PLAYERS.get(team, []):
+        if k in SEASON_OUT or any(k in p for p in out_lower):
+            result.append((k, "out"))
+        elif k in LIMITED_PLAYERS or any(k in p for p in q_lower):
+            result.append((k, "limited"))
+    return result
+
+
+def injury_adjusted_stat(team, injury_data, live_ratings):
+    """This team's off/def/form rating with missing-player penalties
+    applied -- the same 60/40 off/def split predict_margin has always
+    used, just factored out so predict_total can apply the identical
+    adjustment instead of using the unadjusted rating regardless of who's
+    actually available to play. Returns (adjusted_stat_dict, missing_list)."""
+    base = live_ratings.get(team, FALLBACK_RATINGS.get(team, DEFAULT_RATING))
+    stat = dict(base)
+    missing = get_missing_players(team, injury_data)
+    for p, status in missing:
+        penalty = (SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY) if status == "out" else LIMITED_PENALTY
+        stat["off"] -= penalty * 0.6
+        stat["def"] += penalty * 0.4
+    return stat, missing
+
+
 def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_rest=None, home_adv=None):
     h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
     a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
-    h_stat = dict(h_base)
-    a_stat = dict(a_base)
-
-    def get_missing(team):
-        out_lower = [p.lower() for p in injury_data.get("out", {}).get(team, [])]
-        q_lower   = [p.lower() for p in injury_data.get("questionable", {}).get(team, [])]
-        result = []
-        for k in IMPACT_PLAYERS.get(team, []):
-            if k in SEASON_OUT or any(k in p for p in out_lower):
-                result.append((k, "out"))
-            elif k in LIMITED_PLAYERS or any(k in p for p in q_lower):
-                result.append((k, "limited"))
-        return result
-
-    h_missing = get_missing(home)
-    a_missing = get_missing(away)
-
-    for p, status in h_missing:
-        penalty = (SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY) if status == "out" else LIMITED_PENALTY
-        h_stat["off"] -= penalty * 0.6
-        h_stat["def"] += penalty * 0.4
-
-    for p, status in a_missing:
-        penalty = (SUPERSTAR_PENALTY if p in SUPERSTARS else STAR_PENALTY) if status == "out" else LIMITED_PENALTY
-        a_stat["off"] -= penalty * 0.6
-        a_stat["def"] += penalty * 0.4
+    h_stat, h_missing = injury_adjusted_stat(home, injury_data, live_ratings)
+    a_stat, a_missing = injury_adjusted_stat(away, injury_data, live_ratings)
 
     h_net  = (h_stat["off"] - h_stat["def"]) + h_base.get("form", 0.0)
     a_net  = (a_stat["off"] - a_stat["def"]) + a_base.get("form", 0.0)
@@ -1328,11 +1337,23 @@ def predict_margin(home, away, injury_data, live_ratings, home_rest=None, away_r
     return margin, fmt(h_missing), fmt(a_missing)
 
 
-def predict_total(home, away, live_ratings, four_factors=None, league_avg_pace=None):
+def predict_total(home, away, live_ratings, four_factors=None, league_avg_pace=None, injury_data=None):
     """Each side's expected points is its own offense against the
     opponent's defense, not just the two offenses added together -- the
     previous formula ignored defense entirely, so a historically stingy
     defense never pulled a projected total down.
+
+    Also used to silently ignore injuries completely -- a missing star
+    changed the model's margin prediction (predict_margin already
+    applies the penalty) but never touched the totals estimate at all,
+    even though the same injury report was already sitting right there
+    in the caller. Reuses injury_adjusted_stat(), the exact same 60/40
+    off/def penalty split predict_margin applies, so a missing player
+    affects both predictions consistently instead of margin reacting
+    and totals not noticing. injury_data=None (the default) preserves
+    the old unadjusted behavior exactly, for any caller (e.g. the
+    backtest scripts, which have no retroactive injury data available)
+    that doesn't pass one.
 
     When real pace data is available for both teams (four_factors, from
     compute_four_factors()) and a league_avg_pace to compare against, the
@@ -1345,8 +1366,12 @@ def predict_total(home, away, live_ratings, four_factors=None, league_avg_pace=N
     have a full box-stat line yet, etc.) leaves the estimate exactly as
     it was before this -- no guessed pace is ever substituted in.
     """
-    h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
-    a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
+    if injury_data is not None:
+        h_base, _ = injury_adjusted_stat(home, injury_data, live_ratings)
+        a_base, _ = injury_adjusted_stat(away, injury_data, live_ratings)
+    else:
+        h_base = live_ratings.get(home, FALLBACK_RATINGS.get(home, DEFAULT_RATING))
+        a_base = live_ratings.get(away, FALLBACK_RATINGS.get(away, DEFAULT_RATING))
     home_pts = (h_base["off"] + a_base["def"]) / 2
     away_pts = (a_base["off"] + h_base["def"]) / 2
     total = home_pts + away_pts
@@ -2546,7 +2571,7 @@ def run():
             home_rest=home_rest, away_rest=away_rest, home_adv=home_adv,
         )
 
-        model_total     = predict_total(home, away, live_ratings, four_factors=four_factors, league_avg_pace=league_avg_pace)
+        model_total     = predict_total(home, away, live_ratings, four_factors=four_factors, league_avg_pace=league_avg_pace, injury_data=injuries)
         consensus_total = get_consensus_total(bookmakers)
         ou_note = ""
         if consensus_total:
