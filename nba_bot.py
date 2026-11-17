@@ -284,6 +284,42 @@ TEAM_CN = {
 # this reversal is lossless.
 TEAM_CN_REVERSE = {zh: en for en, zh in TEAM_CN.items()}
 
+# NHL (ice hockey) -- a second, separate sport pipeline. Names/codes
+# confirmed against ESPN's live team list (api as of 2026-11-17), not
+# guessed from memory -- notably "Utah Mammoth", the team that relocated
+# from Arizona and was later given this permanent name, not "Arizona
+# Coyotes" or the interim "Utah Hockey Club".
+NHL_TEAM_CN = {
+    "Anaheim Ducks": "鴨子", "Boston Bruins": "棕熊", "Buffalo Sabres": "軍刀",
+    "Calgary Flames": "火焰", "Carolina Hurricanes": "颶風", "Chicago Blackhawks": "黑鷹",
+    "Colorado Avalanche": "雪崩", "Columbus Blue Jackets": "藍衣", "Dallas Stars": "星隊",
+    "Detroit Red Wings": "紅翼", "Edmonton Oilers": "油人", "Florida Panthers": "黑豹",
+    "Los Angeles Kings": "國王", "Minnesota Wild": "荒野", "Montreal Canadiens": "加拿大人",
+    "Nashville Predators": "掠食者", "New Jersey Devils": "惡魔", "New York Islanders": "島人",
+    "New York Rangers": "遊騎兵", "Ottawa Senators": "參議員", "Philadelphia Flyers": "飛人",
+    "Pittsburgh Penguins": "企鵝", "San Jose Sharks": "鯊魚", "Seattle Kraken": "海妖",
+    "St. Louis Blues": "藍調", "Tampa Bay Lightning": "閃電", "Toronto Maple Leafs": "楓葉",
+    "Utah Mammoth": "長毛象", "Vancouver Canucks": "加人", "Vegas Golden Knights": "金騎士",
+    "Washington Capitals": "首都人", "Winnipeg Jets": "噴射機",
+}
+
+# ESPN's team abbreviation, lowercased -- same CDN URL pattern the NBA
+# team-logo system already uses (a.espncdn.com/i/teamlogos/<league>/500/
+# <code>.png), just under "nhl" instead of "nba".
+NHL_TEAM_LOGO_CODE = {
+    "Anaheim Ducks": "ana", "Boston Bruins": "bos", "Buffalo Sabres": "buf",
+    "Calgary Flames": "cgy", "Carolina Hurricanes": "car", "Chicago Blackhawks": "chi",
+    "Colorado Avalanche": "col", "Columbus Blue Jackets": "cbj", "Dallas Stars": "dal",
+    "Detroit Red Wings": "det", "Edmonton Oilers": "edm", "Florida Panthers": "fla",
+    "Los Angeles Kings": "la", "Minnesota Wild": "min", "Montreal Canadiens": "mtl",
+    "Nashville Predators": "nsh", "New Jersey Devils": "nj", "New York Islanders": "nyi",
+    "New York Rangers": "nyr", "Ottawa Senators": "ott", "Philadelphia Flyers": "phi",
+    "Pittsburgh Penguins": "pit", "San Jose Sharks": "sj", "Seattle Kraken": "sea",
+    "St. Louis Blues": "stl", "Tampa Bay Lightning": "tb", "Toronto Maple Leafs": "tor",
+    "Utah Mammoth": "utah", "Vancouver Canucks": "van", "Vegas Golden Knights": "vgk",
+    "Washington Capitals": "wsh", "Winnipeg Jets": "wpg",
+}
+
 
 # Substring matching below only catches full.lower() are literal substrings
 # of one another, which misses common city abbreviations (e.g. "LA Clippers"
@@ -1487,6 +1523,164 @@ def fetch_odds():
     return data
 
 
+def fetch_nhl_odds():
+    """Same the-odds-api pattern as fetch_odds(), for NHL -- "icehockey_nhl"
+    is a stable, documented sport_key (unlike Summer League's, which has
+    to be discovered at runtime). Moneyline (h2h) only for this first
+    version: puck line and totals need their own goal-scoring model, not
+    a reuse of the margin/point-total Gaussian simulation built for
+    basketball, and are left for later."""
+    data = safe_get(
+        "https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/",
+        params={"apiKey": ODDS_API_KEY, "regions": "us", "markets": "h2h", "oddsFormat": "decimal"},
+    )
+    if data is None:
+        log.error("NHL Odds API failed")
+        return []
+    log.info("NHL odds loaded: %d games", len(data))
+    return data
+
+
+NHL_SEASON_LOOKBACK_START = "2026-09-20"  # safely before any real season start
+NHL_GAMES_CACHE_GIST_DESC = "nba_bot_nhl_games_cache"
+# Dates within this many days of today are NEVER trusted from cache, always
+# re-fetched fresh -- guards against caching a day as "done" before a late
+# game on it has actually gone final, and against any Taiwan/US date-
+# boundary mismatch, the same class of bug the NBA side's target_date fix
+# (compute_target_date) exists to prevent. A handful of extra ESPN calls
+# per run is a trivial cost next to getting that wrong.
+NHL_CACHE_RESCAN_DAYS = 3
+
+
+def load_nhl_games_cache():
+    """Cached completed NHL games plus the date through which that cache is
+    trusted, so fetch_nhl_season_games() only has to ask ESPN about recent/
+    new dates each run instead of re-scanning the entire season from
+    scratch every time -- confirmed live to otherwise cost ~25 real seconds
+    and ~60 HTTP calls per run even this early in the season, a cost that
+    only grows as the season goes on. Same Gist-caching pattern as
+    load_live_alert_state(), a separate Gist from both that and the
+    settled-bet history Gist."""
+    if not GITHUB_TOKEN:
+        return None
+    headers = {"Authorization": "token %s" % GITHUB_TOKEN}
+    gists = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
+    if not gists:
+        return None
+    for g in gists:
+        if g.get("description") == NHL_GAMES_CACHE_GIST_DESC:
+            raw_url = list(g["files"].values())[0]["raw_url"]
+            data = safe_get(raw_url)
+            return data if isinstance(data, dict) else None
+    return None
+
+
+def save_nhl_games_cache(cache):
+    if not GITHUB_TOKEN:
+        return
+    headers = {
+        "Authorization": "token %s" % GITHUB_TOKEN,
+        "Content-Type":  "application/json",
+    }
+    content = json.dumps(cache, ensure_ascii=False)
+    gists   = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
+    gist_id = None
+    if gists:
+        for g in gists:
+            if g.get("description") == NHL_GAMES_CACHE_GIST_DESC:
+                gist_id = g["id"]
+                break
+    payload = {
+        "description": NHL_GAMES_CACHE_GIST_DESC,
+        "public":      False,
+        "files":       {"nhl_games_cache.json": {"content": content}},
+    }
+    try:
+        if gist_id:
+            requests.patch("https://api.github.com/gists/%s" % gist_id, headers=headers, json=payload, timeout=10)
+        else:
+            requests.post("https://api.github.com/gists", headers=headers, json=payload, timeout=10)
+        log.info("NHL games cache saved to Gist (%d games, valid through %s)", len(cache.get("games", [])), cache.get("cached_through"))
+    except Exception as e:
+        log.error("Failed to save NHL games cache: %s", e)
+
+
+def fetch_nhl_season_games():
+    """Pull this season's real NHL results from ESPN's free scoreboard
+    endpoint, one HTTP call per calendar date that isn't already trusted
+    from the Gist cache. Unlike balldontlie's paginated whole-season fetch
+    for the NBA side, ESPN's NHL scoreboard only accepts a single date per
+    call -- a date-range query (?dates=YYYYMMDD-YYYYMMDD) was tried and
+    silently returns nothing, confirmed live, not assumed.
+
+    Filters to season.type == 2 (regular season): the real 2026-27 season
+    started around Sept 30, but preseason games exist before that and
+    would distort early-season Elo if counted, so a cold-start backfill
+    scans a bit before any plausible season start and lets the
+    season.type field -- not a hand-picked date -- decide what counts.
+
+    See NHL_CACHE_RESCAN_DAYS for why the most recent few days are always
+    re-fetched rather than trusted from cache.
+    """
+    cache = load_nhl_games_cache() or {}
+    cached_games = cache.get("games", [])
+    cached_through_str = cache.get("cached_through")
+
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
+    rescan_boundary = today - timedelta(days=NHL_CACHE_RESCAN_DAYS)
+
+    if cached_through_str:
+        cached_through = datetime.strptime(cached_through_str, "%Y-%m-%d").date()
+    else:
+        cached_through = datetime.strptime(NHL_SEASON_LOOKBACK_START, "%Y-%m-%d").date() - timedelta(days=1)
+
+    trusted_games = [g for g in cached_games if g["date"] <= cached_through.strftime("%Y-%m-%d")]
+    fetch_start = cached_through + timedelta(days=1)
+
+    fetched = []
+    d = fetch_start
+    while d <= today:
+        data = safe_get(
+            "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+            params={"dates": d.strftime("%Y%m%d")},
+            retries=2, max_wait=5,
+        )
+        if data:
+            for ev in data.get("events", []):
+                if (ev.get("season") or {}).get("type") != 2:
+                    continue
+                comp = (ev.get("competitions") or [{}])[0]
+                status = ((comp.get("status") or {}).get("type") or {})
+                if not status.get("completed"):
+                    continue
+                competitors = comp.get("competitors", [])
+                home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not home or not away:
+                    continue
+                try:
+                    hs = int(home.get("score"))
+                    vs = int(away.get("score"))
+                except (TypeError, ValueError):
+                    continue
+                fetched.append({
+                    "home": (home.get("team") or {}).get("displayName", ""),
+                    "away": (away.get("team") or {}).get("displayName", ""),
+                    "hs": hs, "vs": vs,
+                    "date": d.strftime("%Y-%m-%d"),
+                })
+        d += timedelta(days=1)
+
+    all_games = trusted_games + fetched
+    new_cached_through = max(cached_through, min(rescan_boundary, today))
+    save_nhl_games_cache({"cached_through": new_cached_through.strftime("%Y-%m-%d"), "games": all_games})
+    log.info(
+        "NHL season games: %d trusted (cached) + %d freshly fetched = %d total",
+        len(trusted_games), len(fetched), len(all_games),
+    )
+    return all_games
+
+
 def fetch_summer_league_sport_key():
     """Scan the live Odds API sports list for a basketball entry whose key or
     title mentions 'summer' -- the exact sport_key isn't documented and can
@@ -2331,10 +2525,142 @@ def build_elo_rankings(elo_ratings):
     return rows
 
 
+def build_nhl_elo_ratings(games):
+    """Same classic sequential Elo math as build_elo_ratings() (NBA), over
+    NHL games instead. Kept as its own function rather than generalizing
+    the NBA one to take both -- they pull from entirely different raw
+    data shapes (balldontlie vs ESPN's scoreboard), and this one's input
+    is already the flat {home, away, hs, vs, date} shape
+    fetch_nhl_season_games() produces, so sharing would mean forcing one
+    of them through an adapter for no real benefit."""
+    completed = sorted(games, key=lambda g: g["date"])
+    ratings = {}
+    for g in completed:
+        if g["home"] not in NHL_TEAM_CN or g["away"] not in NHL_TEAM_CN:
+            continue
+        r_home = ratings.setdefault(g["home"], ELO_INITIAL)
+        r_away = ratings.setdefault(g["away"], ELO_INITIAL)
+        expected_home = 1.0 / (1.0 + 10 ** ((r_away - r_home) / 400.0))
+        actual_home   = 1.0 if g["hs"] > g["vs"] else 0.0
+        delta = ELO_K * (actual_home - expected_home)
+        ratings[g["home"]] = r_home + delta
+        ratings[g["away"]] = r_away - delta
+    return {team: round(r, 1) for team, r in ratings.items()}
+
+
+NHL_EDGE_THRESHOLD = 0.08  # same bar as the NBA side; no NHL-specific settled history yet to justify a different one
+
+
+def analyze_nhl(odds_games, elo_ratings, today_s):
+    """Moneyline-only picks for NHL today, modeled the same way the NBA
+    spread pipeline blends model vs market before computing edge: Elo's
+    own win probability blended with the devigged market-implied
+    probability (get_consensus_moneyline_prob(), already written
+    generically enough to work for any team names), using the same
+    MODEL_WEIGHT/MARKET_WEIGHT as the rest of this file -- there's no
+    NHL-specific settled history yet to justify different weights.
+
+    This is a BRAND NEW pipeline with ZERO settled history of its own.
+    Unlike the NBA side (years of real calibration data behind its
+    thresholds and weights), there's no way yet to confirm Elo blended
+    this way actually produces a real edge for hockey. Every pick/tier/
+    edge number here is real (not fabricated), computed the same honest
+    way as everything else in this file -- but genuinely unvalidated,
+    which is why run() does not write these to any history/Gist tracking
+    yet, and why the export marks this section accordingly.
+    """
+    picks = {}
+    for g in odds_games:
+        try:
+            c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        c_time_tw = c_time_utc + timedelta(hours=8)
+        g_date = c_time_tw.strftime("%Y-%m-%d")
+        if g_date != today_s:
+            continue
+
+        home = g.get("home_team", "")
+        away = g.get("away_team", "")
+        if home not in NHL_TEAM_CN or away not in NHL_TEAM_CN:
+            continue
+        bookmakers = g.get("bookmakers", [])
+
+        r_home = elo_ratings.get(home, ELO_INITIAL)
+        r_away = elo_ratings.get(away, ELO_INITIAL)
+        elo_prob_home = 1.0 / (1.0 + 10 ** ((r_away - r_home) / 400.0))
+
+        game_id = "%s@%s_%s" % (away, home, g_date)
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "h2h":
+                    continue
+                for outcome in market.get("outcomes", []):
+                    name  = outcome.get("name", "")
+                    price = outcome.get("price")
+                    if not price or price <= 0 or name not in (home, away):
+                        continue
+
+                    elo_prob    = elo_prob_home if name == home else (1 - elo_prob_home)
+                    market_prob = get_consensus_moneyline_prob(bookmakers, name)
+                    if market_prob is None:
+                        continue
+
+                    blended_prob = elo_prob * MODEL_WEIGHT + market_prob * MARKET_WEIGHT
+                    edge = blended_prob - (1 / price)
+                    meets_threshold = edge >= NHL_EDGE_THRESHOLD
+                    stake = kelly_stake(blended_prob, price, BANKROLL)
+
+                    if not meets_threshold:
+                        tier = "👀 觀察中"
+                    elif edge > 0.12:
+                        tier = "💎 頂級"
+                    elif edge > 0.09:
+                        tier = "🔥 強力"
+                    else:
+                        tier = "⭐ 穩定"
+
+                    existing = picks.get(game_id)
+                    if existing is None or edge > existing["edge"]:
+                        picks[game_id] = {
+                            "tier": tier, "meets_threshold": meets_threshold,
+                            "matchup": "%s @ %s" % (NHL_TEAM_CN.get(away, away), NHL_TEAM_CN.get(home, home)),
+                            "start_time": c_time_tw.strftime("%m/%d %H:%M"),
+                            "bet": NHL_TEAM_CN.get(name, name) + " 勝",
+                            "price": price, "book": book.get("title", "?"),
+                            "prob": blended_prob, "edge": edge, "kelly_stake": stake,
+                        }
+
+    out = []
+    for p in picks.values():
+        p = dict(p)
+        p["prob"] = round(p["prob"] * 100, 1)
+        p["edge"] = round(p["edge"] * 100, 1)
+        out.append(p)
+    return out
+
+
+def format_nhl_section(nhl_picks):
+    """Discord text block for today's NHL picks, mirroring
+    format_summer_league_section()'s style. Always labels this
+    experimental/unvalidated -- see analyze_nhl()'s docstring -- rather
+    than presenting it with the same confidence as the NBA side's
+    years-of-calibration-backed numbers."""
+    if not nhl_picks:
+        return ""
+    lines = ["\n🏒 **NHL 冰球分析**（新功能，Elo+市場勝率模型，目前尚無歷史命中率可參考，僅供觀察）\n"]
+    for p in sorted(nhl_picks, key=lambda x: x["edge"], reverse=True):
+        tag = "🎯推薦" if p["meets_threshold"] else "👀觀察中"
+        lines.append("> [%s %s] %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge %+.1f%%" % (
+            p["tier"], tag, p["matchup"], p["bet"], p["price"], p["book"], p["prob"], p["edge"]
+        ))
+    return "\n".join(lines) + "\n"
+
+
 def export_site_data(now_tw, data_source, is_official_run, daily_picks,
                       total_rec, wins, win_rate, profit, summer_league, history,
                       schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None,
-                      parlay_note=None):
+                      parlay_note=None, nhl_picks=None):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     daily_totals = daily_totals or {}
     days = []
@@ -2459,6 +2785,14 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks,
         "parlay_note":        parlay_note,
         "power_rankings":     power_rankings,
         "elo_rankings":       elo_rankings or [],
+        # Brand new, separate sport -- see analyze_nhl()'s docstring for why
+        # this is marked experimental (zero settled history yet to validate
+        # Elo+market blended this way actually works for hockey). Not
+        # wired into any history/Gist tracking yet, unlike the NBA side.
+        "nhl": {
+            "experimental": True,
+            "picks": nhl_picks or [],
+        },
     }
 
     try:
@@ -2525,8 +2859,25 @@ def run():
     summer_league = analyze_summer_league(now_utc=now_utc)
     record_summer_history(history, summer_league, is_official_run)
 
-    if not games and not summer_league.get("available"):
-        log.info("No regular-season games and no Summer League data; nothing to report")
+    # NHL is a brand new, separate sport pipeline (see analyze_nhl()'s
+    # docstring) -- wrapped so that any failure specific to it (the-odds-api
+    # not actually covering icehockey_nhl on this plan, ESPN's scoreboard
+    # having an outage, etc.) only drops NHL output for this run, and never
+    # takes down the main, years-proven NBA pipeline that this whole
+    # function otherwise exists for. Computed before the "nothing to
+    # report" guard below so an NBA off-day (no games, no Summer League)
+    # doesn't also silently swallow a real NHL slate.
+    try:
+        nhl_odds  = fetch_nhl_odds()
+        nhl_games = fetch_nhl_season_games()
+        nhl_elo   = build_nhl_elo_ratings(nhl_games)
+        nhl_picks = analyze_nhl(nhl_odds, nhl_elo, today_s)
+    except Exception as e:
+        log.error("NHL pipeline failed, skipping NHL for this run: %s", e)
+        nhl_picks = []
+
+    if not games and not summer_league.get("available") and not nhl_picks:
+        log.info("No regular-season games, no Summer League, and no NHL data; nothing to report")
         return
 
     daily_picks  = {}
@@ -2949,6 +3300,7 @@ def run():
 
     output += perf_msg
     output += format_summer_league_section(summer_league, now_utc)
+    output += format_nhl_section(nhl_picks)
 
     if is_official_run:
         save_history(history)
@@ -2965,6 +3317,7 @@ def run():
         power_rankings=build_power_rankings(live_ratings, four_factors=four_factors),
         daily_totals=daily_totals,
         elo_rankings=build_elo_rankings(build_elo_ratings(season_games)),
+        nhl_picks=nhl_picks,
     )
 
     log.info("Sending to Discord, length: %d", len(output))
