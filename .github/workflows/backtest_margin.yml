@@ -13,6 +13,7 @@ on:
     paths:
       - 'scripts/backtest_margin_calibration.py'
       - 'scripts/backtest_total_calibration.py'
+      - 'scripts/run_backtests.py'
   workflow_dispatch:
 
 jobs:
@@ -30,12 +31,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run margin backtest
+      - name: Run backtests
         env:
           BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
-        run: python scripts/backtest_margin_calibration.py
-
-      - name: Run total backtest
-        env:
-          BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
-        run: python scripts/backtest_total_calibration.py
+        run: python scripts/run_backtests.py
