@@ -723,6 +723,7 @@
         <a class="seg-btn" href="#power-rankings-section" data-target="power-rankings-section" id="ic-tab-rank"><span></span>戰力排行</a>
         <a class="seg-btn" href="#schedule-section" data-target="schedule-section" id="ic-tab-schedule"><span></span>賽程</a>
         <a class="seg-btn" href="#summer-league-section" data-target="summer-league-section" id="ic-tab-sun"><span></span>夏季聯賽</a>
+        <a class="seg-btn" href="#nhl-section" data-target="nhl-section" id="ic-tab-nhl" style="display:none;"><span></span>NHL</a>
         <a class="seg-btn" href="#history-section" data-target="history-section" id="ic-tab-hist"><span></span>歷史紀錄</a>
       </div>
     </nav>
@@ -795,6 +796,19 @@
       <span class="chev" id="icon-chev-sun"></span>
     </div>
     <div id="summer-league-body"></div>
+  </section>
+
+  <section id="nhl-section" class="reveal" style="display:none;">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-nhl"></span>
+      <div class="head-text"><h2>NHL 冰球分析</h2><p>Elo + 市場勝率模型，新功能，尚無歷史命中率可參考</p></div>
+      <span class="chev" id="icon-chev-nhl"></span>
+    </div>
+    <div class="note-box" style="padding-bottom:14px;">
+      <span id="icon-nhl-info"></span>
+      這是全新功能，目前沒有任何已結算的歷史資料可以驗證準不準，請當作觀察用，先不要當作正式推薦依據。
+    </div>
+    <div id="nhl-body"></div>
   </section>
 
   <section id="history-section" class="reveal">
@@ -924,15 +938,19 @@
   mount("icon-sec-sun", "sun");
   mount("icon-sec-hist", "history");
   mount("icon-sec-top", "trophy");
+  mount("icon-sec-nhl", "activity");
+  mount("icon-nhl-info", "info");
   mount("icon-chev-cal", "chevronright");
   mount("icon-chev-rank", "chevronright");
   mount("icon-chev-schedule", "chevronright");
   mount("icon-chev-sun", "chevronright");
   mount("icon-chev-hist", "chevronright");
+  mount("icon-chev-nhl", "chevronright");
   document.querySelector("#ic-tab-cal span").innerHTML = svg("calendar");
   document.querySelector("#ic-tab-rank span").innerHTML = svg("barchart");
   document.querySelector("#ic-tab-sun span").innerHTML = svg("sun");
   document.querySelector("#ic-tab-hist span").innerHTML = svg("history");
+  document.querySelector("#ic-tab-nhl span").innerHTML = svg("activity");
 
   /* ============ theme ============ */
   var root = document.documentElement;
@@ -1088,6 +1106,35 @@
     return '<span class="matchup-line matchup-line-logos">' + teamLogo(parts[0], size) +
       '<span class="matchup-vs">@</span>' + teamLogo(parts[1], size) + '</span>';
   }
+  // NHL team logos -- same ESPN CDN pattern, "nhl" league path and its own
+  // code map (Chinese names match NHL_TEAM_CN on the backend).
+  var NHL_TEAM_LOGO_CODE = {
+    "鴨子": "ana", "棕熊": "bos", "軍刀": "buf", "火焰": "cgy", "颶風": "car",
+    "黑鷹": "chi", "雪崩": "col", "藍衣": "cbj", "星隊": "dal", "紅翼": "det",
+    "油人": "edm", "黑豹": "fla", "國王": "la", "荒野": "min", "加拿大人": "mtl",
+    "掠食者": "nsh", "惡魔": "nj", "島人": "nyi", "遊騎兵": "nyr", "參議員": "ott",
+    "飛人": "phi", "企鵝": "pit", "鯊魚": "sj", "海妖": "sea", "藍調": "stl",
+    "閃電": "tb", "楓葉": "tor", "長毛象": "utah", "加人": "van", "金騎士": "vgk",
+    "首都人": "wsh", "噴射機": "wpg"
+  };
+  function nhlTeamLogo(name, size) {
+    size = size || 22;
+    var code = NHL_TEAM_LOGO_CODE[name];
+    var safeName = esc(name || "?");
+    if (!code) {
+      return '<span class="team-logo-fallback" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.48) + 'px;">' + safeName.charAt(0) + '</span>';
+    }
+    var url = "https://a.espncdn.com/i/teamlogos/nhl/500/" + code + ".png";
+    return '<img class="team-logo" src="' + url + '" alt="" loading="lazy" width="' + size + '" height="' + size +
+      '" data-name="' + safeName + '" onerror="__teamLogoFallback(this)">';
+  }
+  function nhlMatchupWithLogos(matchup, size) {
+    var parts = String(matchup || "").split(" @ ");
+    if (parts.length !== 2) return esc(matchup);
+    return '<span class="matchup-line">' + nhlTeamLogo(parts[0], size) + esc(parts[0]) +
+      '<span class="matchup-vs">@</span>' + nhlTeamLogo(parts[1], size) + esc(parts[1]) + '</span>';
+  }
+
   function teamNameFromBet(bet) {
     var m = String(bet || "").match(/^(.*?)\s[+-]?\d/);
     return m ? m[1] : bet;
@@ -1995,8 +2042,10 @@
     renderSchedule(data);
     renderSummerLeague(data);
     renderHistory(data);
+    renderNhl(data);
     toggleSummerLeagueTab(data);
     togglePowerRankingsTab(data);
+    toggleNhlTab(data);
   }
 
   function toggleSummerLeagueTab(data) {
@@ -2005,6 +2054,63 @@
     var section = document.getElementById("summer-league-section");
     if (tab) tab.style.display = available ? "" : "none";
     if (section) section.style.display = available ? "" : "none";
+  }
+
+  function toggleNhlTab(data) {
+    var available = !!(data.nhl && data.nhl.picks && data.nhl.picks.length);
+    var tab = document.getElementById("ic-tab-nhl");
+    var section = document.getElementById("nhl-section");
+    if (tab) tab.style.display = available ? "" : "none";
+    if (section) section.style.display = available ? "" : "none";
+  }
+
+  function renderNhl(data) {
+    var body = document.getElementById("nhl-body");
+    var picks = (data.nhl && data.nhl.picks) || [];
+    if (!picks.length) { body.innerHTML = ""; return; }
+    var sorted = picks.slice().sort(function (a, b) { return b.edge - a.edge; });
+    var html = '<div class="card row-list hoverable">';
+    sorted.forEach(function (p) {
+      if (!p.meets_threshold) {
+        html += '<div class="row watch">' +
+          '<div class="row-top">' +
+            '<span class="row-title">' + nhlMatchupWithLogos(p.matchup) + '</span>' +
+            '<span class="row-time">' + esc(p.start_time) + '</span>' +
+          '</div>' +
+          '<div class="row-compact">' +
+            '<span class="badge badge-status" style="margin-right:6px;">👀 觀察中</span>' +
+            '最佳盤口：<b>' + esc(p.bet) + '</b> @ ' + Number(p.price).toFixed(2) +
+            '（' + esc(p.book) + '）｜ 勝率 <b>' + Number(p.prob).toFixed(1) + '%</b>' +
+            ' ｜ Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b>' +
+          '</div>' +
+        '</div>';
+        return;
+      }
+      html += '<div class="row qualifies ' + rowAccentClass(p.tier) + '">' +
+        '<div class="row-top">' +
+          '<span class="row-title">' + nhlMatchupWithLogos(p.matchup) + '</span>' +
+          '<span class="row-time">' + esc(p.start_time) + '</span>' +
+        '</div>' +
+        '<div class="ai-pick-top">' +
+          confidenceRing(confidenceScore(p.edge), 56) +
+          '<div class="ai-pick-info">' +
+            '<span class="badge ' + tierBadgeClass(p.tier) + '" style="margin-right:6px;">' + esc(p.tier) + '</span>' +
+            riskPill(confidenceMeta(confidenceScore(p.edge)).risk) +
+            '<div class="row-sub" style="margin-top:6px;">投注 <b>' + esc(p.bet) + '</b> @ <b>' + Number(p.price).toFixed(2) + '</b>（' + esc(p.book) + '）</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="row-stats">' +
+          '<span class="stat">勝率 <b>' + Number(p.prob).toFixed(1) + '%</b></span>' +
+          '<span class="stat">Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b></span>' +
+          '<span class="stat">Kelly 建議 <b>$' + Number(p.kelly_stake).toFixed(1) + '</b></span>' +
+        '</div>' +
+        probMeter(p.prob) +
+        whyPickBullets(p) +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+    animateRings(body);
   }
 
   var TIER_GRADE = { "頂級": "SS", "強力": "S", "穩定": "A" };
