@@ -1526,13 +1526,13 @@ def fetch_odds():
 def fetch_nhl_odds():
     """Same the-odds-api pattern as fetch_odds(), for NHL -- "icehockey_nhl"
     is a stable, documented sport_key (unlike Summer League's, which has
-    to be discovered at runtime). Moneyline (h2h) only for this first
-    version: puck line and totals need their own goal-scoring model, not
-    a reuse of the margin/point-total Gaussian simulation built for
-    basketball, and are left for later."""
+    to be discovered at runtime). Pulls moneyline (h2h), puck line
+    (spreads) and totals together -- puck line/totals edges are computed
+    against build_nhl_scoring_model()'s own real goal-based numbers, not
+    a reuse of the basketball margin/point-total Gaussian simulation."""
     data = safe_get(
         "https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/",
-        params={"apiKey": ODDS_API_KEY, "regions": "us", "markets": "h2h", "oddsFormat": "decimal"},
+        params={"apiKey": ODDS_API_KEY, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "decimal"},
     )
     if data is None:
         log.error("NHL Odds API failed")
@@ -2548,28 +2548,120 @@ def build_nhl_elo_ratings(games):
     return {team: round(r, 1) for team, r in ratings.items()}
 
 
-NHL_EDGE_THRESHOLD = 0.08  # same bar as the NBA side; no NHL-specific settled history yet to justify a different one
+NHL_SCORING_MODEL_MIN_GAMES = 100  # league-wide, roughly 3+ games/team across 32 teams, before team GF/GA averages are trusted
 
 
-def analyze_nhl(odds_games, elo_ratings, today_s):
-    """Moneyline-only picks for NHL today, modeled the same way the NBA
-    spread pipeline blends model vs market before computing edge: Elo's
-    own win probability blended with the devigged market-implied
-    probability (get_consensus_moneyline_prob(), already written
-    generically enough to work for any team names), using the same
-    MODEL_WEIGHT/MARKET_WEIGHT as the rest of this file -- there's no
-    NHL-specific settled history yet to justify different weights.
+def build_nhl_scoring_model(games):
+    """Goal-based scoring model for NHL puck-line/totals edges, built the
+    same way build_nhl_elo_ratings() builds Elo -- from this season's real
+    completed games only (ESPN scoreboard via fetch_nhl_season_games()).
+
+    This deliberately does NOT reuse the NBA side's DYNAMIC_STD_BASE/
+    TOTAL_STD_BASE: those are calibrated for a sport where games land in
+    the 90-130 point range, so a point-scale std is meaningless for a
+    2-7 goal sport. margin_std/total_std here are instead the real,
+    empirical standard deviation of this season's actual (home - away)
+    and (home + away) goal counts, in goal units, so simulate_cover()'s
+    Monte Carlo simulation runs on the right scale for hockey instead of
+    just inheriting basketball's.
+
+    Team goals-for/against are plain season-to-date per-game averages,
+    combined multiplicatively against the league average the same way
+    simple sports-scoring models commonly do -- no opponent-strength
+    adjustment, no injury data (no NHL injury feed wired in yet). A
+    first-pass model, not claimed to be more sophisticated than that.
+
+    Returns margin_std/total_std/league_avg as None (and empty ratings)
+    until NHL_SCORING_MODEL_MIN_GAMES completed games are available --
+    early in a season, per-team averages from a handful of games would
+    be noise, not signal, so puck line/totals picks simply don't run
+    yet rather than running on unstable numbers.
+    """
+    completed = [g for g in games if g["home"] in NHL_TEAM_CN and g["away"] in NHL_TEAM_CN]
+    if len(completed) < NHL_SCORING_MODEL_MIN_GAMES:
+        return {"ratings": {}, "league_avg": None, "home_adv": 0.0,
+                "margin_std": None, "total_std": None, "n_games": len(completed)}
+
+    gf, ga, margins, totals = {}, {}, [], []
+    for g in completed:
+        h, a, hs, vs = g["home"], g["away"], g["hs"], g["vs"]
+        gf.setdefault(h, []).append(hs)
+        ga.setdefault(h, []).append(vs)
+        gf.setdefault(a, []).append(vs)
+        ga.setdefault(a, []).append(hs)
+        margins.append(hs - vs)
+        totals.append(hs + vs)
+
+    def mean(xs):
+        return sum(xs) / len(xs)
+
+    def pstd(xs, m):
+        return (sum((x - m) ** 2 for x in xs) / len(xs)) ** 0.5
+
+    all_team_goals = [v for vals in gf.values() for v in vals]
+    league_avg = mean(all_team_goals)
+    home_adv   = mean(margins)
+    ratings    = {t: {"gf": mean(gf[t]), "ga": mean(ga[t])} for t in gf}
+
+    return {
+        "ratings":    ratings,
+        "league_avg": round(league_avg, 3),
+        "home_adv":   round(home_adv, 3),
+        "margin_std": round(pstd(margins, home_adv), 3),
+        "total_std":  round(pstd(totals, league_avg * 2), 3),
+        "n_games":    len(completed),
+    }
+
+
+def predict_nhl_score(home, away, scoring_model):
+    """Expected goals for each side: own offense vs opponent's defense,
+    each expressed as a multiple of league average, the same off-vs-def
+    shape predict_total() uses for NBA -- just on a goals scale with a
+    real (not NBA-borrowed) home-ice term."""
+    league_avg = scoring_model["league_avg"]
+    ratings    = scoring_model["ratings"]
+    h = ratings.get(home, {"gf": league_avg, "ga": league_avg})
+    a = ratings.get(away, {"gf": league_avg, "ga": league_avg})
+    home_goals = league_avg * (h["gf"] / league_avg) * (a["ga"] / league_avg) + scoring_model["home_adv"] / 2
+    away_goals = league_avg * (a["gf"] / league_avg) * (h["ga"] / league_avg) - scoring_model["home_adv"] / 2
+    return home_goals, away_goals
+
+
+def nhl_tier(meets_threshold, edge):
+    if not meets_threshold:
+        return "👀 觀察中"
+    if edge > 0.12:
+        return "💎 頂級"
+    if edge > 0.09:
+        return "🔥 強力"
+    return "⭐ 穩定"
+
+
+NHL_EDGE_THRESHOLD = 0.08  # a relative edge % (model vs. devigged market), not a scoring-scale number -- same bar as the NBA side, since this one doesn't depend on sport-specific units the way std does; no NHL-specific settled history yet to justify a different one
+
+
+def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
+    """NHL picks for today across all three markets: moneyline (Elo blended
+    with devigged market win probability), puck line, and totals (both of
+    the latter using build_nhl_scoring_model()'s real goal-based
+    projection and empirical std, blended with the market consensus line
+    the same MODEL_WEIGHT/MARKET_WEIGHT way the NBA spread/totals
+    pipelines already do). Puck line and totals are skipped entirely when
+    scoring_model has no usable numbers yet (early season, under
+    NHL_SCORING_MODEL_MIN_GAMES) -- moneyline still runs on Elo alone.
 
     This is a BRAND NEW pipeline with ZERO settled history of its own.
     Unlike the NBA side (years of real calibration data behind its
-    thresholds and weights), there's no way yet to confirm Elo blended
-    this way actually produces a real edge for hockey. Every pick/tier/
-    edge number here is real (not fabricated), computed the same honest
-    way as everything else in this file -- but genuinely unvalidated,
-    which is why run() does not write these to any history/Gist tracking
-    yet, and why the export marks this section accordingly.
+    thresholds and weights), there's no way yet to confirm any of this
+    actually produces a real edge for hockey. Every pick/tier/edge number
+    here is real (not fabricated), computed the same honest way as
+    everything else in this file -- but genuinely unvalidated, which is
+    why run() does not write these to any history/Gist tracking yet, and
+    why the export marks this section accordingly.
     """
     picks = {}
+    has_scoring_model = scoring_model.get("league_avg") is not None
+
     for g in odds_games:
         try:
             c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
@@ -2590,7 +2682,17 @@ def analyze_nhl(odds_games, elo_ratings, today_s):
         r_away = elo_ratings.get(away, ELO_INITIAL)
         elo_prob_home = 1.0 / (1.0 + 10 ** ((r_away - r_home) / 400.0))
 
-        game_id = "%s@%s_%s" % (away, home, g_date)
+        game_id    = "%s@%s_%s" % (away, home, g_date)
+        start_time = c_time_tw.strftime("%m/%d %H:%M")
+        matchup    = "%s @ %s" % (NHL_TEAM_CN.get(away, away), NHL_TEAM_CN.get(home, home))
+
+        def keep(market_name, edge, entry):
+            key = (game_id, market_name)
+            existing = picks.get(key)
+            if existing is None or edge > existing["edge"]:
+                picks[key] = entry
+
+        # ---- Moneyline ----
         for book in bookmakers:
             for market in book.get("markets", []):
                 if market.get("key") != "h2h":
@@ -2606,30 +2708,98 @@ def analyze_nhl(odds_games, elo_ratings, today_s):
                     if market_prob is None:
                         continue
 
-                    blended_prob = elo_prob * MODEL_WEIGHT + market_prob * MARKET_WEIGHT
-                    edge = blended_prob - (1 / price)
+                    blended_prob    = elo_prob * MODEL_WEIGHT + market_prob * MARKET_WEIGHT
+                    edge            = blended_prob - (1 / price)
                     meets_threshold = edge >= NHL_EDGE_THRESHOLD
-                    stake = kelly_stake(blended_prob, price, BANKROLL)
+                    stake           = kelly_stake(blended_prob, price, BANKROLL)
 
-                    if not meets_threshold:
-                        tier = "👀 觀察中"
-                    elif edge > 0.12:
-                        tier = "💎 頂級"
-                    elif edge > 0.09:
-                        tier = "🔥 強力"
-                    else:
-                        tier = "⭐ 穩定"
+                    keep("moneyline", edge, {
+                        "market": "moneyline", "tier": nhl_tier(meets_threshold, edge),
+                        "meets_threshold": meets_threshold,
+                        "matchup": matchup, "start_time": start_time,
+                        "bet": NHL_TEAM_CN.get(name, name) + " 勝",
+                        "price": price, "book": book.get("title", "?"),
+                        "prob": blended_prob, "edge": edge, "kelly_stake": stake,
+                    })
 
-                    existing = picks.get(game_id)
-                    if existing is None or edge > existing["edge"]:
-                        picks[game_id] = {
-                            "tier": tier, "meets_threshold": meets_threshold,
-                            "matchup": "%s @ %s" % (NHL_TEAM_CN.get(away, away), NHL_TEAM_CN.get(home, home)),
-                            "start_time": c_time_tw.strftime("%m/%d %H:%M"),
-                            "bet": NHL_TEAM_CN.get(name, name) + " 勝",
-                            "price": price, "book": book.get("title", "?"),
-                            "prob": blended_prob, "edge": edge, "kelly_stake": stake,
-                        }
+        if not has_scoring_model:
+            continue
+        model_home_goals, model_away_goals = predict_nhl_score(home, away, scoring_model)
+        model_margin = model_home_goals - model_away_goals
+        model_total  = model_home_goals + model_away_goals
+        margin_std   = scoring_model["margin_std"]
+        total_std    = scoring_model["total_std"]
+
+        # ---- Puck line ----
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "spreads":
+                    continue
+                for outcome in market.get("outcomes", []):
+                    name  = outcome.get("name", "")
+                    line  = outcome.get("point")
+                    price = outcome.get("price")
+                    if line is None or not price or price <= 0 or name not in (home, away):
+                        continue
+
+                    consensus = get_consensus_line(bookmakers, name, exclude_book=book.get("title"))
+                    if consensus is None:
+                        consensus = line
+                    if line - consensus < 0:  # only a book posting a better-than-consensus line is worth pricing
+                        continue
+
+                    target  = model_margin if name == home else -model_margin
+                    blended = target * MODEL_WEIGHT + (-consensus) * MARKET_WEIGHT
+                    prob    = simulate_cover(blended, line, std=margin_std)
+                    edge    = prob - (1 / price)
+                    meets_threshold = edge >= NHL_EDGE_THRESHOLD
+                    stake   = kelly_stake(prob, price, BANKROLL)
+
+                    keep("puckline", edge, {
+                        "market": "puckline", "tier": nhl_tier(meets_threshold, edge),
+                        "meets_threshold": meets_threshold,
+                        "matchup": matchup, "start_time": start_time,
+                        "bet": "%s %+.1f" % (NHL_TEAM_CN.get(name, name), line),
+                        "price": price, "book": book.get("title", "?"),
+                        "prob": prob, "edge": edge, "kelly_stake": stake,
+                    })
+
+        # ---- Totals ----
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "totals":
+                    continue
+                book_consensus_total = get_consensus_total(bookmakers, exclude_book=book.get("title"))
+                for outcome in market.get("outcomes", []):
+                    side = outcome.get("name", "").lower()
+                    if side not in ("over", "under"):
+                        continue
+                    total_line = outcome.get("point")
+                    price      = outcome.get("price")
+                    if total_line is None or not price or price <= 0:
+                        continue
+
+                    t_consensus = book_consensus_total if book_consensus_total is not None else total_line
+                    total_advantage = (t_consensus - total_line) if side == "over" else (total_line - t_consensus)
+                    if total_advantage < 0:
+                        continue
+
+                    blended_total = model_total * MODEL_WEIGHT + t_consensus * MARKET_WEIGHT
+                    prob_over = simulate_cover(blended_total - total_line, 0, std=total_std)
+                    prob = prob_over if side == "over" else (1 - prob_over)
+                    edge = prob - (1 / price)
+                    meets_threshold = edge >= NHL_EDGE_THRESHOLD
+                    stake = kelly_stake(prob, price, BANKROLL)
+                    side_cn = "大分 Over" if side == "over" else "小分 Under"
+
+                    keep("totals", edge, {
+                        "market": "totals", "tier": nhl_tier(meets_threshold, edge),
+                        "meets_threshold": meets_threshold,
+                        "matchup": matchup, "start_time": start_time,
+                        "bet": "%s %.1f" % (side_cn, total_line),
+                        "price": price, "book": book.get("title", "?"),
+                        "prob": prob, "edge": edge, "kelly_stake": stake,
+                    })
 
     out = []
     for p in picks.values():
@@ -2640,19 +2810,23 @@ def analyze_nhl(odds_games, elo_ratings, today_s):
     return out
 
 
+NHL_MARKET_LABEL = {"moneyline": "獨贏", "puckline": "讓分", "totals": "大小分"}
+
+
 def format_nhl_section(nhl_picks):
-    """Discord text block for today's NHL picks, mirroring
-    format_summer_league_section()'s style. Always labels this
-    experimental/unvalidated -- see analyze_nhl()'s docstring -- rather
-    than presenting it with the same confidence as the NBA side's
-    years-of-calibration-backed numbers."""
+    """Discord text block for today's NHL picks (moneyline, puck line,
+    totals), mirroring format_summer_league_section()'s style. Always
+    labels this experimental/unvalidated -- see analyze_nhl()'s docstring
+    -- rather than presenting it with the same confidence as the NBA
+    side's years-of-calibration-backed numbers."""
     if not nhl_picks:
         return ""
-    lines = ["\n🏒 **NHL 冰球分析**（新功能，Elo+市場勝率模型，目前尚無歷史命中率可參考，僅供觀察）\n"]
+    lines = ["\n🏒 **NHL 冰球分析**（新功能，Elo/進球模型+市場勝率混合，目前尚無歷史命中率可參考，僅供觀察）\n"]
     for p in sorted(nhl_picks, key=lambda x: x["edge"], reverse=True):
         tag = "🎯推薦" if p["meets_threshold"] else "👀觀察中"
-        lines.append("> [%s %s] %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge %+.1f%%" % (
-            p["tier"], tag, p["matchup"], p["bet"], p["price"], p["book"], p["prob"], p["edge"]
+        label = NHL_MARKET_LABEL.get(p["market"], p["market"])
+        lines.append("> [%s %s/%s] %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge %+.1f%%" % (
+            p["tier"], label, tag, p["matchup"], p["bet"], p["price"], p["book"], p["prob"], p["edge"]
         ))
     return "\n".join(lines) + "\n"
 
@@ -2868,10 +3042,11 @@ def run():
     # report" guard below so an NBA off-day (no games, no Summer League)
     # doesn't also silently swallow a real NHL slate.
     try:
-        nhl_odds  = fetch_nhl_odds()
-        nhl_games = fetch_nhl_season_games()
-        nhl_elo   = build_nhl_elo_ratings(nhl_games)
-        nhl_picks = analyze_nhl(nhl_odds, nhl_elo, today_s)
+        nhl_odds    = fetch_nhl_odds()
+        nhl_games   = fetch_nhl_season_games()
+        nhl_elo     = build_nhl_elo_ratings(nhl_games)
+        nhl_scoring = build_nhl_scoring_model(nhl_games)
+        nhl_picks   = analyze_nhl(nhl_odds, nhl_elo, nhl_scoring, today_s)
     except Exception as e:
         log.error("NHL pipeline failed, skipping NHL for this run: %s", e)
         nhl_picks = []

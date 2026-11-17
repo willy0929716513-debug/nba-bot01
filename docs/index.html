@@ -2064,6 +2064,8 @@
     if (section) section.style.display = available ? "" : "none";
   }
 
+  var NHL_MARKET_LABEL = { moneyline: "獨贏", puckline: "讓分", totals: "大小分" };
+
   function renderNhl(data) {
     var body = document.getElementById("nhl-body");
     var picks = (data.nhl && data.nhl.picks) || [];
@@ -2071,6 +2073,7 @@
     var sorted = picks.slice().sort(function (a, b) { return b.edge - a.edge; });
     var html = '<div class="card row-list hoverable">';
     sorted.forEach(function (p) {
+      var marketLabel = NHL_MARKET_LABEL[p.market] || p.market;
       if (!p.meets_threshold) {
         html += '<div class="row watch">' +
           '<div class="row-top">' +
@@ -2078,6 +2081,7 @@
             '<span class="row-time">' + esc(p.start_time) + '</span>' +
           '</div>' +
           '<div class="row-compact">' +
+            '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
             '<span class="badge badge-status" style="margin-right:6px;">👀 觀察中</span>' +
             '最佳盤口：<b>' + esc(p.bet) + '</b> @ ' + Number(p.price).toFixed(2) +
             '（' + esc(p.book) + '）｜ 勝率 <b>' + Number(p.prob).toFixed(1) + '%</b>' +
@@ -2094,6 +2098,7 @@
         '<div class="ai-pick-top">' +
           confidenceRing(confidenceScore(p.edge), 56) +
           '<div class="ai-pick-info">' +
+            '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
             '<span class="badge ' + tierBadgeClass(p.tier) + '" style="margin-right:6px;">' + esc(p.tier) + '</span>' +
             riskPill(confidenceMeta(confidenceScore(p.edge)).risk) +
             '<div class="row-sub" style="margin-top:6px;">投注 <b>' + esc(p.bet) + '</b> @ <b>' + Number(p.price).toFixed(2) + '</b>（' + esc(p.book) + '）</div>' +
