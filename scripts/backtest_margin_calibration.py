@@ -30,8 +30,14 @@ import nba_bot as nb
 MIN_PRIOR_GAMES = 5  # per team, before trusting its rating enough to test on
 
 
-def main():
-    games = nb.fetch_season_games()
+def main(games=None):
+    # Accepts a pre-fetched games list (see run_backtests.py) so a combined
+    # run doesn't call balldontlie twice back to back and double up on its
+    # rate limit -- confirmed to actually happen: a solo run of this script
+    # is fine, but running this and backtest_total_calibration.py in the
+    # same job sequentially got the second fetch 429'd on every retry.
+    if games is None:
+        games = nb.fetch_season_games()
     if not games:
         print("No games returned (missing/rate-limited BALLDONTLIE_KEY?) -- aborting.")
         return 1
