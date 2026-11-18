@@ -2652,6 +2652,16 @@ def compute_target_date(odds_games, today_s):
     games listed in odds_games, falling back to today_s itself (an empty
     result) only if nothing at all is upcoming.
 
+    Only counts a game toward its date if it still has at least one
+    bookmaker listed. Confirmed live: the-odds-api can keep an entry for
+    a game around (team names, commence_time) with an already-empty
+    "bookmakers" list -- after it starts, or after books have pulled
+    their markets -- rather than dropping the event outright. Counting
+    that bare entry as "today has a slate" was a real bug: it made this
+    settle on today_s (with nothing actually bettable on it) and never
+    advance to tomorrow's real, fully-booked slate, even on a day where
+    every one of today's games had already tipped off or finished.
+
     Shared by build_schedule() and run()'s own per-game loop -- both were
     independently solving the exact same "today_s is usually the wrong
     date" problem, and having only one of them actually do it (the loop
@@ -2660,6 +2670,8 @@ def compute_target_date(odds_games, today_s):
     """
     dates_present = set()
     for g in odds_games:
+        if not g.get("bookmakers"):
+            continue
         try:
             c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
         except (KeyError, ValueError):
@@ -3183,14 +3195,23 @@ NHL_EDGE_THRESHOLD = 0.08  # a relative edge % (model vs. devigged market), not 
 
 
 def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=None):
-    """NHL picks for today across all three markets: moneyline (Elo blended
-    with devigged market win probability), puck line, and totals (both of
-    the latter using build_nhl_scoring_model()'s real goal-based
-    projection and empirical std, blended with the market consensus line
-    the same MODEL_WEIGHT/MARKET_WEIGHT way the NBA spread/totals
-    pipelines already do). Puck line and totals are skipped entirely when
-    scoring_model has no usable numbers yet (early season, under
-    NHL_SCORING_MODEL_MIN_GAMES) -- moneyline still runs on Elo alone.
+    """NHL picks for the next real upcoming slate across all three markets:
+    moneyline (Elo blended with devigged market win probability), puck
+    line, and totals (both of the latter using build_nhl_scoring_model()'s
+    real goal-based projection and empirical std, blended with the market
+    consensus line the same MODEL_WEIGHT/MARKET_WEIGHT way the NBA
+    spread/totals pipelines already do). Puck line and totals are skipped
+    entirely when scoring_model has no usable numbers yet (early season,
+    under NHL_SCORING_MODEL_MIN_GAMES) -- moneyline still runs on Elo
+    alone.
+
+    Uses compute_target_date(odds_games, today_s) rather than literally
+    filtering on today_s -- the same "today_s is usually the wrong date"
+    problem build_schedule()/run()'s NBA loop already solve this way.
+    Confirmed live: a day with real NHL games can still show zero picks
+    under a bare today_s filter if today's own games (in Taiwan time)
+    already tipped off or finished by the time this runs, even though a
+    real, fully-booked slate exists tomorrow.
 
     nhl_injuries (from fetch_nhl_injuries(), optional) is shown on every
     pick as "missing" for transparency -- purely informational, the same
@@ -3211,6 +3232,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
     picks = {}
     nhl_injuries = nhl_injuries or {}
     has_scoring_model = scoring_model.get("league_avg") is not None
+    target_date = compute_target_date(odds_games, today_s)
 
     for g in odds_games:
         try:
@@ -3219,7 +3241,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
             continue
         c_time_tw = c_time_utc + timedelta(hours=8)
         g_date = c_time_tw.strftime("%Y-%m-%d")
-        if g_date != today_s:
+        if g_date != target_date:
             continue
 
         home = g.get("home_team", "")
@@ -3392,14 +3414,19 @@ NFL_EDGE_THRESHOLD = 0.08  # same relative-edge reasoning as NHL_EDGE_THRESHOLD
 
 def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=None,
                  history=None, is_official_run=False):
-    """NFL picks for today across all three markets: moneyline, spread,
-    totals -- exactly analyze_nhl()'s architecture (Elo for moneyline,
-    build_nfl_scoring_model()'s real points-based projection and
-    empirical std for spread/totals, blended with market consensus the
-    same MODEL_WEIGHT/MARKET_WEIGHT way), just on NFL's points scale
-    instead of NHL's goals scale. Spread/totals are skipped entirely
-    when scoring_model has no usable numbers yet (under
+    """NFL picks for the next real upcoming slate across all three markets:
+    moneyline, spread, totals -- exactly analyze_nhl()'s architecture
+    (Elo for moneyline, build_nfl_scoring_model()'s real points-based
+    projection and empirical std for spread/totals, blended with market
+    consensus the same MODEL_WEIGHT/MARKET_WEIGHT way), just on NFL's
+    points scale instead of NHL's goals scale. Spread/totals are skipped
+    entirely when scoring_model has no usable numbers yet (under
     NFL_SCORING_MODEL_MIN_GAMES) -- moneyline still runs on Elo alone.
+
+    Uses compute_target_date(odds_games, today_s), same as analyze_nhl()
+    now does -- see that docstring for why a bare today_s filter can show
+    zero real picks on a day that actually has a full slate, just not
+    landing on today_s's own Taiwan date.
 
     nfl_injuries (from fetch_nfl_injuries(), optional) is shown on every
     pick as "missing", purely informational -- see
@@ -3429,26 +3456,27 @@ def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=No
     history = history if history is not None else {}
     nfl_injuries = nfl_injuries or {}
     has_scoring_model = scoring_model.get("league_avg") is not None
+    target_date = compute_target_date(odds_games, today_s)
 
     # Diagnostic visibility into whether this function is actually
-    # reaching real games at all on a given day, vs. just returning an
-    # empty [] because nothing in the feed happened to match today_s --
-    # those look identical from the outside (zero picks either way), so
-    # without this there's no way to tell "ran the real analysis on a
-    # real game and it didn't qualify" apart from "never touched a real
-    # game at all" just by reading the final picks list.
+    # reaching real games at all, vs. just returning an empty [] because
+    # nothing in the feed happened to match target_date -- those look
+    # identical from the outside (zero picks either way), so without
+    # this there's no way to tell "ran the real analysis on a real game
+    # and it didn't qualify" apart from "never touched a real game at
+    # all" just by reading the final picks list.
     matching_date = []
     for g in odds_games:
         try:
             ct = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
         except (KeyError, ValueError):
             continue
-        if (ct + timedelta(hours=8)).strftime("%Y-%m-%d") == today_s:
+        if (ct + timedelta(hours=8)).strftime("%Y-%m-%d") == target_date:
             matching_date.append(g)
     valid_teams = [g for g in matching_date if g.get("home_team") in NFL_TEAM_CN and g.get("away_team") in NFL_TEAM_CN]
     log.info(
-        "analyze_nfl: %d odds_games fetched, %d match today (%s), %d of those have recognized teams",
-        len(odds_games), len(matching_date), today_s, len(valid_teams),
+        "analyze_nfl: %d odds_games fetched, target_date=%s (today=%s), %d match target_date, %d of those have recognized teams",
+        len(odds_games), target_date, today_s, len(matching_date), len(valid_teams),
     )
 
     for g in odds_games:
@@ -3458,7 +3486,7 @@ def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=No
             continue
         c_time_tw = c_time_utc + timedelta(hours=8)
         g_date = c_time_tw.strftime("%Y-%m-%d")
-        if g_date != today_s:
+        if g_date != target_date:
             continue
 
         home = g.get("home_team", "")
