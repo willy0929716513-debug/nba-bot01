@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-11-18 14:00",
+  "generated_at": "2026-11-18 14:06",
   "data_source": "即時數據",
   "run_type": "official",
   "regular_season": {
@@ -864,15 +864,6 @@
   "schedule": {
     "date": "2026-11-18",
     "games": [
-      {
-        "home": "快艇",
-        "away": "爵士",
-        "start_time": "11/18 11:41",
-        "status": "已完賽",
-        "home_score": 107,
-        "away_score": 132,
-        "has_pick": false
-      },
       {
         "home": "湖人",
         "away": "黃蜂",
