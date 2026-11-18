@@ -341,6 +341,31 @@ def normalize_team(name):
     return name
 
 
+# Same abbreviation problem TEAM_ALIASES documents for the NBA's two LA
+# teams also applies to the NHL's: "LA Kings" is not a substring of "Los
+# Angeles Kings" either. Without this, a bookmaker posting the shortened
+# form would silently fail every `name == home`/`name in (home, away)`
+# check in analyze_nhl() (that book's line invisible to all three NHL
+# markets) and fail to match in the shared get_consensus_* helpers.
+# "utah hockey club" covers the team's prior interim name, in case any
+# book's feed lags the "Utah Mammoth" rebrand.
+NHL_TEAM_ALIASES = {
+    "la kings": "los angeles kings",
+    "utah hockey club": "utah mammoth",
+}
+
+
+def normalize_nhl_team(name):
+    if not name:
+        return name
+    n = name.lower()
+    n = NHL_TEAM_ALIASES.get(n, n)
+    for full in NHL_TEAM_CN:
+        if n in full.lower() or full.lower() in n:
+            return full
+    return name
+
+
 def _retry_after_seconds(response, attempt):
     """Respect the server's Retry-After header when present (common on
     429s); otherwise fall back to a growing backoff."""
@@ -1422,7 +1447,7 @@ def predict_total(home, away, live_ratings, four_factors=None, league_avg_pace=N
     return round(total, 1)
 
 
-def get_consensus_moneyline_prob(bookmakers, team_name):
+def get_consensus_moneyline_prob(bookmakers, team_name, normalize=normalize_team):
     """Devigged win probability implied by the moneyline (h2h) market,
     averaged across books -- a second, more direct read on what the
     market thinks the win probability actually is, versus backing one out
@@ -1448,7 +1473,7 @@ def get_consensus_moneyline_prob(bookmakers, team_name):
                 continue
             raw = {}
             for outcome in market.get("outcomes", []):
-                name  = normalize_team(outcome.get("name", ""))
+                name  = normalize(outcome.get("name", ""))
                 price = outcome.get("price")
                 if price and price > 0:
                     raw[name] = 1.0 / price
@@ -1458,7 +1483,7 @@ def get_consensus_moneyline_prob(bookmakers, team_name):
     return (sum(probs) / len(probs)) if probs else None
 
 
-def get_consensus_line(bookmakers, team_name, exclude_book=None):
+def get_consensus_line(bookmakers, team_name, exclude_book=None, normalize=normalize_team):
     """Average posted spread for `team_name` across books, as a baseline to
     check whether one specific book's line is unusually favorable ("value").
     Excludes `exclude_book` (the book actually being evaluated as a
@@ -1474,7 +1499,7 @@ def get_consensus_line(bookmakers, team_name, exclude_book=None):
             if market.get("key") != "spreads":
                 continue
             for outcome in market.get("outcomes", []):
-                if normalize_team(outcome.get("name", "")) == team_name:
+                if normalize(outcome.get("name", "")) == team_name:
                     pt = outcome.get("point")
                     if pt is not None:
                         lines.append(pt)
@@ -2698,13 +2723,13 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
                 if market.get("key") != "h2h":
                     continue
                 for outcome in market.get("outcomes", []):
-                    name  = outcome.get("name", "")
+                    name  = normalize_nhl_team(outcome.get("name", ""))
                     price = outcome.get("price")
                     if not price or price <= 0 or name not in (home, away):
                         continue
 
                     elo_prob    = elo_prob_home if name == home else (1 - elo_prob_home)
-                    market_prob = get_consensus_moneyline_prob(bookmakers, name)
+                    market_prob = get_consensus_moneyline_prob(bookmakers, name, normalize=normalize_nhl_team)
                     if market_prob is None:
                         continue
 
@@ -2736,13 +2761,13 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
                 if market.get("key") != "spreads":
                     continue
                 for outcome in market.get("outcomes", []):
-                    name  = outcome.get("name", "")
+                    name  = normalize_nhl_team(outcome.get("name", ""))
                     line  = outcome.get("point")
                     price = outcome.get("price")
                     if line is None or not price or price <= 0 or name not in (home, away):
                         continue
 
-                    consensus = get_consensus_line(bookmakers, name, exclude_book=book.get("title"))
+                    consensus = get_consensus_line(bookmakers, name, exclude_book=book.get("title"), normalize=normalize_nhl_team)
                     if consensus is None:
                         consensus = line
                     if line - consensus < 0:  # only a book posting a better-than-consensus line is worth pricing
