@@ -3430,6 +3430,27 @@ def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=No
     nfl_injuries = nfl_injuries or {}
     has_scoring_model = scoring_model.get("league_avg") is not None
 
+    # Diagnostic visibility into whether this function is actually
+    # reaching real games at all on a given day, vs. just returning an
+    # empty [] because nothing in the feed happened to match today_s --
+    # those look identical from the outside (zero picks either way), so
+    # without this there's no way to tell "ran the real analysis on a
+    # real game and it didn't qualify" apart from "never touched a real
+    # game at all" just by reading the final picks list.
+    matching_date = []
+    for g in odds_games:
+        try:
+            ct = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        if (ct + timedelta(hours=8)).strftime("%Y-%m-%d") == today_s:
+            matching_date.append(g)
+    valid_teams = [g for g in matching_date if g.get("home_team") in NFL_TEAM_CN and g.get("away_team") in NFL_TEAM_CN]
+    log.info(
+        "analyze_nfl: %d odds_games fetched, %d match today (%s), %d of those have recognized teams",
+        len(odds_games), len(matching_date), today_s, len(valid_teams),
+    )
+
     for g in odds_games:
         try:
             c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
