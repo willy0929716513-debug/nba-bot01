@@ -703,6 +703,7 @@
       <div class="seg-indicator" id="sport-switch-indicator"></div>
       <button class="seg-btn active" data-sport="nba" type="button">NBA</button>
       <button class="seg-btn" data-sport="nhl" type="button">NHL</button>
+      <button class="seg-btn" data-sport="nfl" type="button">NFL</button>
     </div>
   </div>
 
@@ -827,6 +828,58 @@
       這是全新功能，目前沒有任何已結算的歷史資料可以驗證準不準，請當作觀察用，先不要當作正式推薦依據。
     </div>
     <div id="nhl-body"></div>
+  </section>
+
+  <div class="sticky-stack nfl-only" id="nfl-tabs-wrap" style="display:none;">
+    <nav class="seg-wrap fade-in" aria-label="NFL 區塊導覽">
+      <div class="seg" id="nfl-seg" role="tablist">
+        <div class="seg-indicator" id="nfl-seg-indicator"></div>
+        <a class="seg-btn" href="#nfl-picks-section" data-target="nfl-picks-section" id="ic-tab-nfl-picks"><span></span>推薦</a>
+        <a class="seg-btn" href="#nfl-power-section" data-target="nfl-power-section" id="ic-tab-nfl-power"><span></span>戰力排行</a>
+        <a class="seg-btn" href="#nfl-schedule-section" data-target="nfl-schedule-section" id="ic-tab-nfl-schedule"><span></span>賽程</a>
+        <a class="seg-btn" href="#nfl-history-section" data-target="nfl-history-section" id="ic-tab-nfl-history"><span></span>歷史紀錄</a>
+      </div>
+    </nav>
+  </div>
+
+  <section id="nfl-picks-section" class="reveal nfl-only" style="display:none;">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-nfl-picks"></span>
+      <div class="head-text"><h2>NFL 今日推薦</h2><p>Elo/得分模型 + 市場勝率混合，獨贏/讓分/大小分</p></div>
+      <span class="chev" id="icon-chev-nfl-picks"></span>
+    </div>
+    <div class="note-box" style="padding-bottom:14px;">
+      <span id="icon-nfl-info"></span>
+      這是全新功能，歷史命中率樣本數還很小，請當作觀察用，先不要當作正式推薦依據。
+    </div>
+    <div id="nfl-picks-body"></div>
+  </section>
+
+  <section id="nfl-power-section" class="reveal nfl-only" style="display:none;">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-nfl-power"></span>
+      <div class="head-text"><h2>NFL 戰力排行榜</h2><p>SRS 模型：依對手強弱校正過的場均淨勝分</p></div>
+      <span class="chev" id="icon-chev-nfl-power"></span>
+    </div>
+    <div id="nfl-power-body"></div>
+  </section>
+
+  <section id="nfl-schedule-section" class="reveal nfl-only" style="display:none;">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-nfl-schedule"></span>
+      <div class="head-text"><h2>NFL 最新賽程</h2><p>下一輪完整賽程，比分完場後自動結算</p></div>
+      <span class="chev" id="icon-chev-nfl-schedule"></span>
+    </div>
+    <div id="nfl-schedule-body"></div>
+  </section>
+
+  <section id="nfl-history-section" class="reveal nfl-only" style="display:none;">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-nfl-hist"></span>
+      <div class="head-text"><h2>NFL 歷史紀錄</h2><p>正式執行後自動累積</p></div>
+      <span class="chev" id="icon-chev-nfl-hist"></span>
+    </div>
+    <div id="nfl-history-body"></div>
   </section>
 
   <section id="history-section" class="reveal nba-only">
@@ -958,16 +1011,28 @@
   mount("icon-sec-top", "trophy");
   mount("icon-sec-nhl", "activity");
   mount("icon-nhl-info", "info");
+  mount("icon-sec-nfl-picks", "activity");
+  mount("icon-nfl-info", "info");
+  mount("icon-sec-nfl-power", "barchart");
+  mount("icon-sec-nfl-schedule", "clock");
+  mount("icon-sec-nfl-hist", "history");
   mount("icon-chev-cal", "chevronright");
   mount("icon-chev-rank", "chevronright");
   mount("icon-chev-schedule", "chevronright");
   mount("icon-chev-sun", "chevronright");
   mount("icon-chev-hist", "chevronright");
   mount("icon-chev-nhl", "chevronright");
+  mount("icon-chev-nfl-picks", "chevronright");
+  mount("icon-chev-nfl-power", "chevronright");
+  mount("icon-chev-nfl-schedule", "chevronright");
+  mount("icon-chev-nfl-hist", "chevronright");
   document.querySelector("#ic-tab-cal span").innerHTML = svg("calendar");
   document.querySelector("#ic-tab-rank span").innerHTML = svg("barchart");
   document.querySelector("#ic-tab-sun span").innerHTML = svg("sun");
   document.querySelector("#ic-tab-hist span").innerHTML = svg("history");
+  document.querySelector("#ic-tab-nfl-picks span").innerHTML = svg("calendar");
+  document.querySelector("#ic-tab-nfl-power span").innerHTML = svg("barchart");
+  document.querySelector("#ic-tab-nfl-history span").innerHTML = svg("history");
 
   /* ============ theme ============ */
   var root = document.documentElement;
@@ -986,10 +1051,17 @@
   });
 
   /* ============ segmented control ============ */
-  (function setupSeg() {
-    var seg = document.getElementById("seg");
-    var indicator = document.getElementById("seg-indicator");
+  // Shared by #seg (NBA's own tab bar) and #nfl-seg (NFL's own tab bar,
+  // same role one level down inside NFL's sport view) -- both are
+  // independent in-page scroll-nav bars over a different set of
+  // sections, so this just takes which seg/indicator pair to drive
+  // instead of duplicating the whole mechanism a second time.
+  function setupSegNav(segId, indicatorId) {
+    var seg = document.getElementById(segId);
+    var indicator = document.getElementById(indicatorId);
+    if (!seg || !indicator) return;
     var btns = Array.prototype.slice.call(seg.querySelectorAll(".seg-btn"));
+    if (!btns.length) return;
 
     function moveIndicatorTo(btn) {
       indicator.style.transform = "translateX(" + btn.offsetLeft + "px)";
@@ -1028,7 +1100,11 @@
       });
     }, { rootMargin: "-45% 0px -50% 0px", threshold: 0 });
     sections.forEach(function (s) { if (s) io.observe(s); });
-  })();
+
+    return { moveIndicatorTo: moveIndicatorTo };
+  }
+  setupSegNav("seg", "seg-indicator");
+  setupSegNav("nfl-seg", "nfl-seg-indicator");
 
   /* ============ scroll reveal ============ */
   (function setupReveal() {
@@ -1156,6 +1232,41 @@
     if (parts.length !== 2) return esc(matchup);
     return '<span class="matchup-line matchup-line-logos">' + nhlTeamLogo(parts[0], size) +
       '<span class="matchup-vs">@</span>' + nhlTeamLogo(parts[1], size) + '</span>';
+  }
+
+  // NFL team logos -- same ESPN CDN pattern, "nfl" league path and its own
+  // code map (Chinese names match NFL_TEAM_CN on the backend).
+  var NFL_TEAM_LOGO_CODE = {
+    "紅雀": "ari", "獵鷹": "atl", "烏鴉": "bal", "比爾": "buf", "黑豹": "car",
+    "熊": "chi", "孟加拉虎": "cin", "布朗": "cle", "牛仔": "dal", "野馬": "den",
+    "雄獅": "det", "包裝工": "gb", "德州人": "hou", "小馬": "ind", "美洲虎": "jax",
+    "酋長": "kc", "突襲者": "lv", "閃電": "lac", "公羊": "lar", "海豚": "mia",
+    "維京人": "min", "愛國者": "ne", "聖徒": "no", "巨人": "nyg", "噴射機": "nyj",
+    "老鷹": "phi", "鋼人": "pit", "四九人": "sf", "海鷹": "sea", "海盜": "tb",
+    "泰坦": "ten", "指揮官": "wsh"
+  };
+  function nflTeamLogo(name, size) {
+    size = size || 22;
+    var code = NFL_TEAM_LOGO_CODE[name];
+    var safeName = esc(name || "?");
+    if (!code) {
+      return '<span class="team-logo-fallback" style="width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.48) + 'px;">' + safeName.charAt(0) + '</span>';
+    }
+    var url = "https://a.espncdn.com/i/teamlogos/nfl/500/" + code + ".png";
+    return '<img class="team-logo" src="' + url + '" alt="" loading="lazy" width="' + size + '" height="' + size +
+      '" data-name="' + safeName + '" onerror="__teamLogoFallback(this)">';
+  }
+  function nflMatchupWithLogos(matchup, size) {
+    var parts = String(matchup || "").split(" @ ");
+    if (parts.length !== 2) return esc(matchup);
+    return '<span class="matchup-line">' + nflTeamLogo(parts[0], size) + esc(parts[0]) +
+      '<span class="matchup-vs">@</span>' + nflTeamLogo(parts[1], size) + esc(parts[1]) + '</span>';
+  }
+  function nflMatchupLogosOnly(matchup, size) {
+    var parts = String(matchup || "").split(" @ ");
+    if (parts.length !== 2) return esc(matchup);
+    return '<span class="matchup-line matchup-line-logos">' + nflTeamLogo(parts[0], size) +
+      '<span class="matchup-vs">@</span>' + nflTeamLogo(parts[1], size) + '</span>';
   }
 
   function teamNameFromBet(bet) {
@@ -1456,27 +1567,31 @@
   })();
 
   /* ============ render ============ */
+  // A win-rate computed from a handful of games swings on pure variance --
+  // 2/3 vs 1/3 "looks like" a 33-point gap but is really just one game
+  // different. Below min_sample, show the raw record instead of a colored
+  // percentage so it doesn't read as a confident stat it isn't yet. Shared
+  // by renderStats (NBA) and renderNflStats (NFL) -- NFL's own history is
+  // real but inevitably thin and new, the exact situation this already
+  // exists to handle honestly.
+  var DEFAULT_MIN_SAMPLE = 10;
+  function winRateTile(label, icon, p) {
+    var n = p.total_recommendations || 0;
+    var minSample = p.min_sample || DEFAULT_MIN_SAMPLE;
+    var pct = (p.win_rate != null ? p.win_rate.toFixed(1) : "0.0") + "%";
+    if (n > 0 && n < minSample) {
+      return { label: label, icon: icon, value: (p.wins || 0) + "/" + n + " 場", cls: "" };
+    }
+    return {
+      label: label, icon: icon, value: pct,
+      cls: n >= minSample ? (p.win_rate >= 55 ? "good" : (p.win_rate > 0 && p.win_rate < 45 ? "bad" : "")) : ""
+    };
+  }
+
   function renderStats(data) {
     var rs = data.regular_season || {};
     var perf = data.performance || {};
     var slPerf = (data.summer_league && data.summer_league.performance) || {};
-    // A win-rate computed from a handful of games swings on pure variance --
-    // 2/3 vs 1/3 "looks like" a 33-point gap but is really just one game
-    // different. Below min_sample, show the raw record instead of a colored
-    // percentage so it doesn't read as a confident stat it isn't yet.
-    var DEFAULT_MIN_SAMPLE = 10;
-    function winRateTile(label, icon, p) {
-      var n = p.total_recommendations || 0;
-      var minSample = p.min_sample || DEFAULT_MIN_SAMPLE;
-      var pct = (p.win_rate != null ? p.win_rate.toFixed(1) : "0.0") + "%";
-      if (n > 0 && n < minSample) {
-        return { label: label, icon: icon, value: (p.wins || 0) + "/" + n + " 場", cls: "" };
-      }
-      return {
-        label: label, icon: icon, value: pct,
-        cls: n >= minSample ? (p.win_rate >= 55 ? "good" : (p.win_rate > 0 && p.win_rate < 45 ? "bad" : "")) : ""
-      };
-    }
     var tiles = [
       { label: "今日/近期推薦場次", icon: "calendar", value: rs.total_picks || 0 },
       { label: "平均 Edge", icon: "activity", value: (rs.avg_edge != null ? rs.avg_edge.toFixed(1) : "0.0") + "%" },
@@ -2064,9 +2179,14 @@
     renderSummerLeague(data);
     renderHistory(data);
     renderNhl(data);
+    renderNfl(data);
+    renderNflPowerRankings(data);
+    renderNflSchedule(data);
+    renderNflHistory(data);
     toggleSummerLeagueTab(data);
     togglePowerRankingsTab(data);
     toggleNhlSection(data);
+    toggleNflSections(data);
     lastData = data;
     applySportView();
   }
@@ -2087,18 +2207,32 @@
     if (section) section.style.display = nhlAvailable(data) ? "" : "none";
   }
 
-  /* ============ NBA / NHL sport switch ============
+  // NFL has four sections (picks/power/schedule/history) plus its own
+  // tab bar, unlike NHL's single section -- all toggled together by
+  // whether there's any real NFL data at all, same role toggleNhlSection
+  // plays for NHL's one section.
+  function toggleNflSections(data) {
+    var available = nflAvailable(data);
+    ["nfl-tabs-wrap", "nfl-picks-section", "nfl-power-section", "nfl-schedule-section", "nfl-history-section"]
+      .forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = available ? "" : "none";
+      });
+  }
+
+  /* ============ NBA / NHL / NFL sport switch ============
    * The dashboard used to be NBA-only with NHL bolted on as just another
    * in-page tab sharing the NBA hero/stat tiles (which only ever computed
    * NBA numbers, so an NHL viewer saw NBA win-rate/profit stats next to
    * NHL picks -- not "separately calculated" at all). This instead
-   * splits the page into two independent sport views that share a
+   * splits the page into independent sport views that share a
    * header/hero/stat-tile frame but never mix data into it: switching
    * sport re-points that frame at an entirely different render function
-   * (renderHero/renderStats for NBA, renderNhlHero/renderNhlStats for
-   * NHL) and shows/hides every NBA-only vs. NHL-only section via the
+   * per sport, and shows/hides every one-sport-only section via the
    * .sport-hidden CSS class, instead of hiding individual sections one
-   * at a time. */
+   * at a time. NFL is a full fourth-tab dashboard in its own right
+   * (picks/power rankings/schedule/history, same as NBA), not a single
+   * bolted-on section the way NHL still is. */
   var SPORT_COPY = {
     nba: {
       brandTitle: "NBA 賽事分析儀表板", brandSub: "NBA Analytics",
@@ -2112,17 +2246,28 @@
       heroTitle: "每日 NHL 賽事分析與數據推薦",
       heroSub: "新功能：Elo 評分 + 市場勝率混合模型，涵蓋獨贏、讓分、大小分，目前尚無歷史命中率可參考，僅供觀察用途。",
     },
+    nfl: {
+      brandTitle: "NFL 美式足球儀表板", brandSub: "NFL Analytics",
+      heroKicker: "NFL Game Intelligence",
+      heroTitle: "每日 NFL 賽事分析與數據推薦",
+      heroSub: "新功能：Elo/得分模型 + 市場勝率混合模型，涵蓋獨贏、讓分、大小分，歷史樣本數還很小，僅供觀察用途。",
+    },
   };
 
   var currentSport = "nba";
   try {
-    if (localStorage.getItem("nba_dashboard_sport") === "nhl") currentSport = "nhl";
+    var savedSport = localStorage.getItem("nba_dashboard_sport");
+    if (savedSport === "nhl" || savedSport === "nfl") currentSport = savedSport;
   } catch (e) {}
 
   var lastData = null;
 
   function nhlAvailable(data) {
     return !!(data && data.nhl && data.nhl.picks && data.nhl.picks.length);
+  }
+
+  function nflAvailable(data) {
+    return !!(data && data.nfl && data.nfl.picks && data.nfl.picks.length);
   }
 
   function moveSportIndicator() {
@@ -2135,12 +2280,28 @@
     indicator.style.width = active.offsetWidth + "px";
   }
 
+  // The NFL sub-nav (#nfl-seg) computes its own indicator position on
+  // page load, while its section is still display:none -- offsetLeft/
+  // offsetWidth are meaningless then. Recompute once NFL's tab bar
+  // actually becomes visible (switching into NFL mode).
+  function refreshNflSegIndicator() {
+    var seg = document.getElementById("nfl-seg");
+    var indicator = document.getElementById("nfl-seg-indicator");
+    if (!seg || !indicator) return;
+    var active = seg.querySelector(".seg-btn.active") || seg.querySelector(".seg-btn");
+    if (!active) return;
+    indicator.style.transform = "translateX(" + active.offsetLeft + "px)";
+    indicator.style.width = active.offsetWidth + "px";
+  }
+
   function applySportView() {
     var data = lastData;
     if (!data) return;
-    // A stale "nhl" choice from a previous visit (saved when NHL had
-    // picks) must not leave today's page on a sport with nothing to show.
+    // A stale sport choice from a previous visit (saved when that sport
+    // had picks) must not leave today's page on a sport with nothing to
+    // show.
     if (currentSport === "nhl" && !nhlAvailable(data)) currentSport = "nba";
+    if (currentSport === "nfl" && !nflAvailable(data)) currentSport = "nba";
 
     var copy = SPORT_COPY[currentSport];
     document.getElementById("brand-title").textContent = copy.brandTitle;
@@ -2149,21 +2310,27 @@
     document.getElementById("hero-title").textContent = copy.heroTitle;
     document.getElementById("hero-sub").textContent = copy.heroSub;
 
-    Array.prototype.forEach.call(document.querySelectorAll(".nba-only"), function (el) {
-      el.classList.toggle("sport-hidden", currentSport !== "nba");
-    });
-    Array.prototype.forEach.call(document.querySelectorAll(".nhl-only"), function (el) {
-      el.classList.toggle("sport-hidden", currentSport !== "nhl");
+    ["nba", "nhl", "nfl"].forEach(function (sport) {
+      Array.prototype.forEach.call(document.querySelectorAll("." + sport + "-only"), function (el) {
+        el.classList.toggle("sport-hidden", currentSport !== sport);
+      });
     });
 
     var switchWrap = document.getElementById("sport-switch-wrap");
-    if (switchWrap) switchWrap.style.display = nhlAvailable(data) ? "" : "none";
+    if (switchWrap) switchWrap.style.display = (nhlAvailable(data) || nflAvailable(data)) ? "" : "none";
     Array.prototype.forEach.call(document.querySelectorAll("#sport-switch .seg-btn"), function (btn) {
       btn.classList.toggle("active", btn.dataset.sport === currentSport);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#sport-switch .seg-btn[data-sport="nhl"]'), function (btn) {
+      btn.style.display = nhlAvailable(data) ? "" : "none";
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#sport-switch .seg-btn[data-sport="nfl"]'), function (btn) {
+      btn.style.display = nflAvailable(data) ? "" : "none";
     });
     moveSportIndicator();
 
     if (currentSport === "nhl") { renderNhlHero(data); renderNhlStats(data); }
+    else if (currentSport === "nfl") { renderNflHero(data); renderNflStats(data); refreshNflSegIndicator(); }
     else { renderHero(data); renderStats(data); }
   }
 
@@ -2292,6 +2459,224 @@
     html += '</div>';
     body.innerHTML = html;
     animateRings(body);
+  }
+
+  function renderNflStats(data) {
+    var nfl = data.nfl || {};
+    var picks = nfl.picks || [];
+    var perf = nfl.performance || {};
+    var spreadPerf = perf.spread || {};
+    var tiles = [
+      { label: "今日/近期推薦場次", icon: "calendar", value: picks.length },
+      {
+        label: "平均 Edge", icon: "activity",
+        value: (function () {
+          var qualifying = picks.filter(function (p) { return p.meets_threshold; });
+          var avg = qualifying.length
+            ? qualifying.reduce(function (s, p) { return s + p.edge; }, 0) / qualifying.length
+            : 0;
+          return avg.toFixed(1) + "%";
+        })(),
+      },
+      winRateTile("歷史勝率（讓分）", "trophy", spreadPerf),
+      {
+        label: "歷史損益（讓分）", icon: "barchart",
+        value: (spreadPerf.profit > 0 ? "+" : "") + (spreadPerf.profit != null ? spreadPerf.profit.toFixed(1) : "0.0"),
+        cls: spreadPerf.profit > 0 ? "good" : (spreadPerf.profit < 0 ? "bad" : ""),
+      },
+    ];
+    document.getElementById("stat-grid").innerHTML = tiles.map(function (t) {
+      return '<div class="card stat-tile hoverable">' +
+        '<div class="label">' + svg(t.icon) + esc(t.label) + '</div>' +
+        '<div class="value ' + (t.cls || "") + '">' + esc(String(t.value)) + "</div></div>";
+    }).join("");
+  }
+
+  function renderNflHero(data) {
+    var el = document.getElementById("hero-spotlight");
+    var statsRow = document.getElementById("hero-stats-row");
+    var picks = (data.nfl && data.nfl.picks) || [];
+    var qualifying = picks.filter(function (p) { return p.meets_threshold; })
+      .sort(function (a, b) { return b.edge - a.edge; });
+
+    statsRow.innerHTML =
+      '<div class="hero-stat"><div class="v">' + picks.length + '</div><div class="l">今日賽事</div></div>' +
+      '<div class="hero-stat"><div class="v">' + qualifying.length + '</div><div class="l">達標推薦</div></div>';
+
+    if (!qualifying.length) {
+      el.innerHTML =
+        '<div class="hero-spotlight-label">' + svg("star") + ' Today’s Top Pick</div>' +
+        '<div class="empty" style="padding:4px 0;">' +
+          '<div class="body"><div class="title">目前沒有達到信心門檻的推薦</div>' +
+          '<div class="desc">NFL 模型今天分析的比賽都還沒有出現足夠優勢，等下一輪資料更新後再看看。</div></div>' +
+        '</div>';
+      return;
+    }
+    var best = qualifying[0];
+    var score = confidenceScore(best.edge);
+    var marketLabel = NFL_MARKET_LABEL[best.market] || best.market;
+    el.innerHTML =
+      '<div class="hero-spotlight-label">' + svg("star") + ' Today’s Top Pick</div>' +
+      '<div class="hero-spotlight-matchup">' + nflMatchupLogosOnly(best.matchup, 56) + '</div>' +
+      '<div class="hero-spotlight-main">' +
+        confidenceRing(score, 92, true) +
+        '<div class="hero-spotlight-pick">' +
+          '<div class="bet">' + esc(best.bet) + '</div>' +
+          '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
+          '<span class="badge ' + tierBadgeClass(best.tier) + '">' + esc(best.tier) + '</span>' +
+          '<div class="meta" style="margin-top:8px;">勝率 <b>' + Number(best.prob).toFixed(1) + '%</b> ・ Edge <b>+' + Number(best.edge).toFixed(1) + '%</b></div>' +
+        '</div>' +
+      '</div>';
+    animateRings(el);
+  }
+
+  var NFL_MARKET_LABEL = { moneyline: "獨贏", spread: "讓分", totals: "大小分" };
+
+  function renderNfl(data) {
+    var body = document.getElementById("nfl-picks-body");
+    if (!body) return;
+    var picks = (data.nfl && data.nfl.picks) || [];
+    if (!picks.length) { body.innerHTML = ""; return; }
+    var sorted = picks.slice().sort(function (a, b) { return b.edge - a.edge; });
+    var html = '<div class="card row-list hoverable">';
+    sorted.forEach(function (p) {
+      var marketLabel = NFL_MARKET_LABEL[p.market] || p.market;
+      if (!p.meets_threshold) {
+        html += '<div class="row watch">' +
+          '<div class="row-top">' +
+            '<span class="row-title">' + nflMatchupWithLogos(p.matchup) + '</span>' +
+            '<span class="row-time">' + esc(p.start_time) + '</span>' +
+          '</div>' +
+          '<div class="row-compact">' +
+            '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
+            '<span class="badge badge-status" style="margin-right:6px;">👀 觀察中</span>' +
+            '最佳盤口：<b>' + esc(p.bet) + '</b> @ ' + Number(p.price).toFixed(2) +
+            '（' + esc(p.book) + '）｜ 勝率 <b>' + Number(p.prob).toFixed(1) + '%</b>' +
+            ' ｜ Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b>' +
+          '</div>' +
+        '</div>';
+        return;
+      }
+      html += '<div class="row qualifies ' + rowAccentClass(p.tier) + '">' +
+        '<div class="row-top">' +
+          '<span class="row-title">' + nflMatchupWithLogos(p.matchup) + '</span>' +
+          '<span class="row-time">' + esc(p.start_time) + '</span>' +
+        '</div>' +
+        '<div class="ai-pick-top">' +
+          confidenceRing(confidenceScore(p.edge), 56) +
+          '<div class="ai-pick-info">' +
+            '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
+            '<span class="badge ' + tierBadgeClass(p.tier) + '" style="margin-right:6px;">' + esc(p.tier) + '</span>' +
+            riskPill(confidenceMeta(confidenceScore(p.edge)).risk) +
+            '<div class="row-sub" style="margin-top:6px;">投注 <b>' + esc(p.bet) + '</b> @ <b>' + Number(p.price).toFixed(2) + '</b>（' + esc(p.book) + '）</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="row-stats">' +
+          '<span class="stat">勝率 <b>' + Number(p.prob).toFixed(1) + '%</b></span>' +
+          '<span class="stat">Edge <b>' + (p.edge >= 0 ? "+" : "") + Number(p.edge).toFixed(1) + '%</b></span>' +
+          '<span class="stat">Kelly 建議 <b>$' + Number(p.kelly_stake).toFixed(1) + '</b></span>' +
+        '</div>' +
+        probMeter(p.prob) +
+        whyPickBullets(p) +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+    animateRings(body);
+  }
+
+  function renderNflPowerRankings(data) {
+    var body = document.getElementById("nfl-power-body");
+    if (!body) return;
+    var rankings = (data.nfl && data.nfl.power_rankings) || [];
+    if (!rankings.length) {
+      body.innerHTML = emptyState("barchart", "尚無即時戰力數據",
+        "等本季比賽累積幾場完賽資料後，這裡就會自動顯示即時戰力排行。");
+      return;
+    }
+    var html = '<div class="card row-list hoverable">';
+    rankings.forEach(function (r) {
+      var formHtml = r.form > 0.15
+        ? '近期手感 <b style="color:var(--success);">↑ ' + r.form.toFixed(1) + '</b>'
+        : (r.form < -0.15 ? '近期手感 <b style="color:var(--danger);">↓ ' + Math.abs(r.form).toFixed(1) + '</b>' : '近期手感持平');
+      html += '<div class="row">' +
+        '<div class="row-top">' +
+          '<span class="row-title matchup-line"><span class="rank-num' + (r.rank <= 3 ? ' top3' : '') + '">' + r.rank + '</span>' +
+            nflTeamLogo(r.team) + esc(r.team) + '</span>' +
+          marginBar(r.net) +
+        '</div>' +
+        '<div class="team-stats-line">進攻 <b style="color:var(--ink);">' + Number(r.off).toFixed(1) +
+          '</b> ｜ 防守 <b style="color:var(--ink);">' + Number(r.def).toFixed(1) + '</b> ｜ ' + formHtml + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    html += '<div class="note-box">' + svg("info") +
+      '<span>淨勝分（進攻減防守）已用 SRS 依對手實際戰力反覆校正，不是單純的場均得失分差；近期手感比較最近 4 場與整季的場均淨勝分落差（NFL 一季只有 18 場，4 場是對應的近期手感窗口，不是直接套用 NBA 的 10 場）。</span></div>';
+    body.innerHTML = html;
+  }
+
+  function renderNflSchedule(data) {
+    var body = document.getElementById("nfl-schedule-body");
+    if (!body) return;
+    var sched = (data.nfl && data.nfl.schedule) || {};
+    var games = sched.games || [];
+    if (!games.length) {
+      body.innerHTML = emptyState("clock", "暫無賽程資料", "資料源目前沒有即將開打的比賽資訊，稍後重新整理查看。", true);
+      return;
+    }
+    var html = '<div class="subhead">' + esc(sched.date || "") + ' 賽程</div>';
+    html += '<div class="card row-list hoverable">';
+    games.forEach(function (g) {
+      var hasScore = g.home_score != null && g.away_score != null;
+      var scoreLine = hasScore ? (esc(g.away) + ' ' + g.away_score + ' - ' + g.home_score + ' ' + esc(g.home)) : '';
+      html += '<div class="row">' +
+        '<div class="row-top">' +
+          '<span class="row-title matchup-line">' + nflTeamLogo(g.away) + esc(g.away) + '<span class="matchup-vs">@</span>' + nflTeamLogo(g.home) + esc(g.home) + '</span>' +
+          '<span class="row-time">' + esc(g.start_time) + '（台灣時間）</span>' +
+        '</div>' +
+        '<div class="row-sub">' +
+          '<span class="badge ' + (g.status === "已完賽" ? "badge-tier-strong" : "badge-status") + '">' + esc(g.status) + '</span>' +
+        '</div>' +
+        (scoreLine ? '<div class="row-sub">' + scoreLine + '</div>' : '') +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  function renderNflHistory(data) {
+    var body = document.getElementById("nfl-history-body");
+    if (!body) return;
+    var history = (data.nfl && data.nfl.history) || [];
+    if (!history.length) {
+      body.innerHTML = emptyState("history", "目前沒有歷史紀錄",
+        "NFL 推薦達到信心門檻且為正式執行時才會被記錄下來，跑過幾次正式排程後這裡就會累積資料。");
+      return;
+    }
+    var html = '<div class="card row-list hoverable">';
+    history.forEach(function (h) {
+      var marketLabel = NFL_MARKET_LABEL[(h.market || "").replace("nfl_", "")] || h.market;
+      var titleHtml = h.matchup ? nflMatchupWithLogos(h.matchup) : esc(h.bet);
+      html += '<div class="row">' +
+        '<div class="row-top">' +
+          '<span class="row-title matchup-line">' + titleHtml + '</span>' +
+          '<span class="row-time">' + esc(h.date) + '</span>' +
+        '</div>' +
+        '<div class="row-sub">' +
+          '<span class="badge ' + resultBadgeClass(h.result) + '" style="margin-right:6px;">' + esc(h.result) + '</span>' +
+          '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
+          '投注 <b>' + esc(h.bet) + '</b> ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) +
+        '</div>' +
+        (h.final_score ? '<div class="row-sub">實際比分：' + esc(h.final_score) + '</div>' : '') +
+        '<div class="row-stats">' +
+          '<span class="stat">模型勝率 <b>' + Number(h.prob).toFixed(1) + '%</b></span>' +
+          '<span class="stat">Edge <b>+' + Number(h.edge).toFixed(1) + '%</b></span>' +
+          (h.kelly_stake != null ? '<span class="stat">Kelly <b>$' + Number(h.kelly_stake).toFixed(1) + '</b></span>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
   }
 
   var TIER_GRADE = { "頂級": "SS", "強力": "S", "穩定": "A" };
