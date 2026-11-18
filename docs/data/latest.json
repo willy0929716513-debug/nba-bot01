@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-11-18 14:06",
+  "generated_at": "2026-11-18 14:10",
   "data_source": "即時數據",
   "run_type": "official",
   "regular_season": {
@@ -1423,21 +1423,6 @@
   ],
   "nhl": {
     "experimental": true,
-    "picks": [
-      {
-        "market": "moneyline",
-        "tier": "👀 觀察中",
-        "meets_threshold": false,
-        "matchup": "星隊 @ 金騎士",
-        "start_time": "11/18 11:18",
-        "bet": "星隊 勝",
-        "price": 1.95,
-        "book": "DraftKings",
-        "prob": 51.0,
-        "edge": -0.3,
-        "kelly_stake": 0.0,
-        "missing": "狀況: Noah Hanifin(缺), Tyler Myers(缺), Kyle Capobianco(缺), Lian Bichsel(缺), Oskar Back(缺), Matt Duchene(缺)"
-      }
-    ]
+    "picks": []
   }
 }
