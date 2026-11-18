@@ -1,8 +1,8 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-11-18 15:06",
+  "generated_at": "2026-11-18 15:09",
   "data_source": "即時數據",
-  "run_type": "official",
+  "run_type": "test",
   "regular_season": {
     "total_picks": 0,
     "avg_edge": 0,
