@@ -1,6 +1,6 @@
 {
   "version": "V2.0",
-  "generated_at": "2026-11-18 14:10",
+  "generated_at": "2026-11-18 14:52",
   "data_source": "即時數據",
   "run_type": "official",
   "regular_season": {
@@ -1424,5 +1424,304 @@
   "nhl": {
     "experimental": true,
     "picks": []
+  },
+  "nfl": {
+    "experimental": true,
+    "picks": [],
+    "power_rankings": [
+      {
+        "team": "美洲虎",
+        "net": 11.9,
+        "off": 28.9,
+        "def": 17.0,
+        "form": 4.11,
+        "rank": 1
+      },
+      {
+        "team": "孟加拉虎",
+        "net": 9.3,
+        "off": 30.8,
+        "def": 21.5,
+        "form": 6.74,
+        "rank": 2
+      },
+      {
+        "team": "比爾",
+        "net": 9.2,
+        "off": 31.6,
+        "def": 22.4,
+        "form": 6.47,
+        "rank": 3
+      },
+      {
+        "team": "四九人",
+        "net": 7.6,
+        "off": 30.3,
+        "def": 22.7,
+        "form": -3.44,
+        "rank": 4
+      },
+      {
+        "team": "維京人",
+        "net": 7.2,
+        "off": 20.4,
+        "def": 13.2,
+        "form": -4.31,
+        "rank": 5
+      },
+      {
+        "team": "酋長",
+        "net": 6.6,
+        "off": 25.1,
+        "def": 18.5,
+        "form": -3.0,
+        "rank": 6
+      },
+      {
+        "team": "熊",
+        "net": 6.4,
+        "off": 26.8,
+        "def": 20.4,
+        "form": 2.17,
+        "rank": 7
+      },
+      {
+        "team": "雄獅",
+        "net": 5.8,
+        "off": 28.2,
+        "def": 22.4,
+        "form": 4.06,
+        "rank": 8
+      },
+      {
+        "team": "海盜",
+        "net": 4.7,
+        "off": 23.5,
+        "def": 18.8,
+        "form": 6.33,
+        "rank": 9
+      },
+      {
+        "team": "海鷹",
+        "net": 3.8,
+        "off": 21.8,
+        "def": 18.0,
+        "form": 0.7,
+        "rank": 10
+      },
+      {
+        "team": "野馬",
+        "net": 3.6,
+        "off": 23.1,
+        "def": 19.5,
+        "form": 5.17,
+        "rank": 11
+      },
+      {
+        "team": "公羊",
+        "net": 3.5,
+        "off": 23.5,
+        "def": 20.0,
+        "form": 6.74,
+        "rank": 12
+      },
+      {
+        "team": "包裝工",
+        "net": 2.5,
+        "off": 23.6,
+        "def": 21.1,
+        "form": 0.25,
+        "rank": 13
+      },
+      {
+        "team": "鋼人",
+        "net": 2.2,
+        "off": 22.2,
+        "def": 20.0,
+        "form": 1.72,
+        "rank": 14
+      },
+      {
+        "team": "德州人",
+        "net": 1.2,
+        "off": 25.7,
+        "def": 24.5,
+        "form": 2.44,
+        "rank": 15
+      },
+      {
+        "team": "愛國者",
+        "net": 0.7,
+        "off": 23.5,
+        "def": 22.8,
+        "form": -6.74,
+        "rank": 16
+      },
+      {
+        "team": "黑豹",
+        "net": -1.5,
+        "off": 24.5,
+        "def": 26.0,
+        "form": -6.74,
+        "rank": 17
+      },
+      {
+        "team": "牛仔",
+        "net": -1.8,
+        "off": 27.5,
+        "def": 29.3,
+        "form": 2.6,
+        "rank": 18
+      },
+      {
+        "team": "獵鷹",
+        "net": -2.9,
+        "off": 21.5,
+        "def": 24.4,
+        "form": -5.8,
+        "rank": 19
+      },
+      {
+        "team": "突襲者",
+        "net": -3.2,
+        "off": 25.4,
+        "def": 28.6,
+        "form": -5.7,
+        "rank": 20
+      },
+      {
+        "team": "巨人",
+        "net": -3.3,
+        "off": 20.5,
+        "def": 23.8,
+        "form": 0.22,
+        "rank": 21
+      },
+      {
+        "team": "布朗",
+        "net": -3.6,
+        "off": 18.6,
+        "def": 22.2,
+        "form": -0.8,
+        "rank": 22
+      },
+      {
+        "team": "聖徒",
+        "net": -4.3,
+        "off": 22.2,
+        "def": 26.5,
+        "form": 3.53,
+        "rank": 23
+      },
+      {
+        "team": "指揮官",
+        "net": -4.8,
+        "off": 20.9,
+        "def": 25.7,
+        "form": 4.75,
+        "rank": 24
+      },
+      {
+        "team": "噴射機",
+        "net": -5.0,
+        "off": 19.9,
+        "def": 24.9,
+        "form": -6.5,
+        "rank": 25
+      },
+      {
+        "team": "烏鴉",
+        "net": -5.6,
+        "off": 20.6,
+        "def": 26.2,
+        "form": -6.74,
+        "rank": 26
+      },
+      {
+        "team": "海豚",
+        "net": -5.9,
+        "off": 17.7,
+        "def": 23.6,
+        "form": 4.94,
+        "rank": 27
+      },
+      {
+        "team": "小馬",
+        "net": -6.1,
+        "off": 20.9,
+        "def": 27.0,
+        "form": -4.45,
+        "rank": 28
+      },
+      {
+        "team": "老鷹",
+        "net": -8.4,
+        "off": 16.3,
+        "def": 24.7,
+        "form": -5.14,
+        "rank": 29
+      },
+      {
+        "team": "紅雀",
+        "net": -8.7,
+        "off": 19.3,
+        "def": 28.0,
+        "form": -2.75,
+        "rank": 30
+      },
+      {
+        "team": "泰坦",
+        "net": -9.1,
+        "off": 18.0,
+        "def": 27.1,
+        "form": 2.75,
+        "rank": 31
+      },
+      {
+        "team": "閃電",
+        "net": -9.4,
+        "off": 16.6,
+        "def": 26.0,
+        "form": -1.94,
+        "rank": 32
+      }
+    ],
+    "schedule": {
+      "date": "2026-11-20",
+      "games": [
+        {
+          "home": "德州人",
+          "away": "小馬",
+          "start_time": "11/20 09:15",
+          "status": "未開始",
+          "home_score": null,
+          "away_score": null
+        }
+      ]
+    },
+    "history": [],
+    "performance": {
+      "moneyline": {
+        "total_recommendations": 0,
+        "wins": 0,
+        "win_rate": 0,
+        "profit": 0.0,
+        "min_sample": 10
+      },
+      "spread": {
+        "total_recommendations": 0,
+        "wins": 0,
+        "win_rate": 0,
+        "profit": 0.0,
+        "min_sample": 10
+      },
+      "total": {
+        "total_recommendations": 0,
+        "wins": 0,
+        "win_rate": 0,
+        "profit": 0.0,
+        "min_sample": 10
+      }
+    }
   }
 }
