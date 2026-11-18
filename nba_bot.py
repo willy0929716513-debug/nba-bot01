@@ -1,6 +1,5 @@
 import requests
 import os
-import random
 import logging
 import json
 import time
@@ -66,7 +65,6 @@ SUMMER_LEAGUE_ESPN_SLUGS = [
     "nba-summer-california",
 ]
 
-SIMS             = 50000
 # Raised from 0.06 -- not fit to this project's own ~30-50-bet history
 # (far too few samples to tune a threshold against without just chasing
 # noise), but a deliberate, structural selectivity choice: a real,
@@ -378,12 +376,19 @@ def _retry_after_seconds(response, attempt):
     return 2.0 * attempt
 
 
-def safe_get(url, headers=None, params=None, retries=3, timeout=15, max_wait=None):
+def safe_get(url, headers=None, params=None, retries=3, timeout=15, max_wait=None, return_headers=False):
+    """return_headers=True additionally returns the response's own
+    headers alongside the parsed body, as (json, headers) instead of just
+    json -- e.g. so a caller can read The Odds API's x-requests-remaining/
+    x-requests-used quota headers, which the plain json body never
+    includes. Defaults to False (plain json, as before) for every
+    existing caller, including this function's own retry-exhausted
+    `return None` path."""
     for attempt in range(1, retries + 1):
         try:
             r = requests.get(url, headers=headers, params=params, timeout=timeout)
             r.raise_for_status()
-            return r.json()
+            return (r.json(), r.headers) if return_headers else r.json()
         except requests.exceptions.Timeout:
             log.warning("Timeout attempt %d/%d: %s", attempt, retries, url)
         except requests.exceptions.HTTPError as e:
@@ -1523,11 +1528,40 @@ def get_consensus_total(bookmakers, exclude_book=None):
 
 
 def simulate_cover(blended, line, std=DYNAMIC_STD_BASE):
-    wins = sum(
-        1 for _ in range(SIMS)
-        if blended + random.gauss(0, std) + line > 0
-    )
-    return wins / SIMS
+    """P(blended + N(0, std) + line > 0), via the closed-form normal CDF.
+
+    This used to estimate the same quantity with a 50,000-sample Monte
+    Carlo loop (random.gauss() draws counted against zero). The model has
+    always just been "is blended+line enough standard deviations from
+    zero under a normal distribution" -- there's an exact formula for
+    that, so the loop was spending 50,000 random draws per call (across
+    every spread/total/NHL moneyline/puck-line/totals price this file
+    computes, many times a run) to approximate a number that can be
+    computed exactly and faster. This also removes that estimate's own
+    sampling noise (~0.4% std error at 50,000 samples), so calling this
+    twice with the same inputs now always returns the same probability.
+    """
+    if std <= 0:
+        return 1.0 if (blended + line) > 0 else 0.0
+    return 0.5 * (1 + math.erf((blended + line) / (std * math.sqrt(2))))
+
+
+def log_odds_api_quota(headers, label):
+    """The Odds API bills by requests, not by sport -- adding NHL's
+    spreads/totals markets on top of NBA's own call means each run now
+    spends more of the same shared monthly quota than before. There's no
+    way to read the account's remaining quota without making a real
+    call, but every real call's response headers already carry it --
+    this just surfaces x-requests-remaining/x-requests-used (when
+    present; not guaranteed by their API, so this degrades silently if
+    missing) into the run's own logs instead of that information going
+    unused."""
+    if not headers:
+        return
+    remaining = headers.get("x-requests-remaining")
+    used      = headers.get("x-requests-used")
+    if remaining is not None or used is not None:
+        log.info("Odds API quota (%s): used=%s remaining=%s", label, used, remaining)
 
 
 def fetch_odds():
@@ -1537,13 +1571,15 @@ def fetch_odds():
         "markets":    "spreads,totals",
         "oddsFormat": "decimal",
     }
-    data = safe_get(
+    result = safe_get(
         "https://api.the-odds-api.com/v4/sports/basketball_nba/odds/",
-        params=params,
+        params=params, return_headers=True,
     )
-    if data is None:
+    if result is None:
         log.error("Odds API failed")
         return []
+    data, headers = result
+    log_odds_api_quota(headers, "NBA")
     log.info("Odds loaded: %d games", len(data))
     return data
 
@@ -1555,13 +1591,16 @@ def fetch_nhl_odds():
     (spreads) and totals together -- puck line/totals edges are computed
     against build_nhl_scoring_model()'s own real goal-based numbers, not
     a reuse of the basketball margin/point-total Gaussian simulation."""
-    data = safe_get(
+    result = safe_get(
         "https://api.the-odds-api.com/v4/sports/icehockey_nhl/odds/",
         params={"apiKey": ODDS_API_KEY, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "decimal"},
+        return_headers=True,
     )
-    if data is None:
+    if result is None:
         log.error("NHL Odds API failed")
         return []
+    data, headers = result
+    log_odds_api_quota(headers, "NHL")
     log.info("NHL odds loaded: %d games", len(data))
     return data
 
@@ -1704,6 +1743,48 @@ def fetch_nhl_season_games():
         len(trusted_games), len(fetched), len(all_games),
     )
     return all_games
+
+
+def fetch_nhl_injuries():
+    """Real-time NHL injury report from ESPN's free injuries endpoint.
+    Unlike the NBA side's RotoWire text-scrape (get_injury_report()),
+    which needs a hardcoded IMPACT_PLAYERS whitelist per team to know
+    which player names to even look for in free text, this endpoint
+    already returns every team's actual reported injuries directly as
+    structured data -- no scraping, no pre-curated star list needed.
+
+    Deliberately informational only: shown in the NHL Discord/website
+    output (like the NBA totals pipeline's "missing" field), but NOT fed
+    into predict_nhl_score()/analyze_nhl()'s edge math the way the NBA
+    side's SUPERSTAR_PENALTY/STAR_PENALTY/LIMITED_PENALTY numbers are.
+    Those were tuned against years of this project's own settled NBA
+    history; there's no equivalent real calibration for what a given NHL
+    injury is worth in goals, and inventing a number would be exactly
+    the kind of fabricated figure this project avoids everywhere else.
+    """
+    data = safe_get("https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/injuries")
+    if data is None:
+        log.warning("NHL injuries fetch failed")
+        return {}
+
+    out = {}
+    for team_entry in data.get("injuries", []):
+        team = team_entry.get("displayName", "")
+        if team not in NHL_TEAM_CN:
+            continue
+        names = []
+        for inj in team_entry.get("injuries", []):
+            athlete = inj.get("athlete", {}).get("displayName")
+            if not athlete:
+                continue
+            status = inj.get("status", "")
+            tag = "缺" if status in ("Out", "Injured Reserve") else "待定"
+            names.append("%s(%s)" % (athlete, tag))
+        if names:
+            out[team] = names
+
+    log.info("NHL injuries loaded: %d teams with at least one listed injury", len(out))
+    return out
 
 
 def fetch_summer_league_sport_key():
@@ -2665,7 +2746,7 @@ def nhl_tier(meets_threshold, edge):
 NHL_EDGE_THRESHOLD = 0.08  # a relative edge % (model vs. devigged market), not a scoring-scale number -- same bar as the NBA side, since this one doesn't depend on sport-specific units the way std does; no NHL-specific settled history yet to justify a different one
 
 
-def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
+def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=None):
     """NHL picks for today across all three markets: moneyline (Elo blended
     with devigged market win probability), puck line, and totals (both of
     the latter using build_nhl_scoring_model()'s real goal-based
@@ -2674,6 +2755,13 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
     pipelines already do). Puck line and totals are skipped entirely when
     scoring_model has no usable numbers yet (early season, under
     NHL_SCORING_MODEL_MIN_GAMES) -- moneyline still runs on Elo alone.
+
+    nhl_injuries (from fetch_nhl_injuries(), optional) is shown on every
+    pick as "missing" for transparency -- purely informational, the same
+    way NBA totals picks show "missing" without it changing model_total
+    unless injury_data is separately passed into predict_total(). It
+    does NOT feed into any of this function's own edge/probability math;
+    see fetch_nhl_injuries()'s docstring for why.
 
     This is a BRAND NEW pipeline with ZERO settled history of its own.
     Unlike the NBA side (years of real calibration data behind its
@@ -2685,6 +2773,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
     why the export marks this section accordingly.
     """
     picks = {}
+    nhl_injuries = nhl_injuries or {}
     has_scoring_model = scoring_model.get("league_avg") is not None
 
     for g in odds_games:
@@ -2710,6 +2799,8 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
         game_id    = "%s@%s_%s" % (away, home, g_date)
         start_time = c_time_tw.strftime("%m/%d %H:%M")
         matchup    = "%s @ %s" % (NHL_TEAM_CN.get(away, away), NHL_TEAM_CN.get(home, home))
+        missing    = nhl_injuries.get(home, []) + nhl_injuries.get(away, [])
+        missing_str = "狀況: " + ", ".join(missing) if missing else "陣容完整"
 
         def keep(market_name, edge, entry):
             key = (game_id, market_name)
@@ -2745,6 +2836,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
                         "bet": NHL_TEAM_CN.get(name, name) + " 勝",
                         "price": price, "book": book.get("title", "?"),
                         "prob": blended_prob, "edge": edge, "kelly_stake": stake,
+                        "missing": missing_str,
                     })
 
         if not has_scoring_model:
@@ -2787,6 +2879,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
                         "bet": "%s %+.1f" % (NHL_TEAM_CN.get(name, name), line),
                         "price": price, "book": book.get("title", "?"),
                         "prob": prob, "edge": edge, "kelly_stake": stake,
+                        "missing": missing_str,
                     })
 
         # ---- Totals ----
@@ -2824,6 +2917,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s):
                         "bet": "%s %.1f" % (side_cn, total_line),
                         "price": price, "book": book.get("title", "?"),
                         "prob": prob, "edge": edge, "kelly_stake": stake,
+                        "missing": missing_str,
                     })
 
     out = []
@@ -2850,8 +2944,9 @@ def format_nhl_section(nhl_picks):
     for p in sorted(nhl_picks, key=lambda x: x["edge"], reverse=True):
         tag = "🎯推薦" if p["meets_threshold"] else "👀觀察中"
         label = NHL_MARKET_LABEL.get(p["market"], p["market"])
-        lines.append("> [%s %s/%s] %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge %+.1f%%" % (
-            p["tier"], label, tag, p["matchup"], p["bet"], p["price"], p["book"], p["prob"], p["edge"]
+        lines.append("> [%s %s/%s] %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge %+.1f%% | %s" % (
+            p["tier"], label, tag, p["matchup"], p["bet"], p["price"], p["book"], p["prob"], p["edge"],
+            p.get("missing", "陣容完整"),
         ))
     return "\n".join(lines) + "\n"
 
@@ -3067,11 +3162,12 @@ def run():
     # report" guard below so an NBA off-day (no games, no Summer League)
     # doesn't also silently swallow a real NHL slate.
     try:
-        nhl_odds    = fetch_nhl_odds()
-        nhl_games   = fetch_nhl_season_games()
-        nhl_elo     = build_nhl_elo_ratings(nhl_games)
-        nhl_scoring = build_nhl_scoring_model(nhl_games)
-        nhl_picks   = analyze_nhl(nhl_odds, nhl_elo, nhl_scoring, today_s)
+        nhl_odds      = fetch_nhl_odds()
+        nhl_games     = fetch_nhl_season_games()
+        nhl_elo       = build_nhl_elo_ratings(nhl_games)
+        nhl_scoring   = build_nhl_scoring_model(nhl_games)
+        nhl_injuries  = fetch_nhl_injuries()
+        nhl_picks     = analyze_nhl(nhl_odds, nhl_elo, nhl_scoring, today_s, nhl_injuries=nhl_injuries)
     except Exception as e:
         log.error("NHL pipeline failed, skipping NHL for this run: %s", e)
         nhl_picks = []

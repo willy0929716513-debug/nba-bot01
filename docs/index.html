@@ -220,6 +220,17 @@
   .seg-btn.active { color: var(--brand-ink); }
   .seg-btn svg { width: 15px; height: 15px; flex: 0 0 auto; }
 
+  /* ---------- NBA / NHL sport switch ---------- */
+  .sport-switch-wrap { margin: 14px 0 0; }
+  .sport-switch { display: inline-flex; }
+  /* !important so this always wins over an element's own inline
+     style.display, which several sections already set independently
+     (toggleSummerLeagueTab, togglePowerRankingsTab, toggleNhlTab,
+     renderTopPicks) to mean "no data for this section" -- sport mode is
+     a second, independent reason to hide something, and must not fight
+     with that first one depending on which one happened to run last. */
+  .sport-hidden { display: none !important; }
+
   /* ---------- stat grid ---------- */
   .stat-grid {
     display: grid;
@@ -677,8 +688,8 @@
       <button class="icon-btn" id="menu-toggle" type="button" aria-label="選單"></button>
       <div class="brand-mark" id="icon-brand"></div>
       <div class="brand-text">
-        <div class="brand-title">NBA 賽事分析儀表板</div>
-        <div class="brand-sub">NBA Analytics</div>
+        <div class="brand-title" id="brand-title">NBA 賽事分析儀表板</div>
+        <div class="brand-sub" id="brand-sub">NBA Analytics</div>
       </div>
     </div>
     <div class="header-actions">
@@ -687,19 +698,27 @@
     </div>
   </header>
 
+  <div class="sport-switch-wrap fade-in" id="sport-switch-wrap" style="display:none;">
+    <div class="seg sport-switch" id="sport-switch" role="tablist">
+      <div class="seg-indicator" id="sport-switch-indicator"></div>
+      <button class="seg-btn active" data-sport="nba" type="button">NBA</button>
+      <button class="seg-btn" data-sport="nhl" type="button">NHL</button>
+    </div>
+  </div>
+
   <section class="hero reveal" id="hero-section">
     <div class="hero-grid">
       <div class="hero-copy">
-        <div class="hero-kicker">NBA Game Intelligence</div>
-        <h1 class="hero-title">每日 NBA 賽事 AI 分析與數據推薦</h1>
-        <p class="hero-sub">整合近期戰績、主客場、球員狀態、傷兵、攻防效率與賽程因素，建立比賽信心評分。</p>
+        <div class="hero-kicker" id="hero-kicker">NBA Game Intelligence</div>
+        <h1 class="hero-title" id="hero-title">每日 NBA 賽事 AI 分析與數據推薦</h1>
+        <p class="hero-sub" id="hero-sub">整合近期戰績、主客場、球員狀態、傷兵、攻防效率與賽程因素，建立比賽信心評分。</p>
         <div class="hero-stats-row" id="hero-stats-row"></div>
       </div>
       <div class="hero-spotlight" id="hero-spotlight"></div>
     </div>
   </section>
 
-  <section class="top-picks reveal" id="top-picks-section" style="display:none;">
+  <section class="top-picks reveal nba-only" id="top-picks-section" style="display:none;">
     <div class="section-head">
       <span class="ic" id="icon-sec-top"></span>
       <div class="head-text"><h2>Top Picks Today</h2><p>今日信心分數最高的推薦</p></div>
@@ -711,7 +730,7 @@
     <span class="pill">載入中…</span>
   </div>
 
-  <div class="sticky-stack">
+  <div class="sticky-stack nba-only">
     <div class="live-ticker-wrap fade-in" id="live-ticker-wrap" style="display:none;">
       <div class="live-ticker" id="live-ticker"></div>
     </div>
@@ -723,7 +742,6 @@
         <a class="seg-btn" href="#power-rankings-section" data-target="power-rankings-section" id="ic-tab-rank"><span></span>戰力排行</a>
         <a class="seg-btn" href="#schedule-section" data-target="schedule-section" id="ic-tab-schedule"><span></span>賽程</a>
         <a class="seg-btn" href="#summer-league-section" data-target="summer-league-section" id="ic-tab-sun"><span></span>夏季聯賽</a>
-        <a class="seg-btn" href="#nhl-section" data-target="nhl-section" id="ic-tab-nhl" style="display:none;"><span></span>NHL</a>
         <a class="seg-btn" href="#history-section" data-target="history-section" id="ic-tab-hist"><span></span>歷史紀錄</a>
       </div>
     </nav>
@@ -760,7 +778,7 @@
     </div></div>
   </div>
 
-  <section id="regular-season-section" class="reveal">
+  <section id="regular-season-section" class="reveal nba-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-cal"></span>
       <div class="head-text"><h2>今日推薦</h2><p>模型綜合分析出的最佳投注方向</p></div>
@@ -771,7 +789,7 @@
     <div id="regular-season-body"></div>
   </section>
 
-  <section id="power-rankings-section" class="reveal">
+  <section id="power-rankings-section" class="reveal nba-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-rank"></span>
       <div class="head-text"><h2>戰力排行榜</h2><p>SRS 模型：依對手強弱校正過的場均淨勝分</p></div>
@@ -780,7 +798,7 @@
     <div id="power-rankings-body"></div>
   </section>
 
-  <section id="schedule-section" class="reveal">
+  <section id="schedule-section" class="reveal nba-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-schedule"></span>
       <div class="head-text"><h2>最新賽程</h2><p>下一輪完整賽程，比分完場後自動結算</p></div>
@@ -789,7 +807,7 @@
     <div id="schedule-body"></div>
   </section>
 
-  <section id="summer-league-section" class="reveal">
+  <section id="summer-league-section" class="reveal nba-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-sun"></span>
       <div class="head-text"><h2>夏季聯賽</h2><p>最新夏聯數據與模型觀察</p></div>
@@ -798,7 +816,7 @@
     <div id="summer-league-body"></div>
   </section>
 
-  <section id="nhl-section" class="reveal" style="display:none;">
+  <section id="nhl-section" class="reveal nhl-only" style="display:none;">
     <div class="section-head">
       <span class="ic" id="icon-sec-nhl"></span>
       <div class="head-text"><h2>NHL 冰球分析</h2><p>Elo + 市場勝率模型，新功能，尚無歷史命中率可參考</p></div>
@@ -811,7 +829,7 @@
     <div id="nhl-body"></div>
   </section>
 
-  <section id="history-section" class="reveal">
+  <section id="history-section" class="reveal nba-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-hist"></span>
       <div class="head-text"><h2>歷史紀錄</h2><p>正式執行後自動累積</p></div>
@@ -950,7 +968,6 @@
   document.querySelector("#ic-tab-rank span").innerHTML = svg("barchart");
   document.querySelector("#ic-tab-sun span").innerHTML = svg("sun");
   document.querySelector("#ic-tab-hist span").innerHTML = svg("history");
-  document.querySelector("#ic-tab-nhl span").innerHTML = svg("activity");
 
   /* ============ theme ============ */
   var root = document.documentElement;
@@ -1133,6 +1150,12 @@
     if (parts.length !== 2) return esc(matchup);
     return '<span class="matchup-line">' + nhlTeamLogo(parts[0], size) + esc(parts[0]) +
       '<span class="matchup-vs">@</span>' + nhlTeamLogo(parts[1], size) + esc(parts[1]) + '</span>';
+  }
+  function nhlMatchupLogosOnly(matchup, size) {
+    var parts = String(matchup || "").split(" @ ");
+    if (parts.length !== 2) return esc(matchup);
+    return '<span class="matchup-line matchup-line-logos">' + nhlTeamLogo(parts[0], size) +
+      '<span class="matchup-vs">@</span>' + nhlTeamLogo(parts[1], size) + '</span>';
   }
 
   function teamNameFromBet(bet) {
@@ -2032,9 +2055,7 @@
     document.getElementById("status-time").textContent = data.generated_at ? data.generated_at : "尚未執行";
     document.getElementById("status-dot").style.background = data.generated_at ? "var(--success)" : "var(--ink-3)";
     recommendedMatchups = computeRecommendedMatchups(data);
-    renderHero(data);
     renderTopPicks(data);
-    renderStats(data);
     renderRegularSeasonTrio(data);
     renderParlay(data);
     renderRegularSeason(data);
@@ -2045,7 +2066,9 @@
     renderNhl(data);
     toggleSummerLeagueTab(data);
     togglePowerRankingsTab(data);
-    toggleNhlTab(data);
+    toggleNhlSection(data);
+    lastData = data;
+    applySportView();
   }
 
   function toggleSummerLeagueTab(data) {
@@ -2056,12 +2079,165 @@
     if (section) section.style.display = available ? "" : "none";
   }
 
-  function toggleNhlTab(data) {
-    var available = !!(data.nhl && data.nhl.picks && data.nhl.picks.length);
-    var tab = document.getElementById("ic-tab-nhl");
+  // Whether there's any data for it at all -- independent of (and
+  // combined via CSS with) whether the viewer currently has the NHL
+  // sport mode selected. See applySportView()/.sport-hidden.
+  function toggleNhlSection(data) {
     var section = document.getElementById("nhl-section");
-    if (tab) tab.style.display = available ? "" : "none";
-    if (section) section.style.display = available ? "" : "none";
+    if (section) section.style.display = nhlAvailable(data) ? "" : "none";
+  }
+
+  /* ============ NBA / NHL sport switch ============
+   * The dashboard used to be NBA-only with NHL bolted on as just another
+   * in-page tab sharing the NBA hero/stat tiles (which only ever computed
+   * NBA numbers, so an NHL viewer saw NBA win-rate/profit stats next to
+   * NHL picks -- not "separately calculated" at all). This instead
+   * splits the page into two independent sport views that share a
+   * header/hero/stat-tile frame but never mix data into it: switching
+   * sport re-points that frame at an entirely different render function
+   * (renderHero/renderStats for NBA, renderNhlHero/renderNhlStats for
+   * NHL) and shows/hides every NBA-only vs. NHL-only section via the
+   * .sport-hidden CSS class, instead of hiding individual sections one
+   * at a time. */
+  var SPORT_COPY = {
+    nba: {
+      brandTitle: "NBA 賽事分析儀表板", brandSub: "NBA Analytics",
+      heroKicker: "NBA Game Intelligence",
+      heroTitle: "每日 NBA 賽事 AI 分析與數據推薦",
+      heroSub: "整合近期戰績、主客場、球員狀態、傷兵、攻防效率與賽程因素，建立比賽信心評分。",
+    },
+    nhl: {
+      brandTitle: "NHL 冰球分析儀表板", brandSub: "NHL Analytics",
+      heroKicker: "NHL Game Intelligence",
+      heroTitle: "每日 NHL 賽事分析與數據推薦",
+      heroSub: "新功能：Elo 評分 + 市場勝率混合模型，涵蓋獨贏、讓分、大小分，目前尚無歷史命中率可參考，僅供觀察用途。",
+    },
+  };
+
+  var currentSport = "nba";
+  try {
+    if (localStorage.getItem("nba_dashboard_sport") === "nhl") currentSport = "nhl";
+  } catch (e) {}
+
+  var lastData = null;
+
+  function nhlAvailable(data) {
+    return !!(data && data.nhl && data.nhl.picks && data.nhl.picks.length);
+  }
+
+  function moveSportIndicator() {
+    var seg = document.getElementById("sport-switch");
+    var indicator = document.getElementById("sport-switch-indicator");
+    if (!seg || !indicator) return;
+    var active = seg.querySelector(".seg-btn.active");
+    if (!active) return;
+    indicator.style.transform = "translateX(" + active.offsetLeft + "px)";
+    indicator.style.width = active.offsetWidth + "px";
+  }
+
+  function applySportView() {
+    var data = lastData;
+    if (!data) return;
+    // A stale "nhl" choice from a previous visit (saved when NHL had
+    // picks) must not leave today's page on a sport with nothing to show.
+    if (currentSport === "nhl" && !nhlAvailable(data)) currentSport = "nba";
+
+    var copy = SPORT_COPY[currentSport];
+    document.getElementById("brand-title").textContent = copy.brandTitle;
+    document.getElementById("brand-sub").textContent = copy.brandSub;
+    document.getElementById("hero-kicker").textContent = copy.heroKicker;
+    document.getElementById("hero-title").textContent = copy.heroTitle;
+    document.getElementById("hero-sub").textContent = copy.heroSub;
+
+    Array.prototype.forEach.call(document.querySelectorAll(".nba-only"), function (el) {
+      el.classList.toggle("sport-hidden", currentSport !== "nba");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".nhl-only"), function (el) {
+      el.classList.toggle("sport-hidden", currentSport !== "nhl");
+    });
+
+    var switchWrap = document.getElementById("sport-switch-wrap");
+    if (switchWrap) switchWrap.style.display = nhlAvailable(data) ? "" : "none";
+    Array.prototype.forEach.call(document.querySelectorAll("#sport-switch .seg-btn"), function (btn) {
+      btn.classList.toggle("active", btn.dataset.sport === currentSport);
+    });
+    moveSportIndicator();
+
+    if (currentSport === "nhl") { renderNhlHero(data); renderNhlStats(data); }
+    else { renderHero(data); renderStats(data); }
+  }
+
+  (function setupSportSwitch() {
+    var seg = document.getElementById("sport-switch");
+    if (!seg) return;
+    Array.prototype.forEach.call(seg.querySelectorAll(".seg-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.dataset.sport === currentSport) return;
+        currentSport = btn.dataset.sport;
+        try { localStorage.setItem("nba_dashboard_sport", currentSport); } catch (e) {}
+        applySportView();
+        var hero = document.getElementById("hero-section");
+        if (hero) hero.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+    window.addEventListener("resize", moveSportIndicator);
+  })();
+
+  function renderNhlStats(data) {
+    var picks = (data.nhl && data.nhl.picks) || [];
+    var qualifying = picks.filter(function (p) { return p.meets_threshold; });
+    var avgEdge = qualifying.length
+      ? qualifying.reduce(function (s, p) { return s + p.edge; }, 0) / qualifying.length
+      : 0;
+    var tiles = [
+      { label: "今日/近期推薦場次", icon: "calendar", value: picks.length },
+      { label: "平均 Edge", icon: "activity", value: avgEdge.toFixed(1) + "%" },
+      { label: "歷史勝率（頂級）", icon: "trophy", value: "尚無資料" },
+      { label: "歷史損益", icon: "barchart", value: "新功能，累積中" },
+    ];
+    document.getElementById("stat-grid").innerHTML = tiles.map(function (t) {
+      return '<div class="card stat-tile hoverable">' +
+        '<div class="label">' + svg(t.icon) + esc(t.label) + '</div>' +
+        '<div class="value">' + esc(String(t.value)) + "</div></div>";
+    }).join("");
+  }
+
+  function renderNhlHero(data) {
+    var el = document.getElementById("hero-spotlight");
+    var statsRow = document.getElementById("hero-stats-row");
+    var picks = (data.nhl && data.nhl.picks) || [];
+    var qualifying = picks.filter(function (p) { return p.meets_threshold; })
+      .sort(function (a, b) { return b.edge - a.edge; });
+
+    statsRow.innerHTML =
+      '<div class="hero-stat"><div class="v">' + picks.length + '</div><div class="l">今日賽事</div></div>' +
+      '<div class="hero-stat"><div class="v">' + qualifying.length + '</div><div class="l">達標推薦</div></div>';
+
+    if (!qualifying.length) {
+      el.innerHTML =
+        '<div class="hero-spotlight-label">' + svg("star") + ' Today’s Top Pick</div>' +
+        '<div class="empty" style="padding:4px 0;">' +
+          '<div class="body"><div class="title">目前沒有達到信心門檻的推薦</div>' +
+          '<div class="desc">NHL 模型今天分析的比賽都還沒有出現足夠優勢，等下一輪資料更新後再看看。</div></div>' +
+        '</div>';
+      return;
+    }
+    var best = qualifying[0];
+    var score = confidenceScore(best.edge);
+    var marketLabel = NHL_MARKET_LABEL[best.market] || best.market;
+    el.innerHTML =
+      '<div class="hero-spotlight-label">' + svg("star") + ' Today’s Top Pick</div>' +
+      '<div class="hero-spotlight-matchup">' + nhlMatchupLogosOnly(best.matchup, 56) + '</div>' +
+      '<div class="hero-spotlight-main">' +
+        confidenceRing(score, 92, true) +
+        '<div class="hero-spotlight-pick">' +
+          '<div class="bet">' + esc(best.bet) + '</div>' +
+          '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
+          '<span class="badge ' + tierBadgeClass(best.tier) + '">' + esc(best.tier) + '</span>' +
+          '<div class="meta" style="margin-top:8px;">勝率 <b>' + Number(best.prob).toFixed(1) + '%</b> ・ Edge <b>+' + Number(best.edge).toFixed(1) + '%</b></div>' +
+        '</div>' +
+      '</div>';
+    animateRings(el);
   }
 
   var NHL_MARKET_LABEL = { moneyline: "獨贏", puckline: "讓分", totals: "大小分" };
