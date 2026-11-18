@@ -698,7 +698,7 @@
     </div>
   </header>
 
-  <div class="sport-switch-wrap fade-in" id="sport-switch-wrap" style="display:none;">
+  <div class="sport-switch-wrap fade-in" id="sport-switch-wrap">
     <div class="seg sport-switch" id="sport-switch" role="tablist">
       <div class="seg-indicator" id="sport-switch-indicator"></div>
       <button class="seg-btn active" data-sport="nba" type="button">NBA</button>
@@ -817,7 +817,7 @@
     <div id="summer-league-body"></div>
   </section>
 
-  <section id="nhl-section" class="reveal nhl-only" style="display:none;">
+  <section id="nhl-section" class="reveal nhl-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-nhl"></span>
       <div class="head-text"><h2>NHL 冰球分析</h2><p>Elo + 市場勝率模型，新功能，尚無歷史命中率可參考</p></div>
@@ -830,7 +830,7 @@
     <div id="nhl-body"></div>
   </section>
 
-  <div class="sticky-stack nfl-only" id="nfl-tabs-wrap" style="display:none;">
+  <div class="sticky-stack nfl-only" id="nfl-tabs-wrap">
     <nav class="seg-wrap fade-in" aria-label="NFL 區塊導覽">
       <div class="seg" id="nfl-seg" role="tablist">
         <div class="seg-indicator" id="nfl-seg-indicator"></div>
@@ -842,7 +842,7 @@
     </nav>
   </div>
 
-  <section id="nfl-picks-section" class="reveal nfl-only" style="display:none;">
+  <section id="nfl-picks-section" class="reveal nfl-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-nfl-picks"></span>
       <div class="head-text"><h2>NFL 今日推薦</h2><p>Elo/得分模型 + 市場勝率混合，獨贏/讓分/大小分</p></div>
@@ -855,7 +855,7 @@
     <div id="nfl-picks-body"></div>
   </section>
 
-  <section id="nfl-power-section" class="reveal nfl-only" style="display:none;">
+  <section id="nfl-power-section" class="reveal nfl-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-nfl-power"></span>
       <div class="head-text"><h2>NFL 戰力排行榜</h2><p>SRS 模型：依對手強弱校正過的場均淨勝分</p></div>
@@ -864,7 +864,7 @@
     <div id="nfl-power-body"></div>
   </section>
 
-  <section id="nfl-schedule-section" class="reveal nfl-only" style="display:none;">
+  <section id="nfl-schedule-section" class="reveal nfl-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-nfl-schedule"></span>
       <div class="head-text"><h2>NFL 最新賽程</h2><p>下一輪完整賽程，比分完場後自動結算</p></div>
@@ -873,7 +873,7 @@
     <div id="nfl-schedule-body"></div>
   </section>
 
-  <section id="nfl-history-section" class="reveal nfl-only" style="display:none;">
+  <section id="nfl-history-section" class="reveal nfl-only">
     <div class="section-head">
       <span class="ic" id="icon-sec-nfl-hist"></span>
       <div class="head-text"><h2>NFL 歷史紀錄</h2><p>正式執行後自動累積</p></div>
@@ -2185,8 +2185,6 @@
     renderNflHistory(data);
     toggleSummerLeagueTab(data);
     togglePowerRankingsTab(data);
-    toggleNhlSection(data);
-    toggleNflSections(data);
     lastData = data;
     applySportView();
   }
@@ -2202,24 +2200,6 @@
   // Whether there's any data for it at all -- independent of (and
   // combined via CSS with) whether the viewer currently has the NHL
   // sport mode selected. See applySportView()/.sport-hidden.
-  function toggleNhlSection(data) {
-    var section = document.getElementById("nhl-section");
-    if (section) section.style.display = nhlAvailable(data) ? "" : "none";
-  }
-
-  // NFL has four sections (picks/power/schedule/history) plus its own
-  // tab bar, unlike NHL's single section -- all toggled together by
-  // whether there's any real NFL data at all, same role toggleNhlSection
-  // plays for NHL's one section.
-  function toggleNflSections(data) {
-    var available = nflAvailable(data);
-    ["nfl-tabs-wrap", "nfl-picks-section", "nfl-power-section", "nfl-schedule-section", "nfl-history-section"]
-      .forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.style.display = available ? "" : "none";
-      });
-  }
-
   /* ============ NBA / NHL / NFL sport switch ============
    * The dashboard used to be NBA-only with NHL bolted on as just another
    * in-page tab sharing the NBA hero/stat tiles (which only ever computed
@@ -2262,14 +2242,6 @@
 
   var lastData = null;
 
-  function nhlAvailable(data) {
-    return !!(data && data.nhl && data.nhl.picks && data.nhl.picks.length);
-  }
-
-  function nflAvailable(data) {
-    return !!(data && data.nfl && data.nfl.picks && data.nfl.picks.length);
-  }
-
   function moveSportIndicator() {
     var seg = document.getElementById("sport-switch");
     var indicator = document.getElementById("sport-switch-indicator");
@@ -2295,13 +2267,14 @@
   }
 
   function applySportView() {
-    var data = lastData;
-    if (!data) return;
-    // A stale sport choice from a previous visit (saved when that sport
-    // had picks) must not leave today's page on a sport with nothing to
-    // show.
-    if (currentSport === "nhl" && !nhlAvailable(data)) currentSport = "nba";
-    if (currentSport === "nfl" && !nflAvailable(data)) currentSport = "nba";
+    // The switch itself (and every sport's own tabs/sections) is always
+    // shown regardless of whether that sport has any real data today --
+    // NHL/NFL being brand new, a day with zero games shouldn't make the
+    // whole feature disappear. Each render function below is responsible
+    // for showing an honest "no data" state of its own when picks/
+    // rankings/schedule/history are actually empty, the same way NBA's
+    // own renderPowerRankings/renderSchedule already do.
+    var data = lastData || {};
 
     var copy = SPORT_COPY[currentSport];
     document.getElementById("brand-title").textContent = copy.brandTitle;
@@ -2316,16 +2289,8 @@
       });
     });
 
-    var switchWrap = document.getElementById("sport-switch-wrap");
-    if (switchWrap) switchWrap.style.display = (nhlAvailable(data) || nflAvailable(data)) ? "" : "none";
     Array.prototype.forEach.call(document.querySelectorAll("#sport-switch .seg-btn"), function (btn) {
       btn.classList.toggle("active", btn.dataset.sport === currentSport);
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('#sport-switch .seg-btn[data-sport="nhl"]'), function (btn) {
-      btn.style.display = nhlAvailable(data) ? "" : "none";
-    });
-    Array.prototype.forEach.call(document.querySelectorAll('#sport-switch .seg-btn[data-sport="nfl"]'), function (btn) {
-      btn.style.display = nflAvailable(data) ? "" : "none";
     });
     moveSportIndicator();
 
@@ -2412,7 +2377,11 @@
   function renderNhl(data) {
     var body = document.getElementById("nhl-body");
     var picks = (data.nhl && data.nhl.picks) || [];
-    if (!picks.length) { body.innerHTML = ""; return; }
+    if (!picks.length) {
+      body.innerHTML = emptyState("activity", "今天沒有 NHL 賽事資料",
+        "盤口來源目前沒有符合條件的 NHL 比賽可供分析，等下一輪資料更新後再看看。");
+      return;
+    }
     var sorted = picks.slice().sort(function (a, b) { return b.edge - a.edge; });
     var html = '<div class="card row-list hoverable">';
     sorted.forEach(function (p) {
@@ -2536,7 +2505,11 @@
     var body = document.getElementById("nfl-picks-body");
     if (!body) return;
     var picks = (data.nfl && data.nfl.picks) || [];
-    if (!picks.length) { body.innerHTML = ""; return; }
+    if (!picks.length) {
+      body.innerHTML = emptyState("activity", "今天沒有 NFL 賽事資料",
+        "盤口來源目前沒有符合條件的 NFL 比賽可供分析，等下一輪資料更新後再看看。");
+      return;
+    }
     var sorted = picks.slice().sort(function (a, b) { return b.edge - a.edge; });
     var html = '<div class="card row-list hoverable">';
     sorted.forEach(function (p) {
