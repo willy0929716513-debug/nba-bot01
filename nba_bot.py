@@ -483,9 +483,19 @@ def get_injury_report():
         text = r.text.lower()
 
         out_keywords           = ["ruled out", "will not play", "is out", "has been ruled out", "out ("]
-        questionable_keywords  = ["questionable", "probable", "day-to-day"]
+        # "Doubtful" is one of the NBA's own standard official injury
+        # designations (Out / Doubtful / Questionable / Probable /
+        # Day-To-Day) -- leaning-out but short of a confirmed "out", the
+        # same tier "probable"/"day-to-day" already get folded into here.
+        # A real diagnostic run confirmed 8/90 tracked players actually
+        # appeared on RotoWire's page that night but only 1 got any
+        # status at all, which is consistent with "doubtful" (or other
+        # unhandled wording) falling through unclassified rather than
+        # the page fetch itself being broken.
+        questionable_keywords  = ["questionable", "probable", "day-to-day", "doubtful"]
         clear_keywords         = ["available", "good to go"]
 
+        unclassified = []
         for full_team in IMPACT_PLAYERS:
             nickname = full_team.split()[-1].lower()
             for player in IMPACT_PLAYERS[full_team]:
@@ -496,6 +506,8 @@ def get_injury_report():
                     out.setdefault(full_team, []).append(player)
                 elif status == "questionable" and player not in questionable.get(full_team, []):
                     questionable.setdefault(full_team, []).append(player)
+                elif status is None:
+                    unclassified.append(player)
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
@@ -519,6 +531,12 @@ def get_injury_report():
             sum(len(v) for v in out.values()), sum(len(v) for v in questionable.values()),
             len(text), names_present, tracked_total,
         )
+        if unclassified:
+            log.info(
+                "RotoWire: %d tracked player(s) appear on the page but matched no known status -- "
+                "likely wording this scraper doesn't recognize yet: %s",
+                len(unclassified), ", ".join(unclassified),
+            )
         return {"out": out, "questionable": questionable}
 
     except Exception as e:
