@@ -1004,20 +1004,34 @@ def load_history():
 
 
 def save_history(history):
+    """Writes history to the Gist, merging in whatever is there right now
+    first (remote entries not present locally are kept, not dropped) --
+    history is loaded once near the start of a run and this save can
+    happen minutes later, so a second run's write landing in between
+    would otherwise be silently clobbered by this one's blind overwrite
+    of the whole file. Entries present in both take this run's version,
+    since that's the one that actually processed them just now.
+    """
     if not GITHUB_TOKEN:
         return
     headers = {
         "Authorization": "token %s" % GITHUB_TOKEN,
         "Content-Type":  "application/json",
     }
-    content = json.dumps(history, ensure_ascii=False, indent=2)
     gists   = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
     gist_id = None
+    remote_raw_url = None
     if gists:
         for g in gists:
             if g.get("description") == "nba_bot_history":
                 gist_id = g["id"]
+                remote_raw_url = list(g["files"].values())[0]["raw_url"]
                 break
+    if remote_raw_url:
+        remote = safe_get(remote_raw_url)
+        if isinstance(remote, dict):
+            history = {**remote, **history}
+    content = json.dumps(history, ensure_ascii=False, indent=2)
     payload = {
         "description": "nba_bot_history",
         "public":      False,
@@ -1824,6 +1838,25 @@ def load_nhl_games_cache():
     return None
 
 
+def merge_games_cache(local_cache, remote_cache):
+    """Unions a freshly-built games cache with whatever is on the Gist right
+    now, keyed by (home, away, date) -- the same lost-update risk
+    save_history() guards against: this cache is loaded once near the top
+    of fetch_*_season_games() and only saved after a loop of ESPN calls, so
+    a concurrent run's save landing in between would otherwise be wiped out
+    by this run's blind overwrite instead of merged. cached_through takes
+    the later (more complete) of the two."""
+    if not isinstance(remote_cache, dict):
+        return local_cache
+    merged_by_key = {}
+    for g in remote_cache.get("games", []) + local_cache.get("games", []):
+        merged_by_key[(g.get("home"), g.get("away"), g.get("date"))] = g
+    return {
+        "cached_through": max(local_cache.get("cached_through", ""), remote_cache.get("cached_through", "")),
+        "games": list(merged_by_key.values()),
+    }
+
+
 def save_nhl_games_cache(cache):
     if not GITHUB_TOKEN:
         return
@@ -1831,14 +1864,18 @@ def save_nhl_games_cache(cache):
         "Authorization": "token %s" % GITHUB_TOKEN,
         "Content-Type":  "application/json",
     }
-    content = json.dumps(cache, ensure_ascii=False)
     gists   = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
     gist_id = None
+    remote_raw_url = None
     if gists:
         for g in gists:
             if g.get("description") == NHL_GAMES_CACHE_GIST_DESC:
                 gist_id = g["id"]
+                remote_raw_url = list(g["files"].values())[0]["raw_url"]
                 break
+    if remote_raw_url:
+        cache = merge_games_cache(cache, safe_get(remote_raw_url))
+    content = json.dumps(cache, ensure_ascii=False)
     payload = {
         "description": NHL_GAMES_CACHE_GIST_DESC,
         "public":      False,
@@ -2020,14 +2057,18 @@ def save_nfl_games_cache(cache):
         "Authorization": "token %s" % GITHUB_TOKEN,
         "Content-Type":  "application/json",
     }
-    content = json.dumps(cache, ensure_ascii=False)
     gists   = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
     gist_id = None
+    remote_raw_url = None
     if gists:
         for g in gists:
             if g.get("description") == NFL_GAMES_CACHE_GIST_DESC:
                 gist_id = g["id"]
+                remote_raw_url = list(g["files"].values())[0]["raw_url"]
                 break
+    if remote_raw_url:
+        cache = merge_games_cache(cache, safe_get(remote_raw_url))
+    content = json.dumps(cache, ensure_ascii=False)
     payload = {
         "description": NFL_GAMES_CACHE_GIST_DESC,
         "public":      False,
@@ -2681,15 +2722,21 @@ def compute_target_date(odds_games, today_s):
     return min(candidates) if candidates else today_s
 
 
-def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks, daily_totals=None):
+def build_schedule(odds_games, balldontlie_games, today_s, now_utc, daily_picks, daily_totals=None,
+                    target_date=None):
     """Every regular-season game on the next upcoming slate (compute_target_date),
     not just the ones with a qualifying recommendation -- a full card so the
     dashboard's "賽程" tab answers "what's coming up" by itself. Final scores
     are filled in via find_final_score() once a game's actually finished
     (relevant when this runs from a manual mid-day/evening trigger rather
     than the early-morning scheduled run).
+
+    target_date, if the caller already computed it (run() does, for its own
+    per-game loop), is reused as-is instead of re-scanning odds_games here --
+    same odds_games/today_s in, same answer out either way.
     """
-    target_date = compute_target_date(odds_games, today_s)
+    if target_date is None:
+        target_date = compute_target_date(odds_games, today_s)
     picks_for_date = {
         gid for gid, p in daily_picks.get(target_date, {}).items() if p["meets_threshold"]
     }
@@ -4535,7 +4582,8 @@ def run():
         if spread_calib.get("n"):
             output += "\n🔗 **串關推薦**：%s\n" % parlay_note
 
-    schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks, daily_totals)
+    schedule = build_schedule(games, season_games, today_s, now_utc, daily_picks, daily_totals,
+                               target_date=target_date)
 
     summer_league["performance"] = {
         "total_recommendations": summer_total,
