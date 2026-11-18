@@ -333,6 +333,8 @@ NFL_TEAM_CN = {
     "Tennessee Titans": "泰坦", "Washington Commanders": "指揮官",
 }
 
+NFL_TEAM_CN_REVERSE = {zh: en for en, zh in NFL_TEAM_CN.items()}
+
 # ESPN's team abbreviation, lowercased -- same CDN URL pattern as NHL's,
 # under "nfl" instead of "nhl". Verified live against ESPN's teams endpoint.
 NFL_TEAM_LOGO_CODE = {
@@ -1418,6 +1420,99 @@ def grade_pending_history(history, games):
 
     if graded:
         log.info("Auto-graded %d pending history entries against final scores", graded)
+    return graded
+
+
+def grade_pending_nfl_history(history, games):
+    """Same auto-grading approach as grade_pending_history() (NBA), for
+    NFL's three history-tagged markets ("nfl_moneyline"/"nfl_spread"/
+    "nfl_total", written by analyze_nfl()). Uses NFL_TEAM_CN_REVERSE and
+    find_final_score_flat() (the flat ESPN-shaped game lookup) instead
+    of TEAM_CN_REVERSE/find_final_score(), since NFL's completed games
+    come from fetch_nfl_season_games(), not balldontlie. Moneyline has
+    no "cover a line" math at all -- it's graded by who simply won,
+    with an exact-tie final score (rare in the NFL, but real) settled
+    as a push rather than forced into a win or loss."""
+    graded = 0
+    for hist_id, record in history.items():
+        if record.get("league") != "nfl":
+            continue
+        if record.get("result") != "pending":
+            continue
+
+        market = record.get("market", "")
+        suffix = {"nfl_total": "_total", "nfl_spread": "_spread", "nfl_moneyline": "_moneyline"}.get(market)
+        if suffix is None:
+            continue
+        base_id = hist_id[:-len(suffix)] if hist_id.endswith(suffix) else hist_id
+
+        try:
+            teams_part, date_part = base_id.rsplit("_", 1)
+            away_en, home_en = teams_part.split("@", 1)
+        except ValueError:
+            continue
+
+        score = find_final_score_flat(games, home_en, away_en, date_part)
+        if score is None:
+            continue
+
+        if market == "nfl_total":
+            m = re.match(r"^(大分 Over|小分 Under)\s+([+-]?\d+(?:\.\d+)?)$", record.get("bet", ""))
+            if not m:
+                continue
+            side_label, line_str = m.group(1), m.group(2)
+            line = float(line_str)
+            actual_total = score["home_score"] + score["away_score"]
+            diff = actual_total - line
+            if diff == 0:
+                record["result"] = "push"
+            elif (side_label == "大分 Over") == (diff > 0):
+                record["result"] = "win"
+            else:
+                record["result"] = "loss"
+            record["actual_total"] = actual_total
+
+        elif market == "nfl_spread":
+            m = re.match(r"^(.+?)\s+([+-]?\d+(?:\.\d+)?)$", record.get("bet", ""))
+            if not m:
+                continue
+            bet_team_cn, line_str = m.group(1), m.group(2)
+            bet_team_en = NFL_TEAM_CN_REVERSE.get(bet_team_cn)
+            if bet_team_en not in (home_en, away_en):
+                continue
+            line = float(line_str)
+            margin_for_bet = (
+                (score["home_score"] - score["away_score"]) if bet_team_en == home_en
+                else (score["away_score"] - score["home_score"])
+            )
+            cover_margin = margin_for_bet + line
+            if cover_margin > 0:
+                record["result"] = "win"
+            elif cover_margin < 0:
+                record["result"] = "loss"
+            else:
+                record["result"] = "push"
+            record["actual_margin"] = score["home_score"] - score["away_score"]
+
+        else:  # nfl_moneyline
+            bet_team_cn = record.get("bet", "").rsplit(" ", 1)[0]
+            bet_team_en = NFL_TEAM_CN_REVERSE.get(bet_team_cn)
+            if bet_team_en not in (home_en, away_en):
+                continue
+            if score["home_score"] == score["away_score"]:
+                record["result"] = "push"
+            else:
+                winner = home_en if score["home_score"] > score["away_score"] else away_en
+                record["result"] = "win" if bet_team_en == winner else "loss"
+
+        record["final_score"] = "%s %d - %d %s" % (
+            NFL_TEAM_CN.get(away_en, away_en), score["away_score"],
+            score["home_score"], NFL_TEAM_CN.get(home_en, home_en),
+        )
+        graded += 1
+
+    if graded:
+        log.info("Auto-graded %d pending NFL history entries against final scores", graded)
     return graded
 
 
@@ -3295,7 +3390,8 @@ def format_nhl_section(nhl_picks):
 NFL_EDGE_THRESHOLD = 0.08  # same relative-edge reasoning as NHL_EDGE_THRESHOLD
 
 
-def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=None):
+def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=None,
+                 history=None, is_official_run=False):
     """NFL picks for today across all three markets: moneyline, spread,
     totals -- exactly analyze_nhl()'s architecture (Elo for moneyline,
     build_nfl_scoring_model()'s real points-based projection and
@@ -3310,12 +3406,27 @@ def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=No
     fetch_nfl_injuries()/fetch_nhl_injuries()'s docstrings for why this
     doesn't feed into the edge/probability math.
 
-    This is a BRAND NEW pipeline with ZERO settled history of its own,
-    same caveat as analyze_nhl(): every number here is real, computed
-    the same honest way as everything else in this file, but genuinely
-    unvalidated.
+    Unlike analyze_nhl(), this DOES write qualifying picks into the
+    shared history dict (when is_official_run and a history dict is
+    passed), tagged "league": "nfl" so calc_performance()/
+    calc_calibration() -- already generic over an arbitrary "league"
+    string -- can track NFL performance completely independently from
+    NBA's "regular" entries without any change to either function. The
+    user explicitly asked for NFL to reach the same completeness as the
+    NBA dashboard, a 歷史紀錄 tab included; unlike the injury-penalty
+    numbers this file avoids inventing, actually recording real
+    predictions against real outcomes is how genuine validation starts,
+    not a fabricated figure. grade_pending_nfl_history() (called from
+    run()) settles these against real final scores the same way
+    grade_pending_history() does for the NBA side. Every pick/tier/edge
+    number here is still real, computed the same honest way as
+    everything else in this file -- but with a brand new, thin
+    (currently zero-game) settled sample, so calc_performance()'s own
+    min-sample handling is what keeps an early, noisy NFL win rate from
+    being presented with false confidence.
     """
     picks = {}
+    history = history if history is not None else {}
     nfl_injuries = nfl_injuries or {}
     has_scoring_model = scoring_model.get("league_avg") is not None
 
@@ -3382,6 +3493,19 @@ def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=No
                         "missing": missing_str,
                     })
 
+                    if meets_threshold and is_official_run:
+                        hist_id = game_id + "_moneyline"
+                        existing_h = history.get(hist_id)
+                        if existing_h is None or edge > existing_h.get("edge", 0):
+                            history[hist_id] = {
+                                "date": g_date, "league": "nfl", "market": "nfl_moneyline",
+                                "matchup": matchup, "bet": NFL_TEAM_CN.get(name, name) + " 勝",
+                                "book": book.get("title", "?"), "price": price,
+                                "prob": round(blended_prob, 4), "edge": round(edge, 4),
+                                "kelly_stake": stake,
+                                "result": existing_h.get("result", "pending") if existing_h else "pending",
+                            }
+
         if not has_scoring_model:
             continue
         model_home_pts, model_away_pts = predict_nfl_score(home, away, scoring_model)
@@ -3425,6 +3549,19 @@ def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=No
                         "missing": missing_str,
                     })
 
+                    if meets_threshold and is_official_run:
+                        hist_id = game_id + "_spread"
+                        existing_h = history.get(hist_id)
+                        if existing_h is None or edge > existing_h.get("edge", 0):
+                            history[hist_id] = {
+                                "date": g_date, "league": "nfl", "market": "nfl_spread",
+                                "matchup": matchup, "bet": "%s %+.1f" % (NFL_TEAM_CN.get(name, name), line),
+                                "book": book.get("title", "?"), "price": price,
+                                "prob": round(prob, 4), "edge": round(edge, 4),
+                                "kelly_stake": stake, "predicted_margin": round(model_margin, 2),
+                                "result": existing_h.get("result", "pending") if existing_h else "pending",
+                            }
+
         # ---- Totals ----
         for book in bookmakers:
             for market in book.get("markets", []):
@@ -3462,6 +3599,19 @@ def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=No
                         "prob": prob, "edge": edge, "kelly_stake": stake,
                         "missing": missing_str,
                     })
+
+                    if meets_threshold and is_official_run:
+                        hist_id = game_id + "_total"
+                        existing_h = history.get(hist_id)
+                        if existing_h is None or edge > existing_h.get("edge", 0):
+                            history[hist_id] = {
+                                "date": g_date, "league": "nfl", "market": "nfl_total",
+                                "matchup": matchup, "bet": "%s %.1f" % (side_cn, total_line),
+                                "book": book.get("title", "?"), "price": price,
+                                "prob": round(prob, 4), "edge": round(edge, 4),
+                                "kelly_stake": stake, "predicted_total": round(model_total, 2),
+                                "result": existing_h.get("result", "pending") if existing_h else "pending",
+                            }
 
     out = []
     for p in picks.values():
@@ -3769,7 +3919,11 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks,
             "total_since_fix": total_since_fix_block,
         },
         "summer_league":      summer_league,
-        "history":            build_history_list(history),
+        # Excludes "nfl"-tagged entries -- those get their own history
+        # list under "nfl" below, kept out of the NBA 歷史紀錄 tab's list
+        # the same way NBA and NHL/NFL are two independent dashboard
+        # views on the frontend (see docs/index.html's sport switch).
+        "history":            build_history_list({k: v for k, v in history.items() if v.get("league") != "nfl"}),
         "performance_trend":  build_performance_trend(history),
         "schedule":           schedule,
         "parlay":             parlay,
@@ -3784,12 +3938,32 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks,
             "experimental": True,
             "picks": nhl_picks or [],
         },
-        # Same brand-new/experimental treatment as nhl above.
+        # Same brand-new/experimental treatment as nhl above -- except
+        # NFL DOES write to (and settle against) the shared history dict
+        # (see analyze_nfl()), so its own performance/history view is
+        # real, just inevitably thin and noisy this early. calc_performance's
+        # own min_sample handling (same MIN_HISTORY_SAMPLE used everywhere
+        # else) is what keeps a tiny NFL win rate from reading as a
+        # confident number before there's really enough settled bets to
+        # say anything.
         "nfl": {
             "experimental":   True,
             "picks":          nfl_picks or [],
             "power_rankings": nfl_power_rankings or [],
             "schedule":       nfl_schedule or {"date": "", "games": []},
+            "history":        build_history_list({k: v for k, v in history.items() if v.get("league") == "nfl"}),
+            "performance": {
+                m: {
+                    "total_recommendations": t, "wins": w,
+                    "win_rate": round(wr, 1), "profit": round(pf, 1),
+                    "min_sample": MIN_HISTORY_SAMPLE,
+                }
+                for m, (t, w, wr, pf) in (
+                    ("moneyline", calc_performance(history, league="nfl", market="nfl_moneyline")),
+                    ("spread",    calc_performance(history, league="nfl", market="nfl_spread")),
+                    ("total",     calc_performance(history, league="nfl", market="nfl_total")),
+                )
+            },
         },
     }
 
@@ -3882,10 +4056,14 @@ def run():
     try:
         nfl_odds          = fetch_nfl_odds()
         nfl_games         = fetch_nfl_season_games()
+        grade_pending_nfl_history(history, nfl_games)
         nfl_elo           = build_nfl_elo_ratings(nfl_games)
         nfl_scoring       = build_nfl_scoring_model(nfl_games)
         nfl_injuries      = fetch_nfl_injuries()
-        nfl_picks         = analyze_nfl(nfl_odds, nfl_elo, nfl_scoring, today_s, nfl_injuries=nfl_injuries)
+        nfl_picks         = analyze_nfl(
+            nfl_odds, nfl_elo, nfl_scoring, today_s, nfl_injuries=nfl_injuries,
+            history=history, is_official_run=is_official_run,
+        )
         nfl_power_ratings = build_nfl_power_ratings(nfl_games)
         nfl_power_rankings = build_nfl_power_rankings(nfl_power_ratings)
         nfl_schedule      = build_nfl_schedule(nfl_odds, nfl_games, today_s, now_utc)
