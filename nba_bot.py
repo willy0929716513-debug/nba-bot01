@@ -3492,10 +3492,166 @@ def format_nfl_section(nfl_picks):
     return "\n".join(lines) + "\n"
 
 
+NFL_SRS_ITERATIONS = 10  # same convergence-iteration count as the NBA SRS pass (build_live_ratings) -- an algorithm parameter, not scale-dependent
+NFL_FORM_GAMES     = 4   # NFL plays 18 games/season (vs. NBA's 82); last 4 is the standard "recent form" window for that schedule length
+
+
+def build_nfl_power_ratings(games):
+    """SRS (Simple Rating System) off/def/form ratings for NFL teams --
+    same opponent-adjustment math as build_live_ratings() (NBA), just
+    on the flat {home, away, hs, vs, date} shape fetch_nfl_season_games()
+    produces. Powers the NFL power-rankings table specifically; kept
+    separate from build_nfl_scoring_model()'s pf/pa numbers (which feed
+    the actual moneyline/spread/totals edge math), the same way the NBA
+    side keeps build_live_ratings() and build_elo_ratings() as two
+    independent rating systems rather than forcing one number to serve
+    both prediction and display.
+
+    The "form" cap is derived from this season's own real margin std
+    (half of one std), not a fixed point number borrowed from the NBA
+    side or guessed -- same discipline as build_nfl_scoring_model()'s
+    margin_std/total_std.
+    """
+    team_games = {}
+    for g in games:
+        if g["home"] not in NFL_TEAM_CN or g["away"] not in NFL_TEAM_CN:
+            continue
+        team_games.setdefault(g["home"], []).append({"opp": g["away"], "pf": g["hs"], "pa": g["vs"], "date": g["date"]})
+        team_games.setdefault(g["away"], []).append({"opp": g["home"], "pf": g["vs"], "pa": g["hs"], "date": g["date"]})
+
+    teams = list(team_games.keys())
+    if not teams:
+        return {}
+    for t in teams:
+        team_games[t].sort(key=lambda x: x["date"])
+
+    raw_margin = {t: sum(x["pf"] - x["pa"] for x in team_games[t]) / len(team_games[t]) for t in teams}
+    raw_off    = {t: sum(x["pf"] for x in team_games[t]) / len(team_games[t]) for t in teams}
+    raw_def    = {t: sum(x["pa"] for x in team_games[t]) / len(team_games[t]) for t in teams}
+
+    net = dict(raw_margin)
+    for _ in range(NFL_SRS_ITERATIONS):
+        net = {
+            t: sum((x["pf"] - x["pa"]) + net.get(x["opp"], 0.0) for x in team_games[t]) / len(team_games[t])
+            for t in teams
+        }
+
+    all_margins = [x["pf"] - x["pa"] for t in teams for x in team_games[t]]
+    mean_margin = sum(all_margins) / len(all_margins)
+    margin_std  = (sum((m - mean_margin) ** 2 for m in all_margins) / len(all_margins)) ** 0.5
+    form_cap    = margin_std * 0.5
+
+    ratings = {}
+    for t in teams:
+        sos  = net[t] - raw_margin[t]
+        off  = raw_off[t] + sos / 2
+        deff = raw_def[t] - sos / 2
+
+        recent = team_games[t][-NFL_FORM_GAMES:]
+        recent_margin = sum(x["pf"] - x["pa"] for x in recent) / len(recent)
+        form = max(-form_cap, min(form_cap, recent_margin - raw_margin[t]))
+
+        ratings[t] = {"off": round(off, 1), "def": round(deff, 1), "form": round(form, 2)}
+    return ratings
+
+
+def build_nfl_power_rankings(nfl_power_ratings):
+    """Same shape as build_power_rankings() (NBA) minus four_factors --
+    no equivalent free, structured NFL advanced-stats feed is wired in."""
+    rows = []
+    for team, r in nfl_power_ratings.items():
+        rows.append({
+            "team": NFL_TEAM_CN.get(team, team),
+            "net":  round(r["off"] - r["def"], 1),
+            "off":  round(r["off"], 1),
+            "def":  round(r["def"], 1),
+            "form": round(r.get("form", 0.0), 2),
+        })
+    rows.sort(key=lambda x: x["net"], reverse=True)
+    for i, row in enumerate(rows, 1):
+        row["rank"] = i
+    return rows
+
+
+def find_final_score_flat(games, home_en, away_en, taiwan_date, window_days=2):
+    """Like find_final_score() (NBA, balldontlie-shaped), but for the flat
+    {home, away, hs, vs, date} shape fetch_nhl_season_games()/
+    fetch_nfl_season_games() produce. Matched by team identity within a
+    window of taiwan_date -- a wider window than the NBA version's
+    (which derives an exact expected offset from tip-off-time physics)
+    since NFL kickoff times spread across Thursday/Sunday/Monday with no
+    single reliable US-date-to-Taiwan-date offset to derive."""
+    try:
+        center = datetime.strptime(taiwan_date, "%Y-%m-%d")
+    except ValueError:
+        return None
+    for g in games:
+        if {g.get("home"), g.get("away")} != {home_en, away_en}:
+            continue
+        try:
+            g_date = datetime.strptime(g["date"], "%Y-%m-%d")
+        except (KeyError, ValueError, TypeError):
+            continue
+        if abs((g_date - center).days) > window_days:
+            continue
+        return {"home": g["home"], "away": g["away"], "home_score": g["hs"], "away_score": g["vs"]}
+    return None
+
+
+def build_nfl_schedule(odds_games, nfl_games, today_s, now_utc):
+    """Same shape/purpose as build_schedule() (NBA): every game on the
+    next upcoming slate (compute_target_date() -- already sport-agnostic,
+    shared as-is), with final scores filled in via find_final_score_flat()
+    once a game's actually finished."""
+    target_date = compute_target_date(odds_games, today_s)
+    out  = []
+    seen = set()
+    for g in odds_games:
+        try:
+            c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        c_time_tw = c_time_utc + timedelta(hours=8)
+        g_date    = c_time_tw.strftime("%Y-%m-%d")
+        if g_date != target_date:
+            continue
+        home_en = normalize_nfl_team(g.get("home_team", ""))
+        away_en = normalize_nfl_team(g.get("away_team", ""))
+        if home_en not in NFL_TEAM_CN or away_en not in NFL_TEAM_CN:
+            continue
+        game_id = "%s@%s_%s" % (away_en, home_en, g_date)
+        if game_id in seen:
+            continue
+        seen.add(game_id)
+
+        score = find_final_score_flat(nfl_games, home_en, away_en, g_date)
+        if score:
+            status = "已完賽"
+            home_score, away_score = score["home_score"], score["away_score"]
+        elif c_time_utc < now_utc:
+            status = "進行中/比分未更新"
+            home_score = away_score = None
+        else:
+            status = "未開始"
+            home_score = away_score = None
+
+        out.append({
+            "home":       NFL_TEAM_CN.get(home_en, home_en),
+            "away":       NFL_TEAM_CN.get(away_en, away_en),
+            "start_time": c_time_tw.strftime("%m/%d %H:%M"),
+            "status":     status,
+            "home_score": home_score,
+            "away_score": away_score,
+        })
+    out.sort(key=lambda x: x["start_time"])
+    return {"date": target_date, "games": out}
+
+
 def export_site_data(now_tw, data_source, is_official_run, daily_picks,
                       total_rec, wins, win_rate, profit, summer_league, history,
                       schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None,
-                      parlay_note=None, nhl_picks=None, nfl_picks=None):
+                      parlay_note=None, nhl_picks=None, nfl_picks=None,
+                      nfl_power_rankings=None, nfl_schedule=None):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     daily_totals = daily_totals or {}
     days = []
@@ -3630,8 +3786,10 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks,
         },
         # Same brand-new/experimental treatment as nhl above.
         "nfl": {
-            "experimental": True,
-            "picks": nfl_picks or [],
+            "experimental":   True,
+            "picks":          nfl_picks or [],
+            "power_rankings": nfl_power_rankings or [],
+            "schedule":       nfl_schedule or {"date": "", "games": []},
         },
     }
 
@@ -3722,15 +3880,20 @@ def run():
     # reasons -- an NFL-specific failure (odds API coverage, ESPN outage)
     # never takes down the NBA pipeline.
     try:
-        nfl_odds      = fetch_nfl_odds()
-        nfl_games     = fetch_nfl_season_games()
-        nfl_elo       = build_nfl_elo_ratings(nfl_games)
-        nfl_scoring   = build_nfl_scoring_model(nfl_games)
-        nfl_injuries  = fetch_nfl_injuries()
-        nfl_picks     = analyze_nfl(nfl_odds, nfl_elo, nfl_scoring, today_s, nfl_injuries=nfl_injuries)
+        nfl_odds          = fetch_nfl_odds()
+        nfl_games         = fetch_nfl_season_games()
+        nfl_elo           = build_nfl_elo_ratings(nfl_games)
+        nfl_scoring       = build_nfl_scoring_model(nfl_games)
+        nfl_injuries      = fetch_nfl_injuries()
+        nfl_picks         = analyze_nfl(nfl_odds, nfl_elo, nfl_scoring, today_s, nfl_injuries=nfl_injuries)
+        nfl_power_ratings = build_nfl_power_ratings(nfl_games)
+        nfl_power_rankings = build_nfl_power_rankings(nfl_power_ratings)
+        nfl_schedule      = build_nfl_schedule(nfl_odds, nfl_games, today_s, now_utc)
     except Exception as e:
         log.error("NFL pipeline failed, skipping NFL for this run: %s", e)
         nfl_picks = []
+        nfl_power_rankings = []
+        nfl_schedule = {"date": today_s, "games": []}
 
     if not games and not summer_league.get("available") and not nhl_picks and not nfl_picks:
         log.info("No regular-season games, no Summer League, no NHL data, and no NFL data; nothing to report")
@@ -4176,6 +4339,8 @@ def run():
         elo_rankings=build_elo_rankings(build_elo_ratings(season_games)),
         nhl_picks=nhl_picks,
         nfl_picks=nfl_picks,
+        nfl_power_rankings=nfl_power_rankings,
+        nfl_schedule=nfl_schedule,
     )
 
     log.info("Sending to Discord, length: %d", len(output))
