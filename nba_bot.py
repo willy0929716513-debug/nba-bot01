@@ -507,7 +507,10 @@ def get_injury_report():
                 elif status == "questionable" and player not in questionable.get(full_team, []):
                     questionable.setdefault(full_team, []).append(player)
                 elif status is None:
-                    unclassified.append(player)
+                    idx = text.find(player)
+                    snippet = text[max(0, idx - 60):idx + 150] if idx != -1 else ""
+                    snippet = " ".join(snippet.split())  # collapse whitespace/newlines/HTML indentation for a one-line log
+                    unclassified.append((player, snippet))
 
         for team, players in IMPACT_PLAYERS.items():
             for p in players:
@@ -535,8 +538,12 @@ def get_injury_report():
             log.info(
                 "RotoWire: %d tracked player(s) appear on the page but matched no known status -- "
                 "likely wording this scraper doesn't recognize yet: %s",
-                len(unclassified), ", ".join(unclassified),
+                len(unclassified), ", ".join(p for p, _ in unclassified),
             )
+            # Raw context around each miss -- the actual next step here is
+            # reading real page text, not guessing another keyword blind.
+            for player, snippet in unclassified:
+                log.info("RotoWire unclassified %r context: ...%s...", player, snippet[:200])
         return {"out": out, "questionable": questionable}
 
     except Exception as e:
