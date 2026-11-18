@@ -502,9 +502,22 @@ def get_injury_report():
                 if p in SEASON_OUT and p not in out.get(team, []):
                     out.setdefault(team, []).append(p)
 
+        # A low out/questionable count is ambiguous on its own: it could
+        # mean most tracked players are genuinely healthy tonight, or it
+        # could mean the page's real layout no longer matches these
+        # keyword heuristics (RotoWire changing its injury-report page
+        # format, for instance) and matches are silently being missed.
+        # This distinguishes the two: how many of IMPACT_PLAYERS' tracked
+        # last names appear in the fetched text at all, before any
+        # status/keyword filtering -- if that number is itself small,
+        # the page fetch/content is the thing to look at; if it's large
+        # but out/questionable stayed small, the keyword matching is.
+        tracked_total = sum(len(v) for v in IMPACT_PLAYERS.values())
+        names_present = sum(1 for players in IMPACT_PLAYERS.values() for p in players if p in text)
         log.info(
-            "RotoWire injury loaded: %d out, %d questionable",
+            "RotoWire injury loaded: %d out, %d questionable (page: %d chars, %d/%d tracked names present in text)",
             sum(len(v) for v in out.values()), sum(len(v) for v in questionable.values()),
+            len(text), names_present, tracked_total,
         )
         return {"out": out, "questionable": questionable}
 
