@@ -318,6 +318,37 @@ NHL_TEAM_LOGO_CODE = {
     "Washington Capitals": "wsh", "Winnipeg Jets": "wpg",
 }
 
+# All 32 real NFL teams, verified live against ESPN's teams endpoint.
+NFL_TEAM_CN = {
+    "Arizona Cardinals": "紅雀", "Atlanta Falcons": "獵鷹", "Baltimore Ravens": "烏鴉",
+    "Buffalo Bills": "比爾", "Carolina Panthers": "黑豹", "Chicago Bears": "熊",
+    "Cincinnati Bengals": "孟加拉虎", "Cleveland Browns": "布朗", "Dallas Cowboys": "牛仔",
+    "Denver Broncos": "野馬", "Detroit Lions": "雄獅", "Green Bay Packers": "包裝工",
+    "Houston Texans": "德州人", "Indianapolis Colts": "小馬", "Jacksonville Jaguars": "美洲虎",
+    "Kansas City Chiefs": "酋長", "Las Vegas Raiders": "突襲者", "Los Angeles Chargers": "閃電",
+    "Los Angeles Rams": "公羊", "Miami Dolphins": "海豚", "Minnesota Vikings": "維京人",
+    "New England Patriots": "愛國者", "New Orleans Saints": "聖徒", "New York Giants": "巨人",
+    "New York Jets": "噴射機", "Philadelphia Eagles": "老鷹", "Pittsburgh Steelers": "鋼人",
+    "San Francisco 49ers": "四九人", "Seattle Seahawks": "海鷹", "Tampa Bay Buccaneers": "海盜",
+    "Tennessee Titans": "泰坦", "Washington Commanders": "指揮官",
+}
+
+# ESPN's team abbreviation, lowercased -- same CDN URL pattern as NHL's,
+# under "nfl" instead of "nhl". Verified live against ESPN's teams endpoint.
+NFL_TEAM_LOGO_CODE = {
+    "Arizona Cardinals": "ari", "Atlanta Falcons": "atl", "Baltimore Ravens": "bal",
+    "Buffalo Bills": "buf", "Carolina Panthers": "car", "Chicago Bears": "chi",
+    "Cincinnati Bengals": "cin", "Cleveland Browns": "cle", "Dallas Cowboys": "dal",
+    "Denver Broncos": "den", "Detroit Lions": "det", "Green Bay Packers": "gb",
+    "Houston Texans": "hou", "Indianapolis Colts": "ind", "Jacksonville Jaguars": "jax",
+    "Kansas City Chiefs": "kc", "Las Vegas Raiders": "lv", "Los Angeles Chargers": "lac",
+    "Los Angeles Rams": "lar", "Miami Dolphins": "mia", "Minnesota Vikings": "min",
+    "New England Patriots": "ne", "New Orleans Saints": "no", "New York Giants": "nyg",
+    "New York Jets": "nyj", "Philadelphia Eagles": "phi", "Pittsburgh Steelers": "pit",
+    "San Francisco 49ers": "sf", "Seattle Seahawks": "sea", "Tampa Bay Buccaneers": "tb",
+    "Tennessee Titans": "ten", "Washington Commanders": "wsh",
+}
+
 
 # Substring matching below only catches full.lower() are literal substrings
 # of one another, which misses common city abbreviations (e.g. "LA Clippers"
@@ -359,6 +390,27 @@ def normalize_nhl_team(name):
     n = name.lower()
     n = NHL_TEAM_ALIASES.get(n, n)
     for full in NHL_TEAM_CN:
+        if n in full.lower() or full.lower() in n:
+            return full
+    return name
+
+
+# The NFL has the same two-LA-teams abbreviation ambiguity as the NBA/NHL
+# ("LA Rams"/"LA Chargers" vs. the full "Los Angeles Rams"/"Los Angeles
+# Chargers"), plus Las Vegas Raiders sometimes posted as "LV Raiders".
+NFL_TEAM_ALIASES = {
+    "la rams":      "los angeles rams",
+    "la chargers":  "los angeles chargers",
+    "lv raiders":   "las vegas raiders",
+}
+
+
+def normalize_nfl_team(name):
+    if not name:
+        return name
+    n = name.lower()
+    n = NFL_TEAM_ALIASES.get(n, n)
+    for full in NFL_TEAM_CN:
         if n in full.lower() or full.lower() in n:
             return full
     return name
@@ -1825,6 +1877,171 @@ def fetch_nhl_injuries():
     return out
 
 
+def fetch_nfl_odds():
+    """Same the-odds-api pattern as fetch_nhl_odds(), for NFL --
+    "americanfootball_nfl" is a stable, documented sport_key. Pulls
+    moneyline (h2h), spread and totals together, the same three markets
+    the NHL pipeline covers."""
+    result = safe_get(
+        "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/",
+        params={"apiKey": ODDS_API_KEY, "regions": "us", "markets": "h2h,spreads,totals", "oddsFormat": "decimal"},
+        return_headers=True,
+    )
+    if result is None:
+        log.error("NFL Odds API failed")
+        return []
+    data, headers = result
+    log_odds_api_quota(headers, "NFL")
+    log.info("NFL odds loaded: %d games", len(data))
+    return data
+
+
+NFL_SEASON_LOOKBACK_START = "2026-09-01"  # safely before any real season start
+NFL_GAMES_CACHE_GIST_DESC = "nba_bot_nfl_games_cache"
+NFL_CACHE_RESCAN_DAYS = 3  # same reasoning as NHL_CACHE_RESCAN_DAYS
+
+
+def load_nfl_games_cache():
+    """Same Gist-caching pattern as load_nhl_games_cache(), a separate Gist
+    keyed by its own description so the two sports' caches never collide."""
+    if not GITHUB_TOKEN:
+        return None
+    headers = {"Authorization": "token %s" % GITHUB_TOKEN}
+    gists = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
+    if not gists:
+        return None
+    for g in gists:
+        if g.get("description") == NFL_GAMES_CACHE_GIST_DESC:
+            raw_url = list(g["files"].values())[0]["raw_url"]
+            data = safe_get(raw_url)
+            return data if isinstance(data, dict) else None
+    return None
+
+
+def save_nfl_games_cache(cache):
+    if not GITHUB_TOKEN:
+        return
+    headers = {
+        "Authorization": "token %s" % GITHUB_TOKEN,
+        "Content-Type":  "application/json",
+    }
+    content = json.dumps(cache, ensure_ascii=False)
+    gists   = safe_get("https://api.github.com/gists", headers=headers, params={"per_page": 100})
+    gist_id = None
+    if gists:
+        for g in gists:
+            if g.get("description") == NFL_GAMES_CACHE_GIST_DESC:
+                gist_id = g["id"]
+                break
+    payload = {
+        "description": NFL_GAMES_CACHE_GIST_DESC,
+        "public":      False,
+        "files":       {"nfl_games_cache.json": {"content": content}},
+    }
+    try:
+        if gist_id:
+            requests.patch("https://api.github.com/gists/%s" % gist_id, headers=headers, json=payload, timeout=10)
+        else:
+            requests.post("https://api.github.com/gists", headers=headers, json=payload, timeout=10)
+        log.info("NFL games cache saved to Gist (%d games, valid through %s)", len(cache.get("games", [])), cache.get("cached_through"))
+    except Exception as e:
+        log.error("Failed to save NFL games cache: %s", e)
+
+
+def fetch_nfl_season_games():
+    """Pull this season's real NFL results from ESPN's free scoreboard
+    endpoint, same incremental-cache pattern as fetch_nhl_season_games().
+    Filters to season.type == 2 (regular season), excluding preseason."""
+    cache = load_nfl_games_cache() or {}
+    cached_games = cache.get("games", [])
+    cached_through_str = cache.get("cached_through")
+
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
+    rescan_boundary = today - timedelta(days=NFL_CACHE_RESCAN_DAYS)
+
+    if cached_through_str:
+        cached_through = datetime.strptime(cached_through_str, "%Y-%m-%d").date()
+    else:
+        cached_through = datetime.strptime(NFL_SEASON_LOOKBACK_START, "%Y-%m-%d").date() - timedelta(days=1)
+
+    trusted_games = [g for g in cached_games if g["date"] <= cached_through.strftime("%Y-%m-%d")]
+    fetch_start = cached_through + timedelta(days=1)
+
+    fetched = []
+    d = fetch_start
+    while d <= today:
+        data = safe_get(
+            "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+            params={"dates": d.strftime("%Y%m%d")},
+            retries=2, max_wait=5,
+        )
+        if data:
+            for ev in data.get("events", []):
+                if (ev.get("season") or {}).get("type") != 2:
+                    continue
+                comp = (ev.get("competitions") or [{}])[0]
+                status = ((comp.get("status") or {}).get("type") or {})
+                if not status.get("completed"):
+                    continue
+                competitors = comp.get("competitors", [])
+                home = next((c for c in competitors if c.get("homeAway") == "home"), None)
+                away = next((c for c in competitors if c.get("homeAway") == "away"), None)
+                if not home or not away:
+                    continue
+                try:
+                    hs = int(home.get("score"))
+                    vs = int(away.get("score"))
+                except (TypeError, ValueError):
+                    continue
+                fetched.append({
+                    "home": (home.get("team") or {}).get("displayName", ""),
+                    "away": (away.get("team") or {}).get("displayName", ""),
+                    "hs": hs, "vs": vs,
+                    "date": d.strftime("%Y-%m-%d"),
+                })
+        d += timedelta(days=1)
+
+    all_games = trusted_games + fetched
+    new_cached_through = max(cached_through, min(rescan_boundary, today))
+    save_nfl_games_cache({"cached_through": new_cached_through.strftime("%Y-%m-%d"), "games": all_games})
+    log.info(
+        "NFL season games: %d trusted (cached) + %d freshly fetched = %d total",
+        len(trusted_games), len(fetched), len(all_games),
+    )
+    return all_games
+
+
+def fetch_nfl_injuries():
+    """Real-time NFL injury report from ESPN's free injuries endpoint,
+    same structured-data approach as fetch_nhl_injuries() -- no text
+    scraping, no hardcoded star-player whitelist. Informational only;
+    see fetch_nhl_injuries()'s docstring for why this isn't fed into the
+    edge/probability math."""
+    data = safe_get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries")
+    if data is None:
+        log.warning("NFL injuries fetch failed")
+        return {}
+
+    out = {}
+    for team_entry in data.get("injuries", []):
+        team = team_entry.get("displayName", "")
+        if team not in NFL_TEAM_CN:
+            continue
+        names = []
+        for inj in team_entry.get("injuries", []):
+            athlete = inj.get("athlete", {}).get("displayName")
+            if not athlete:
+                continue
+            status = inj.get("status", "")
+            tag = "缺" if status in ("Out", "Injured Reserve") else "待定"
+            names.append("%s(%s)" % (athlete, tag))
+        if names:
+            out[team] = names
+
+    log.info("NFL injuries loaded: %d teams with at least one listed injury", len(out))
+    return out
+
+
 def fetch_summer_league_sport_key():
     """Scan the live Odds API sports list for a basketball entry whose key or
     title mentions 'summer' -- the exact sport_key isn't documented and can
@@ -2771,7 +2988,93 @@ def predict_nhl_score(home, away, scoring_model):
     return home_goals, away_goals
 
 
-def nhl_tier(meets_threshold, edge):
+def build_nfl_elo_ratings(games):
+    """Same classic sequential Elo math as build_nhl_elo_ratings(), over
+    NFL games instead -- used for NFL's moneyline edge."""
+    completed = sorted(games, key=lambda g: g["date"])
+    ratings = {}
+    for g in completed:
+        if g["home"] not in NFL_TEAM_CN or g["away"] not in NFL_TEAM_CN:
+            continue
+        r_home = ratings.setdefault(g["home"], ELO_INITIAL)
+        r_away = ratings.setdefault(g["away"], ELO_INITIAL)
+        expected_home = 1.0 / (1.0 + 10 ** ((r_away - r_home) / 400.0))
+        actual_home   = 1.0 if g["hs"] > g["vs"] else 0.0
+        delta = ELO_K * (actual_home - expected_home)
+        ratings[g["home"]] = r_home + delta
+        ratings[g["away"]] = r_away - delta
+    return {team: round(r, 1) for team, r in ratings.items()}
+
+
+NFL_SCORING_MODEL_MIN_GAMES = 100  # league-wide; by ~week 7-8 of an 18-week, 32-team season this is comfortably reached
+
+
+def build_nfl_scoring_model(games):
+    """Points-based scoring model for NFL spread/totals edges, same shape
+    and same reasoning as build_nhl_scoring_model(): real, empirical
+    points-for/against per team and the real standard deviation of this
+    season's actual (home - away) and (home + away) point counts, from
+    this season's real completed games only -- not a reuse of the NBA
+    side's DYNAMIC_STD_BASE/TOTAL_STD_BASE (calibrated for a different
+    sport's scoring scale) and not a fabricated number either.
+
+    Returns margin_std/total_std/league_avg as None (and empty ratings)
+    until NFL_SCORING_MODEL_MIN_GAMES completed games exist league-wide,
+    for the same early-season-noise reason build_nhl_scoring_model()
+    holds off.
+    """
+    completed = [g for g in games if g["home"] in NFL_TEAM_CN and g["away"] in NFL_TEAM_CN]
+    if len(completed) < NFL_SCORING_MODEL_MIN_GAMES:
+        return {"ratings": {}, "league_avg": None, "home_adv": 0.0,
+                "margin_std": None, "total_std": None, "n_games": len(completed)}
+
+    pf, pa, margins, totals = {}, {}, [], []
+    for g in completed:
+        h, a, hs, vs = g["home"], g["away"], g["hs"], g["vs"]
+        pf.setdefault(h, []).append(hs)
+        pa.setdefault(h, []).append(vs)
+        pf.setdefault(a, []).append(vs)
+        pa.setdefault(a, []).append(hs)
+        margins.append(hs - vs)
+        totals.append(hs + vs)
+
+    def mean(xs):
+        return sum(xs) / len(xs)
+
+    def pstd(xs, m):
+        return (sum((x - m) ** 2 for x in xs) / len(xs)) ** 0.5
+
+    all_team_points = [v for vals in pf.values() for v in vals]
+    league_avg = mean(all_team_points)
+    home_adv   = mean(margins)
+    ratings    = {t: {"pf": mean(pf[t]), "pa": mean(pa[t])} for t in pf}
+
+    return {
+        "ratings":    ratings,
+        "league_avg": round(league_avg, 3),
+        "home_adv":   round(home_adv, 3),
+        "margin_std": round(pstd(margins, home_adv), 3),
+        "total_std":  round(pstd(totals, league_avg * 2), 3),
+        "n_games":    len(completed),
+    }
+
+
+def predict_nfl_score(home, away, scoring_model):
+    """Same off-vs-def shape as predict_nhl_score(), on a points scale."""
+    league_avg = scoring_model["league_avg"]
+    ratings    = scoring_model["ratings"]
+    h = ratings.get(home, {"pf": league_avg, "pa": league_avg})
+    a = ratings.get(away, {"pf": league_avg, "pa": league_avg})
+    home_pts = league_avg * (h["pf"] / league_avg) * (a["pa"] / league_avg) + scoring_model["home_adv"] / 2
+    away_pts = league_avg * (a["pf"] / league_avg) * (h["pa"] / league_avg) - scoring_model["home_adv"] / 2
+    return home_pts, away_pts
+
+
+def tier_from_edge(meets_threshold, edge):
+    """Sport-agnostic tier label from an edge value -- same tier cuts
+    (0.09/0.12) the NBA pipeline itself uses, shared by analyze_nhl() and
+    analyze_nfl() since this logic never depended on anything NHL- or
+    NBA-specific to begin with."""
     if not meets_threshold:
         return "👀 觀察中"
     if edge > 0.12:
@@ -2868,7 +3171,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
                     stake           = kelly_stake(blended_prob, price, BANKROLL)
 
                     keep("moneyline", edge, {
-                        "market": "moneyline", "tier": nhl_tier(meets_threshold, edge),
+                        "market": "moneyline", "tier": tier_from_edge(meets_threshold, edge),
                         "meets_threshold": meets_threshold,
                         "matchup": matchup, "start_time": start_time,
                         "bet": NHL_TEAM_CN.get(name, name) + " 勝",
@@ -2911,7 +3214,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
                     stake   = kelly_stake(prob, price, BANKROLL)
 
                     keep("puckline", edge, {
-                        "market": "puckline", "tier": nhl_tier(meets_threshold, edge),
+                        "market": "puckline", "tier": tier_from_edge(meets_threshold, edge),
                         "meets_threshold": meets_threshold,
                         "matchup": matchup, "start_time": start_time,
                         "bet": "%s %+.1f" % (NHL_TEAM_CN.get(name, name), line),
@@ -2949,7 +3252,7 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
                     side_cn = "大分 Over" if side == "over" else "小分 Under"
 
                     keep("totals", edge, {
-                        "market": "totals", "tier": nhl_tier(meets_threshold, edge),
+                        "market": "totals", "tier": tier_from_edge(meets_threshold, edge),
                         "meets_threshold": meets_threshold,
                         "matchup": matchup, "start_time": start_time,
                         "bet": "%s %.1f" % (side_cn, total_line),
@@ -2989,10 +3292,210 @@ def format_nhl_section(nhl_picks):
     return "\n".join(lines) + "\n"
 
 
+NFL_EDGE_THRESHOLD = 0.08  # same relative-edge reasoning as NHL_EDGE_THRESHOLD
+
+
+def analyze_nfl(odds_games, elo_ratings, scoring_model, today_s, nfl_injuries=None):
+    """NFL picks for today across all three markets: moneyline, spread,
+    totals -- exactly analyze_nhl()'s architecture (Elo for moneyline,
+    build_nfl_scoring_model()'s real points-based projection and
+    empirical std for spread/totals, blended with market consensus the
+    same MODEL_WEIGHT/MARKET_WEIGHT way), just on NFL's points scale
+    instead of NHL's goals scale. Spread/totals are skipped entirely
+    when scoring_model has no usable numbers yet (under
+    NFL_SCORING_MODEL_MIN_GAMES) -- moneyline still runs on Elo alone.
+
+    nfl_injuries (from fetch_nfl_injuries(), optional) is shown on every
+    pick as "missing", purely informational -- see
+    fetch_nfl_injuries()/fetch_nhl_injuries()'s docstrings for why this
+    doesn't feed into the edge/probability math.
+
+    This is a BRAND NEW pipeline with ZERO settled history of its own,
+    same caveat as analyze_nhl(): every number here is real, computed
+    the same honest way as everything else in this file, but genuinely
+    unvalidated.
+    """
+    picks = {}
+    nfl_injuries = nfl_injuries or {}
+    has_scoring_model = scoring_model.get("league_avg") is not None
+
+    for g in odds_games:
+        try:
+            c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        c_time_tw = c_time_utc + timedelta(hours=8)
+        g_date = c_time_tw.strftime("%Y-%m-%d")
+        if g_date != today_s:
+            continue
+
+        home = g.get("home_team", "")
+        away = g.get("away_team", "")
+        if home not in NFL_TEAM_CN or away not in NFL_TEAM_CN:
+            continue
+        bookmakers = g.get("bookmakers", [])
+
+        r_home = elo_ratings.get(home, ELO_INITIAL)
+        r_away = elo_ratings.get(away, ELO_INITIAL)
+        elo_prob_home = 1.0 / (1.0 + 10 ** ((r_away - r_home) / 400.0))
+
+        game_id    = "%s@%s_%s" % (away, home, g_date)
+        start_time = c_time_tw.strftime("%m/%d %H:%M")
+        matchup    = "%s @ %s" % (NFL_TEAM_CN.get(away, away), NFL_TEAM_CN.get(home, home))
+        missing    = nfl_injuries.get(home, []) + nfl_injuries.get(away, [])
+        missing_str = "狀況: " + ", ".join(missing) if missing else "陣容完整"
+
+        def keep(market_name, edge, entry):
+            key = (game_id, market_name)
+            existing = picks.get(key)
+            if existing is None or edge > existing["edge"]:
+                picks[key] = entry
+
+        # ---- Moneyline ----
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "h2h":
+                    continue
+                for outcome in market.get("outcomes", []):
+                    name  = normalize_nfl_team(outcome.get("name", ""))
+                    price = outcome.get("price")
+                    if not price or price <= 0 or name not in (home, away):
+                        continue
+
+                    elo_prob    = elo_prob_home if name == home else (1 - elo_prob_home)
+                    market_prob = get_consensus_moneyline_prob(bookmakers, name, normalize=normalize_nfl_team)
+                    if market_prob is None:
+                        continue
+
+                    blended_prob    = elo_prob * MODEL_WEIGHT + market_prob * MARKET_WEIGHT
+                    edge            = blended_prob - (1 / price)
+                    meets_threshold = edge >= NFL_EDGE_THRESHOLD
+                    stake           = kelly_stake(blended_prob, price, BANKROLL)
+
+                    keep("moneyline", edge, {
+                        "market": "moneyline", "tier": tier_from_edge(meets_threshold, edge),
+                        "meets_threshold": meets_threshold,
+                        "matchup": matchup, "start_time": start_time,
+                        "bet": NFL_TEAM_CN.get(name, name) + " 勝",
+                        "price": price, "book": book.get("title", "?"),
+                        "prob": blended_prob, "edge": edge, "kelly_stake": stake,
+                        "missing": missing_str,
+                    })
+
+        if not has_scoring_model:
+            continue
+        model_home_pts, model_away_pts = predict_nfl_score(home, away, scoring_model)
+        model_margin = model_home_pts - model_away_pts
+        model_total  = model_home_pts + model_away_pts
+        margin_std   = scoring_model["margin_std"]
+        total_std    = scoring_model["total_std"]
+
+        # ---- Spread ----
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "spreads":
+                    continue
+                for outcome in market.get("outcomes", []):
+                    name  = normalize_nfl_team(outcome.get("name", ""))
+                    line  = outcome.get("point")
+                    price = outcome.get("price")
+                    if line is None or not price or price <= 0 or name not in (home, away):
+                        continue
+
+                    consensus = get_consensus_line(bookmakers, name, exclude_book=book.get("title"), normalize=normalize_nfl_team)
+                    if consensus is None:
+                        consensus = line
+                    if line - consensus < 0:  # only a book posting a better-than-consensus line is worth pricing
+                        continue
+
+                    target  = model_margin if name == home else -model_margin
+                    blended = target * MODEL_WEIGHT + (-consensus) * MARKET_WEIGHT
+                    prob    = simulate_cover(blended, line, std=margin_std)
+                    edge    = prob - (1 / price)
+                    meets_threshold = edge >= NFL_EDGE_THRESHOLD
+                    stake   = kelly_stake(prob, price, BANKROLL)
+
+                    keep("spread", edge, {
+                        "market": "spread", "tier": tier_from_edge(meets_threshold, edge),
+                        "meets_threshold": meets_threshold,
+                        "matchup": matchup, "start_time": start_time,
+                        "bet": "%s %+.1f" % (NFL_TEAM_CN.get(name, name), line),
+                        "price": price, "book": book.get("title", "?"),
+                        "prob": prob, "edge": edge, "kelly_stake": stake,
+                        "missing": missing_str,
+                    })
+
+        # ---- Totals ----
+        for book in bookmakers:
+            for market in book.get("markets", []):
+                if market.get("key") != "totals":
+                    continue
+                book_consensus_total = get_consensus_total(bookmakers, exclude_book=book.get("title"))
+                for outcome in market.get("outcomes", []):
+                    side = outcome.get("name", "").lower()
+                    if side not in ("over", "under"):
+                        continue
+                    total_line = outcome.get("point")
+                    price      = outcome.get("price")
+                    if total_line is None or not price or price <= 0:
+                        continue
+
+                    t_consensus = book_consensus_total if book_consensus_total is not None else total_line
+                    total_advantage = (t_consensus - total_line) if side == "over" else (total_line - t_consensus)
+                    if total_advantage < 0:
+                        continue
+
+                    blended_total = model_total * MODEL_WEIGHT + t_consensus * MARKET_WEIGHT
+                    prob_over = simulate_cover(blended_total - total_line, 0, std=total_std)
+                    prob = prob_over if side == "over" else (1 - prob_over)
+                    edge = prob - (1 / price)
+                    meets_threshold = edge >= NFL_EDGE_THRESHOLD
+                    stake = kelly_stake(prob, price, BANKROLL)
+                    side_cn = "大分 Over" if side == "over" else "小分 Under"
+
+                    keep("totals", edge, {
+                        "market": "totals", "tier": tier_from_edge(meets_threshold, edge),
+                        "meets_threshold": meets_threshold,
+                        "matchup": matchup, "start_time": start_time,
+                        "bet": "%s %.1f" % (side_cn, total_line),
+                        "price": price, "book": book.get("title", "?"),
+                        "prob": prob, "edge": edge, "kelly_stake": stake,
+                        "missing": missing_str,
+                    })
+
+    out = []
+    for p in picks.values():
+        p = dict(p)
+        p["prob"] = round(p["prob"] * 100, 1)
+        p["edge"] = round(p["edge"] * 100, 1)
+        out.append(p)
+    return out
+
+
+NFL_MARKET_LABEL = {"moneyline": "獨贏", "spread": "讓分", "totals": "大小分"}
+
+
+def format_nfl_section(nfl_picks):
+    """Discord text block for today's NFL picks, mirroring
+    format_nhl_section()'s style exactly -- same experimental/
+    unvalidated disclaimer, same reasoning."""
+    if not nfl_picks:
+        return ""
+    lines = ["\n🏈 **NFL 美式足球分析**（新功能，Elo/得分模型+市場勝率混合，目前尚無歷史命中率可參考，僅供觀察）\n"]
+    for p in sorted(nfl_picks, key=lambda x: x["edge"], reverse=True):
+        tag = "🎯推薦" if p["meets_threshold"] else "👀觀察中"
+        label = NFL_MARKET_LABEL.get(p["market"], p["market"])
+        lines.append("> [%s %s/%s] %s | 投注 %s @ %.2f (%s) | 勝率 %.1f%% | Edge %+.1f%% | %s" % (
+            p["tier"], label, tag, p["matchup"], p["bet"], p["price"], p["book"], p["prob"], p["edge"],
+            p.get("missing", "陣容完整"),
+        ))
+    return "\n".join(lines) + "\n"
+
+
 def export_site_data(now_tw, data_source, is_official_run, daily_picks,
                       total_rec, wins, win_rate, profit, summer_league, history,
                       schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None,
-                      parlay_note=None, nhl_picks=None):
+                      parlay_note=None, nhl_picks=None, nfl_picks=None):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     daily_totals = daily_totals or {}
     days = []
@@ -3125,6 +3628,11 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks,
             "experimental": True,
             "picks": nhl_picks or [],
         },
+        # Same brand-new/experimental treatment as nhl above.
+        "nfl": {
+            "experimental": True,
+            "picks": nfl_picks or [],
+        },
     }
 
     try:
@@ -3210,8 +3718,22 @@ def run():
         log.error("NHL pipeline failed, skipping NHL for this run: %s", e)
         nhl_picks = []
 
-    if not games and not summer_league.get("available") and not nhl_picks:
-        log.info("No regular-season games, no Summer League, and no NHL data; nothing to report")
+    # Same isolated, best-effort treatment as NHL above, for the same
+    # reasons -- an NFL-specific failure (odds API coverage, ESPN outage)
+    # never takes down the NBA pipeline.
+    try:
+        nfl_odds      = fetch_nfl_odds()
+        nfl_games     = fetch_nfl_season_games()
+        nfl_elo       = build_nfl_elo_ratings(nfl_games)
+        nfl_scoring   = build_nfl_scoring_model(nfl_games)
+        nfl_injuries  = fetch_nfl_injuries()
+        nfl_picks     = analyze_nfl(nfl_odds, nfl_elo, nfl_scoring, today_s, nfl_injuries=nfl_injuries)
+    except Exception as e:
+        log.error("NFL pipeline failed, skipping NFL for this run: %s", e)
+        nfl_picks = []
+
+    if not games and not summer_league.get("available") and not nhl_picks and not nfl_picks:
+        log.info("No regular-season games, no Summer League, no NHL data, and no NFL data; nothing to report")
         return
 
     daily_picks  = {}
@@ -3635,6 +4157,7 @@ def run():
     output += perf_msg
     output += format_summer_league_section(summer_league, now_utc)
     output += format_nhl_section(nhl_picks)
+    output += format_nfl_section(nfl_picks)
 
     if is_official_run:
         save_history(history)
@@ -3652,6 +4175,7 @@ def run():
         daily_totals=daily_totals,
         elo_rankings=build_elo_rankings(build_elo_ratings(season_games)),
         nhl_picks=nhl_picks,
+        nfl_picks=nfl_picks,
     )
 
     log.info("Sending to Discord, length: %d", len(output))
