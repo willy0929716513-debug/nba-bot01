@@ -4,4 +4,4 @@ Bot workflow (see .github/workflows/nba_odds_bot.yml's `push:` trigger),
 since that scheduler's GitHub integration has Contents:write but not
 Actions:write, so it can't call the workflow_dispatch API directly.
 
-last triggered: 2026-11-18T14:14:57Z
+last triggered: 2026-11-19T07:30:00Z
