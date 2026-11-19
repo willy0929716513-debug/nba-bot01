@@ -4332,6 +4332,27 @@ def run():
     # per-game filter/lookup below keys off of.
     target_date  = compute_target_date(games, today_s)
     history      = load_history()
+
+    # One-time manual backfill, gated behind a dedicated env var set only
+    # for this one triggered run (never by any test harness, never by a
+    # normal scheduled/push run): this real NHL puck-line value bet (棕熊
+    # +1.5 @ 紅翼, 2026-11-19) was made before NHL_EDGE_THRESHOLD was
+    # lowered to 0.07 and analyze_nhl() started writing history (PR #94),
+    # so it was never recorded. Seeding it in now, as "pending", so it
+    # settles for real against the game's actual final score below
+    # instead of being lost -- same shape analyze_nhl() itself would have
+    # written. This block (and the env var in the workflow file) are
+    # removed again once confirmed written.
+    if is_official_run and os.getenv("NHL_HISTORY_BACKFILL_2026_11_19", "").strip() == "1":
+        _NHL_SEED_ID = "Boston Bruins@Detroit Red Wings_2026-11-19_puckline"
+        if _NHL_SEED_ID not in history:
+            history[_NHL_SEED_ID] = {
+                "date": "2026-11-19", "league": "nhl", "market": "nhl_puckline",
+                "matchup": "棕熊 @ 紅翼", "bet": "棕熊 +1.5", "book": "MyBookie.ag",
+                "price": 1.37, "prob": 0.809, "edge": 0.079, "kelly_stake": 58.7,
+                "result": "pending",
+            }
+
     grade_pending_history(history, season_games)
     summer_league = analyze_summer_league(now_utc=now_utc)
     record_summer_history(history, summer_league, is_official_run)
