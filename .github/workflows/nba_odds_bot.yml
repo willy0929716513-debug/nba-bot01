@@ -54,11 +54,6 @@ jobs:
           BALLDONTLIE_KEY: ${{ secrets.BALLDONTLIE_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           FORCE_OFFICIAL_RUN: ${{ github.event_name == 'push' || inputs.official_run == true }}
-          # One-time backfill toggle for the real 棕熊 +1.5 @ 紅翼 NHL puck
-          # line pick made before NHL history-tracking shipped -- see
-          # run()'s own comment. Remove this line together with that
-          # backfill block once confirmed written.
-          NHL_HISTORY_BACKFILL_2026_11_19: "1"
         run: python nba_bot.py
 
       - name: Publish site data
