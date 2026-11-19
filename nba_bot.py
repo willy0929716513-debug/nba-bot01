@@ -301,6 +301,8 @@ NHL_TEAM_CN = {
     "Washington Capitals": "首都人", "Winnipeg Jets": "噴射機",
 }
 
+NHL_TEAM_CN_REVERSE = {zh: en for en, zh in NHL_TEAM_CN.items()}
+
 # ESPN's team abbreviation, lowercased -- same CDN URL pattern the NBA
 # team-logo system already uses (a.espncdn.com/i/teamlogos/<league>/500/
 # <code>.png), just under "nhl" instead of "nba".
@@ -1527,6 +1529,98 @@ def grade_pending_nfl_history(history, games):
 
     if graded:
         log.info("Auto-graded %d pending NFL history entries against final scores", graded)
+    return graded
+
+
+def grade_pending_nhl_history(history, games):
+    """Same auto-grading approach as grade_pending_nfl_history(), for
+    NHL's three history-tagged markets ("nhl_moneyline"/"nhl_puckline"/
+    "nhl_total", written by analyze_nhl()). Uses NHL_TEAM_CN_REVERSE and
+    find_final_score_flat() against fetch_nhl_season_games()'s flat
+    {home, away, hs, vs, date} games, same as the NFL side. An exact-tie
+    final score (possible in puck line/total math even though NHL games
+    themselves never actually end tied) settles as a push rather than
+    forced into a win or loss."""
+    graded = 0
+    for hist_id, record in history.items():
+        if record.get("league") != "nhl":
+            continue
+        if record.get("result") != "pending":
+            continue
+
+        market = record.get("market", "")
+        suffix = {"nhl_total": "_total", "nhl_puckline": "_puckline", "nhl_moneyline": "_moneyline"}.get(market)
+        if suffix is None:
+            continue
+        base_id = hist_id[:-len(suffix)] if hist_id.endswith(suffix) else hist_id
+
+        try:
+            teams_part, date_part = base_id.rsplit("_", 1)
+            away_en, home_en = teams_part.split("@", 1)
+        except ValueError:
+            continue
+
+        score = find_final_score_flat(games, home_en, away_en, date_part)
+        if score is None:
+            continue
+
+        if market == "nhl_total":
+            m = re.match(r"^(大分 Over|小分 Under)\s+([+-]?\d+(?:\.\d+)?)$", record.get("bet", ""))
+            if not m:
+                continue
+            side_label, line_str = m.group(1), m.group(2)
+            line = float(line_str)
+            actual_total = score["home_score"] + score["away_score"]
+            diff = actual_total - line
+            if diff == 0:
+                record["result"] = "push"
+            elif (side_label == "大分 Over") == (diff > 0):
+                record["result"] = "win"
+            else:
+                record["result"] = "loss"
+            record["actual_total"] = actual_total
+
+        elif market == "nhl_puckline":
+            m = re.match(r"^(.+?)\s+([+-]?\d+(?:\.\d+)?)$", record.get("bet", ""))
+            if not m:
+                continue
+            bet_team_cn, line_str = m.group(1), m.group(2)
+            bet_team_en = NHL_TEAM_CN_REVERSE.get(bet_team_cn)
+            if bet_team_en not in (home_en, away_en):
+                continue
+            line = float(line_str)
+            margin_for_bet = (
+                (score["home_score"] - score["away_score"]) if bet_team_en == home_en
+                else (score["away_score"] - score["home_score"])
+            )
+            cover_margin = margin_for_bet + line
+            if cover_margin > 0:
+                record["result"] = "win"
+            elif cover_margin < 0:
+                record["result"] = "loss"
+            else:
+                record["result"] = "push"
+            record["actual_margin"] = score["home_score"] - score["away_score"]
+
+        else:  # nhl_moneyline
+            bet_team_cn = record.get("bet", "").rsplit(" ", 1)[0]
+            bet_team_en = NHL_TEAM_CN_REVERSE.get(bet_team_cn)
+            if bet_team_en not in (home_en, away_en):
+                continue
+            if score["home_score"] == score["away_score"]:
+                record["result"] = "push"
+            else:
+                winner = home_en if score["home_score"] > score["away_score"] else away_en
+                record["result"] = "win" if bet_team_en == winner else "loss"
+
+        record["final_score"] = "%s %d - %d %s" % (
+            NHL_TEAM_CN.get(away_en, away_en), score["away_score"],
+            score["home_score"], NHL_TEAM_CN.get(home_en, home_en),
+        )
+        graded += 1
+
+    if graded:
+        log.info("Auto-graded %d pending NHL history entries against final scores", graded)
     return graded
 
 
@@ -3238,10 +3332,11 @@ def tier_from_edge(meets_threshold, edge):
     return "⭐ 穩定"
 
 
-NHL_EDGE_THRESHOLD = 0.08  # a relative edge % (model vs. devigged market), not a scoring-scale number -- same bar as the NBA side, since this one doesn't depend on sport-specific units the way std does; no NHL-specific settled history yet to justify a different one
+NHL_EDGE_THRESHOLD = 0.07  # lowered from 0.08 at the user's request once NHL started writing real settled history (see analyze_nhl()) -- a relative edge % (model vs. devigged market), not a scoring-scale number
 
 
-def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=None):
+def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=None,
+                 history=None, is_official_run=False):
     """NHL picks for the next real upcoming slate across all three markets:
     moneyline (Elo blended with devigged market win probability), puck
     line, and totals (both of the latter using build_nhl_scoring_model()'s
@@ -3267,16 +3362,20 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
     does NOT feed into any of this function's own edge/probability math;
     see fetch_nhl_injuries()'s docstring for why.
 
-    This is a BRAND NEW pipeline with ZERO settled history of its own.
-    Unlike the NBA side (years of real calibration data behind its
-    thresholds and weights), there's no way yet to confirm any of this
-    actually produces a real edge for hockey. Every pick/tier/edge number
-    here is real (not fabricated), computed the same honest way as
-    everything else in this file -- but genuinely unvalidated, which is
-    why run() does not write these to any history/Gist tracking yet, and
-    why the export marks this section accordingly.
+    Like analyze_nfl(), this now writes qualifying picks into the shared
+    history dict (tagged "league": "nhl", "market": one of "nhl_moneyline"/
+    "nhl_puckline"/"nhl_total") when is_official_run -- at the user's
+    request, once NHL_EDGE_THRESHOLD was lowered to 0.07, to start
+    tracking real settled performance the same way NBA/NFL already do.
+    grade_pending_nhl_history() (called from run()) settles these
+    against real final scores. Every pick/tier/edge number here is still
+    computed the same honest way as everything else in this file -- but
+    with a brand new, thin settled sample, so calc_performance()'s own
+    min-sample handling is what keeps an early, noisy NHL win rate from
+    being presented with false confidence.
     """
     picks = {}
+    history = history if history is not None else {}
     nhl_injuries = nhl_injuries or {}
     has_scoring_model = scoring_model.get("league_avg") is not None
     target_date = compute_target_date(odds_games, today_s)
@@ -3344,6 +3443,19 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
                         "missing": missing_str,
                     })
 
+                    if meets_threshold and is_official_run:
+                        hist_id = game_id + "_moneyline"
+                        existing_h = history.get(hist_id)
+                        if existing_h is None or edge > existing_h.get("edge", 0):
+                            history[hist_id] = {
+                                "date": g_date, "league": "nhl", "market": "nhl_moneyline",
+                                "matchup": matchup, "bet": NHL_TEAM_CN.get(name, name) + " 勝",
+                                "book": book.get("title", "?"), "price": price,
+                                "prob": round(blended_prob, 4), "edge": round(edge, 4),
+                                "kelly_stake": stake,
+                                "result": existing_h.get("result", "pending") if existing_h else "pending",
+                            }
+
         if not has_scoring_model:
             continue
         model_home_goals, model_away_goals = predict_nhl_score(home, away, scoring_model)
@@ -3387,6 +3499,19 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
                         "missing": missing_str,
                     })
 
+                    if meets_threshold and is_official_run:
+                        hist_id = game_id + "_puckline"
+                        existing_h = history.get(hist_id)
+                        if existing_h is None or edge > existing_h.get("edge", 0):
+                            history[hist_id] = {
+                                "date": g_date, "league": "nhl", "market": "nhl_puckline",
+                                "matchup": matchup, "bet": "%s %+.1f" % (NHL_TEAM_CN.get(name, name), line),
+                                "book": book.get("title", "?"), "price": price,
+                                "prob": round(prob, 4), "edge": round(edge, 4),
+                                "kelly_stake": stake, "predicted_margin": round(model_margin, 2),
+                                "result": existing_h.get("result", "pending") if existing_h else "pending",
+                            }
+
         # ---- Totals ----
         for book in bookmakers:
             for market in book.get("markets", []):
@@ -3424,6 +3549,19 @@ def analyze_nhl(odds_games, elo_ratings, scoring_model, today_s, nhl_injuries=No
                         "prob": prob, "edge": edge, "kelly_stake": stake,
                         "missing": missing_str,
                     })
+
+                    if meets_threshold and is_official_run:
+                        hist_id = game_id + "_total"
+                        existing_h = history.get(hist_id)
+                        if existing_h is None or edge > existing_h.get("edge", 0):
+                            history[hist_id] = {
+                                "date": g_date, "league": "nhl", "market": "nhl_total",
+                                "matchup": matchup, "bet": "%s %.1f" % (side_cn, total_line),
+                                "book": book.get("title", "?"), "price": price,
+                                "prob": round(prob, 4), "edge": round(edge, 4),
+                                "kelly_stake": stake, "predicted_total": round(model_total, 2),
+                                "result": existing_h.get("result", "pending") if existing_h else "pending",
+                            }
 
     out = []
     for p in picks.values():
@@ -3844,6 +3982,58 @@ def find_final_score_flat(games, home_en, away_en, taiwan_date, window_days=2):
     return None
 
 
+def build_nhl_schedule(odds_games, nhl_games, today_s, now_utc):
+    """Same shape/purpose as build_nfl_schedule(): every game on the next
+    upcoming slate (compute_target_date()), with final scores filled in
+    via find_final_score_flat() once a game's actually finished --
+    including a live/in-progress game, shown as "進行中/比分未更新" until
+    fetch_nhl_season_games() reports it complete. Added alongside NHL's
+    history tracking at the user's request, for parity with NBA/NFL's
+    own 賽程 tabs."""
+    target_date = compute_target_date(odds_games, today_s)
+    out  = []
+    seen = set()
+    for g in odds_games:
+        try:
+            c_time_utc = datetime.strptime(g["commence_time"], "%Y-%m-%dT%H:%M:%SZ")
+        except (KeyError, ValueError):
+            continue
+        c_time_tw = c_time_utc + timedelta(hours=8)
+        g_date    = c_time_tw.strftime("%Y-%m-%d")
+        if g_date != target_date:
+            continue
+        home_en = normalize_nhl_team(g.get("home_team", ""))
+        away_en = normalize_nhl_team(g.get("away_team", ""))
+        if home_en not in NHL_TEAM_CN or away_en not in NHL_TEAM_CN:
+            continue
+        game_id = "%s@%s_%s" % (away_en, home_en, g_date)
+        if game_id in seen:
+            continue
+        seen.add(game_id)
+
+        score = find_final_score_flat(nhl_games, home_en, away_en, g_date)
+        if score:
+            status = "已完賽"
+            home_score, away_score = score["home_score"], score["away_score"]
+        elif c_time_utc < now_utc:
+            status = "進行中/比分未更新"
+            home_score = away_score = None
+        else:
+            status = "未開始"
+            home_score = away_score = None
+
+        out.append({
+            "home":       NHL_TEAM_CN.get(home_en, home_en),
+            "away":       NHL_TEAM_CN.get(away_en, away_en),
+            "start_time": c_time_tw.strftime("%m/%d %H:%M"),
+            "status":     status,
+            "home_score": home_score,
+            "away_score": away_score,
+        })
+    out.sort(key=lambda x: x["start_time"])
+    return {"date": target_date, "games": out}
+
+
 def build_nfl_schedule(odds_games, nfl_games, today_s, now_utc):
     """Same shape/purpose as build_schedule() (NBA): every game on the
     next upcoming slate (compute_target_date() -- already sport-agnostic,
@@ -3896,7 +4086,7 @@ def build_nfl_schedule(odds_games, nfl_games, today_s, now_utc):
 def export_site_data(now_tw, data_source, is_official_run, daily_picks,
                       total_rec, wins, win_rate, profit, summer_league, history,
                       schedule, parlay, power_rankings, daily_totals=None, elo_rankings=None,
-                      parlay_note=None, nhl_picks=None, nfl_picks=None,
+                      parlay_note=None, nhl_picks=None, nhl_schedule=None, nfl_picks=None,
                       nfl_power_rankings=None, nfl_schedule=None):
     """Write a JSON snapshot for the static web dashboard (docs/index.html)."""
     daily_totals = daily_totals or {}
@@ -4015,27 +4205,46 @@ def export_site_data(now_tw, data_source, is_official_run, daily_picks,
             "total_since_fix": total_since_fix_block,
         },
         "summer_league":      summer_league,
-        # Excludes "nfl"-tagged entries -- those get their own history
-        # list under "nfl" below, kept out of the NBA 歷史紀錄 tab's list
-        # the same way NBA and NHL/NFL are two independent dashboard
-        # views on the frontend (see docs/index.html's sport switch).
-        "history":            build_history_list({k: v for k, v in history.items() if v.get("league") != "nfl"}),
+        # Excludes "nhl"/"nfl"-tagged entries -- those get their own
+        # history list under "nhl"/"nfl" below, kept out of the NBA
+        # 歷史紀錄 tab's list the same way NBA and NHL/NFL are independent
+        # dashboard views on the frontend (see docs/index.html's sport switch).
+        "history":            build_history_list({k: v for k, v in history.items() if v.get("league") not in ("nhl", "nfl")}),
         "performance_trend":  build_performance_trend(history),
         "schedule":           schedule,
         "parlay":             parlay,
         "parlay_note":        parlay_note,
         "power_rankings":     power_rankings,
         "elo_rankings":       elo_rankings or [],
-        # Brand new, separate sport -- see analyze_nhl()'s docstring for why
-        # this is marked experimental (zero settled history yet to validate
-        # Elo+market blended this way actually works for hockey). Not
-        # wired into any history/Gist tracking yet, unlike the NBA side.
+        # Brand new, separate sport -- see analyze_nhl()'s docstring. NHL
+        # DOES write to (and settle against) the shared history dict now
+        # (since NHL_EDGE_THRESHOLD was lowered to 0.07, at the user's
+        # request), so its own performance/history view is real, just
+        # inevitably thin and noisy this early -- same treatment as NFL
+        # below. calc_performance's own min_sample handling (same
+        # MIN_HISTORY_SAMPLE used everywhere else) is what keeps a tiny
+        # NHL win rate from reading as a confident number before there's
+        # really enough settled bets to say anything.
         "nhl": {
-            "experimental": True,
-            "picks": nhl_picks or [],
+            "experimental":   True,
+            "picks":          nhl_picks or [],
+            "schedule":       nhl_schedule or {"date": "", "games": []},
+            "history":        build_history_list({k: v for k, v in history.items() if v.get("league") == "nhl"}),
+            "performance": {
+                m: {
+                    "total_recommendations": t, "wins": w,
+                    "win_rate": round(wr, 1), "profit": round(pf, 1),
+                    "min_sample": MIN_HISTORY_SAMPLE,
+                }
+                for m, (t, w, wr, pf) in (
+                    ("moneyline", calc_performance(history, league="nhl", market="nhl_moneyline")),
+                    ("puckline",  calc_performance(history, league="nhl", market="nhl_puckline")),
+                    ("total",     calc_performance(history, league="nhl", market="nhl_total")),
+                )
+            },
         },
-        # Same brand-new/experimental treatment as nhl above -- except
-        # NFL DOES write to (and settle against) the shared history dict
+        # Same brand-new/experimental treatment as nhl above -- NFL also
+        # DOES write to (and settle against) the shared history dict
         # (see analyze_nfl()), so its own performance/history view is
         # real, just inevitably thin and noisy this early. calc_performance's
         # own min_sample handling (same MIN_HISTORY_SAMPLE used everywhere
@@ -4138,13 +4347,19 @@ def run():
     try:
         nhl_odds      = fetch_nhl_odds()
         nhl_games     = fetch_nhl_season_games()
+        grade_pending_nhl_history(history, nhl_games)
         nhl_elo       = build_nhl_elo_ratings(nhl_games)
         nhl_scoring   = build_nhl_scoring_model(nhl_games)
         nhl_injuries  = fetch_nhl_injuries()
-        nhl_picks     = analyze_nhl(nhl_odds, nhl_elo, nhl_scoring, today_s, nhl_injuries=nhl_injuries)
+        nhl_picks     = analyze_nhl(
+            nhl_odds, nhl_elo, nhl_scoring, today_s, nhl_injuries=nhl_injuries,
+            history=history, is_official_run=is_official_run,
+        )
+        nhl_schedule  = build_nhl_schedule(nhl_odds, nhl_games, today_s, now_utc)
     except Exception as e:
         log.error("NHL pipeline failed, skipping NHL for this run: %s", e)
         nhl_picks = []
+        nhl_schedule = {"date": today_s, "games": []}
 
     # Same isolated, best-effort treatment as NHL above, for the same
     # reasons -- an NFL-specific failure (odds API coverage, ESPN outage)
@@ -4613,6 +4828,7 @@ def run():
         daily_totals=daily_totals,
         elo_rankings=build_elo_rankings(build_elo_ratings(season_games)),
         nhl_picks=nhl_picks,
+        nhl_schedule=nhl_schedule,
         nfl_picks=nfl_picks,
         nfl_power_rankings=nfl_power_rankings,
         nfl_schedule=nfl_schedule,

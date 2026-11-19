@@ -817,17 +817,46 @@
     <div id="summer-league-body"></div>
   </section>
 
-  <section id="nhl-section" class="reveal nhl-only">
+  <div class="sticky-stack nhl-only" id="nhl-tabs-wrap">
+    <nav class="seg-wrap fade-in" aria-label="NHL 區塊導覽">
+      <div class="seg" id="nhl-seg" role="tablist">
+        <div class="seg-indicator" id="nhl-seg-indicator"></div>
+        <a class="seg-btn" href="#nhl-picks-section" data-target="nhl-picks-section" id="ic-tab-nhl-picks"><span></span>推薦</a>
+        <a class="seg-btn" href="#nhl-schedule-section" data-target="nhl-schedule-section" id="ic-tab-nhl-schedule"><span></span>賽程</a>
+        <a class="seg-btn" href="#nhl-history-section" data-target="nhl-history-section" id="ic-tab-nhl-history"><span></span>歷史紀錄</a>
+      </div>
+    </nav>
+  </div>
+
+  <section id="nhl-picks-section" class="reveal nhl-only">
     <div class="section-head">
-      <span class="ic" id="icon-sec-nhl"></span>
-      <div class="head-text"><h2>NHL 冰球分析</h2><p>Elo + 市場勝率模型，新功能，尚無歷史命中率可參考</p></div>
-      <span class="chev" id="icon-chev-nhl"></span>
+      <span class="ic" id="icon-sec-nhl-picks"></span>
+      <div class="head-text"><h2>NHL 今日推薦</h2><p>Elo/得分模型 + 市場勝率混合，獨贏/讓分/大小分</p></div>
+      <span class="chev" id="icon-chev-nhl-picks"></span>
     </div>
     <div class="note-box" style="padding-bottom:14px;">
       <span id="icon-nhl-info"></span>
-      這是全新功能，目前沒有任何已結算的歷史資料可以驗證準不準，請當作觀察用，先不要當作正式推薦依據。
+      這是全新功能，歷史命中率樣本數還很小，請當作觀察用，先不要當作正式推薦依據。
     </div>
-    <div id="nhl-body"></div>
+    <div id="nhl-picks-body"></div>
+  </section>
+
+  <section id="nhl-schedule-section" class="reveal nhl-only">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-nhl-schedule"></span>
+      <div class="head-text"><h2>NHL 最新賽程</h2><p>下一輪完整賽程，比分完場後自動結算</p></div>
+      <span class="chev" id="icon-chev-nhl-schedule"></span>
+    </div>
+    <div id="nhl-schedule-body"></div>
+  </section>
+
+  <section id="nhl-history-section" class="reveal nhl-only">
+    <div class="section-head">
+      <span class="ic" id="icon-sec-nhl-hist"></span>
+      <div class="head-text"><h2>NHL 歷史紀錄</h2><p>正式執行後自動累積</p></div>
+      <span class="chev" id="icon-chev-nhl-hist"></span>
+    </div>
+    <div id="nhl-history-body"></div>
   </section>
 
   <div class="sticky-stack nfl-only" id="nfl-tabs-wrap">
@@ -1009,8 +1038,10 @@
   mount("icon-sec-sun", "sun");
   mount("icon-sec-hist", "history");
   mount("icon-sec-top", "trophy");
-  mount("icon-sec-nhl", "activity");
+  mount("icon-sec-nhl-picks", "activity");
   mount("icon-nhl-info", "info");
+  mount("icon-sec-nhl-schedule", "clock");
+  mount("icon-sec-nhl-hist", "history");
   mount("icon-sec-nfl-picks", "activity");
   mount("icon-nfl-info", "info");
   mount("icon-sec-nfl-power", "barchart");
@@ -1021,7 +1052,9 @@
   mount("icon-chev-schedule", "chevronright");
   mount("icon-chev-sun", "chevronright");
   mount("icon-chev-hist", "chevronright");
-  mount("icon-chev-nhl", "chevronright");
+  mount("icon-chev-nhl-picks", "chevronright");
+  mount("icon-chev-nhl-schedule", "chevronright");
+  mount("icon-chev-nhl-hist", "chevronright");
   mount("icon-chev-nfl-picks", "chevronright");
   mount("icon-chev-nfl-power", "chevronright");
   mount("icon-chev-nfl-schedule", "chevronright");
@@ -1030,6 +1063,8 @@
   document.querySelector("#ic-tab-rank span").innerHTML = svg("barchart");
   document.querySelector("#ic-tab-sun span").innerHTML = svg("sun");
   document.querySelector("#ic-tab-hist span").innerHTML = svg("history");
+  document.querySelector("#ic-tab-nhl-picks span").innerHTML = svg("calendar");
+  document.querySelector("#ic-tab-nhl-history span").innerHTML = svg("history");
   document.querySelector("#ic-tab-nfl-picks span").innerHTML = svg("calendar");
   document.querySelector("#ic-tab-nfl-power span").innerHTML = svg("barchart");
   document.querySelector("#ic-tab-nfl-history span").innerHTML = svg("history");
@@ -1104,6 +1139,7 @@
     return { moveIndicatorTo: moveIndicatorTo };
   }
   setupSegNav("seg", "seg-indicator");
+  setupSegNav("nhl-seg", "nhl-seg-indicator");
   setupSegNav("nfl-seg", "nfl-seg-indicator");
 
   /* ============ scroll reveal ============ */
@@ -2179,6 +2215,8 @@
     renderSummerLeague(data);
     renderHistory(data);
     renderNhl(data);
+    renderNhlSchedule(data);
+    renderNhlHistory(data);
     renderNfl(data);
     renderNflPowerRankings(data);
     renderNflSchedule(data);
@@ -2252,6 +2290,18 @@
     indicator.style.width = active.offsetWidth + "px";
   }
 
+  // Same reasoning as refreshNflSegIndicator() below, for NHL's own tab
+  // bar (#nhl-seg) now that NHL has one too (推薦/賽程/歷史紀錄).
+  function refreshNhlSegIndicator() {
+    var seg = document.getElementById("nhl-seg");
+    var indicator = document.getElementById("nhl-seg-indicator");
+    if (!seg || !indicator) return;
+    var active = seg.querySelector(".seg-btn.active") || seg.querySelector(".seg-btn");
+    if (!active) return;
+    indicator.style.transform = "translateX(" + active.offsetLeft + "px)";
+    indicator.style.width = active.offsetWidth + "px";
+  }
+
   // The NFL sub-nav (#nfl-seg) computes its own indicator position on
   // page load, while its section is still display:none -- offsetLeft/
   // offsetWidth are meaningless then. Recompute once NFL's tab bar
@@ -2294,7 +2344,7 @@
     });
     moveSportIndicator();
 
-    if (currentSport === "nhl") { renderNhlHero(data); renderNhlStats(data); }
+    if (currentSport === "nhl") { renderNhlHero(data); renderNhlStats(data); refreshNhlSegIndicator(); }
     else if (currentSport === "nfl") { renderNflHero(data); renderNflStats(data); refreshNflSegIndicator(); }
     else { renderHero(data); renderStats(data); }
   }
@@ -2316,21 +2366,33 @@
   })();
 
   function renderNhlStats(data) {
-    var picks = (data.nhl && data.nhl.picks) || [];
-    var qualifying = picks.filter(function (p) { return p.meets_threshold; });
-    var avgEdge = qualifying.length
-      ? qualifying.reduce(function (s, p) { return s + p.edge; }, 0) / qualifying.length
-      : 0;
+    var nhl = data.nhl || {};
+    var picks = nhl.picks || [];
+    var perf = nhl.performance || {};
+    var puckPerf = perf.puckline || {};
     var tiles = [
       { label: "今日/近期推薦場次", icon: "calendar", value: picks.length },
-      { label: "平均 Edge", icon: "activity", value: avgEdge.toFixed(1) + "%" },
-      { label: "歷史勝率（頂級）", icon: "trophy", value: "尚無資料" },
-      { label: "歷史損益", icon: "barchart", value: "新功能，累積中" },
+      {
+        label: "平均 Edge", icon: "activity",
+        value: (function () {
+          var qualifying = picks.filter(function (p) { return p.meets_threshold; });
+          var avg = qualifying.length
+            ? qualifying.reduce(function (s, p) { return s + p.edge; }, 0) / qualifying.length
+            : 0;
+          return avg.toFixed(1) + "%";
+        })(),
+      },
+      winRateTile("歷史勝率（讓分）", "trophy", puckPerf),
+      {
+        label: "歷史損益（讓分）", icon: "barchart",
+        value: (puckPerf.profit > 0 ? "+" : "") + (puckPerf.profit != null ? puckPerf.profit.toFixed(1) : "0.0"),
+        cls: puckPerf.profit > 0 ? "good" : (puckPerf.profit < 0 ? "bad" : ""),
+      },
     ];
     document.getElementById("stat-grid").innerHTML = tiles.map(function (t) {
       return '<div class="card stat-tile hoverable">' +
         '<div class="label">' + svg(t.icon) + esc(t.label) + '</div>' +
-        '<div class="value">' + esc(String(t.value)) + "</div></div>";
+        '<div class="value ' + (t.cls || "") + '">' + esc(String(t.value)) + "</div></div>";
     }).join("");
   }
 
@@ -2375,7 +2437,8 @@
   var NHL_MARKET_LABEL = { moneyline: "獨贏", puckline: "讓分", totals: "大小分" };
 
   function renderNhl(data) {
-    var body = document.getElementById("nhl-body");
+    var body = document.getElementById("nhl-picks-body");
+    if (!body) return;
     var picks = (data.nhl && data.nhl.picks) || [];
     if (!picks.length) {
       body.innerHTML = emptyState("activity", "今天沒有 NHL 賽事資料",
@@ -2428,6 +2491,70 @@
     html += '</div>';
     body.innerHTML = html;
     animateRings(body);
+  }
+
+  function renderNhlSchedule(data) {
+    var body = document.getElementById("nhl-schedule-body");
+    if (!body) return;
+    var sched = (data.nhl && data.nhl.schedule) || {};
+    var games = sched.games || [];
+    if (!games.length) {
+      body.innerHTML = emptyState("clock", "暫無賽程資料", "資料源目前沒有即將開打的比賽資訊，稍後重新整理查看。", true);
+      return;
+    }
+    var html = '<div class="subhead">' + esc(sched.date || "") + ' 賽程</div>';
+    html += '<div class="card row-list hoverable">';
+    games.forEach(function (g) {
+      var hasScore = g.home_score != null && g.away_score != null;
+      var scoreLine = hasScore ? (esc(g.away) + ' ' + g.away_score + ' - ' + g.home_score + ' ' + esc(g.home)) : '';
+      html += '<div class="row">' +
+        '<div class="row-top">' +
+          '<span class="row-title matchup-line">' + nhlTeamLogo(g.away) + esc(g.away) + '<span class="matchup-vs">@</span>' + nhlTeamLogo(g.home) + esc(g.home) + '</span>' +
+          '<span class="row-time">' + esc(g.start_time) + '（台灣時間）</span>' +
+        '</div>' +
+        '<div class="row-sub">' +
+          '<span class="badge ' + (g.status === "已完賽" ? "badge-tier-strong" : "badge-status") + '">' + esc(g.status) + '</span>' +
+        '</div>' +
+        (scoreLine ? '<div class="row-sub">' + scoreLine + '</div>' : '') +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  function renderNhlHistory(data) {
+    var body = document.getElementById("nhl-history-body");
+    if (!body) return;
+    var history = (data.nhl && data.nhl.history) || [];
+    if (!history.length) {
+      body.innerHTML = emptyState("history", "目前沒有歷史紀錄",
+        "NHL 推薦達到信心門檻且為正式執行時才會被記錄下來，跑過幾次正式排程後這裡就會累積資料。");
+      return;
+    }
+    var html = '<div class="card row-list hoverable">';
+    history.forEach(function (h) {
+      var marketLabel = NHL_MARKET_LABEL[(h.market || "").replace("nhl_", "")] || h.market;
+      var titleHtml = h.matchup ? nhlMatchupWithLogos(h.matchup) : esc(h.bet);
+      html += '<div class="row">' +
+        '<div class="row-top">' +
+          '<span class="row-title matchup-line">' + titleHtml + '</span>' +
+          '<span class="row-time">' + esc(h.date) + '</span>' +
+        '</div>' +
+        '<div class="row-sub">' +
+          '<span class="badge ' + resultBadgeClass(h.result) + '" style="margin-right:6px;">' + esc(h.result) + '</span>' +
+          '<span class="badge badge-status" style="margin-right:6px;">' + esc(marketLabel) + '</span>' +
+          '投注 <b>' + esc(h.bet) + '</b> ｜ ' + esc(h.book) + ' ｜ 賠率 ' + Number(h.price).toFixed(2) +
+        '</div>' +
+        (h.final_score ? '<div class="row-sub">實際比分：' + esc(h.final_score) + '</div>' : '') +
+        '<div class="row-stats">' +
+          '<span class="stat">模型勝率 <b>' + Number(h.prob).toFixed(1) + '%</b></span>' +
+          '<span class="stat">Edge <b>+' + Number(h.edge).toFixed(1) + '%</b></span>' +
+          (h.kelly_stake != null ? '<span class="stat">Kelly <b>$' + Number(h.kelly_stake).toFixed(1) + '</b></span>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
   }
 
   function renderNflStats(data) {
