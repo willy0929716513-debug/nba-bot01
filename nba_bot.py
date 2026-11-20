@@ -5059,29 +5059,57 @@ def get_recommended_matchups_today(site_data_path=None):
     return out
 
 
-def check_live_alerts():
-    """One poll: find today's real recommendations, check ESPN's live
-    scoreboard for each, and push a notification the first time one tips
-    off or goes final. Safe to call every ~10 minutes all day -- on a day
-    with no qualifying recommendations, or outside game hours, this does
-    a couple of free HTTP calls and exits having sent nothing."""
-    if not NTFY_TOPIC:
-        log.info("NTFY_TOPIC not set -- live score push alerts are disabled, skipping poll entirely")
-        return
-    recommended = get_recommended_matchups_today()
-    if not recommended:
-        log.info("No meets_threshold recommendations for today -- nothing to watch")
-        return
+def _get_sport_recommended_matchups_today(site_data_key, team_cn_reverse, site_data_path=None):
+    """Same idea as get_recommended_matchups_today(), for NHL/NFL -- except
+    their export's picks list (data[site_data_key]["picks"]) has no "days"
+    wrapper to filter by date at all, since analyze_nhl()/analyze_nfl()
+    already pre-filter to exactly one target date (compute_target_date())
+    before this ever gets exported. Shared by
+    get_nhl_recommended_matchups_today()/get_nfl_recommended_matchups_today()
+    since the two are otherwise identical but for which reverse team-name
+    map to use."""
+    path = site_data_path or SITE_DATA_PATH
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return set()
 
-    scoreboard = safe_get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard")
+    out = set()
+    for p in data.get(site_data_key, {}).get("picks", []):
+        if not p.get("meets_threshold"):
+            continue
+        parts = str(p.get("matchup", "")).split(" @ ")
+        if len(parts) != 2:
+            continue
+        away_en = team_cn_reverse.get(parts[0])
+        home_en = team_cn_reverse.get(parts[1])
+        if away_en and home_en:
+            out.add(frozenset((away_en, home_en)))
+    return out
+
+
+def get_nhl_recommended_matchups_today(site_data_path=None):
+    return _get_sport_recommended_matchups_today("nhl", NHL_TEAM_CN_REVERSE, site_data_path)
+
+
+def get_nfl_recommended_matchups_today(site_data_path=None):
+    return _get_sport_recommended_matchups_today("nfl", NFL_TEAM_CN_REVERSE, site_data_path)
+
+
+def _check_live_alerts_for_sport(emoji, espn_url, team_cn, normalize_fn, recommended, state):
+    """One sport's worth of check_live_alerts()'s core loop -- fetch that
+    sport's ESPN scoreboard, push a start/final notification the first
+    time a recommended matchup tips off/goes final. Returns whether
+    `state` was mutated (so the caller only has to call
+    save_live_alert_state() once, across however many sports actually
+    had something to check, instead of once per sport)."""
+    scoreboard = safe_get(espn_url)
     events = (scoreboard or {}).get("events", [])
     if not events:
-        log.info("ESPN scoreboard returned no events this poll")
-        return
+        return False
 
-    state   = load_live_alert_state()
     changed = False
-
     for ev in events:
         comp = (ev.get("competitions") or [{}])[0]
         competitors = comp.get("competitors", [])
@@ -5089,20 +5117,20 @@ def check_live_alerts():
         away = next((c for c in competitors if c.get("homeAway") == "away"), None)
         if not home or not away:
             continue
-        home_en = normalize_team((home.get("team") or {}).get("displayName", ""))
-        away_en = normalize_team((away.get("team") or {}).get("displayName", ""))
+        home_en = normalize_fn((home.get("team") or {}).get("displayName", ""))
+        away_en = normalize_fn((away.get("team") or {}).get("displayName", ""))
         if frozenset((home_en, away_en)) not in recommended:
             continue
 
         event_id    = ev.get("id") or (away_en + "@" + home_en)
         status      = ((comp.get("status") or {}).get("type") or {})
         game_state  = status.get("state")  # "pre" / "in" / "post"
-        matchup_cn  = "%s @ %s" % (TEAM_CN.get(away_en, away_en), TEAM_CN.get(home_en, home_en))
+        matchup_cn  = "%s @ %s" % (team_cn.get(away_en, away_en), team_cn.get(home_en, home_en))
         prev        = state.get(event_id, {})
 
         if game_state == "in" and not prev.get("notified_start"):
             send_ntfy(
-                "🏀 開賽：%s" % matchup_cn,
+                "%s 開賽：%s" % (emoji, matchup_cn),
                 "這場比賽有模型推薦，現在開打了。",
             )
             prev["notified_start"] = True
@@ -5111,16 +5139,63 @@ def check_live_alerts():
 
         if game_state == "post" and not prev.get("notified_final"):
             score_line = "%s %s - %s %s" % (
-                TEAM_CN.get(away_en, away_en), away.get("score"),
-                home.get("score"), TEAM_CN.get(home_en, home_en),
+                team_cn.get(away_en, away_en), away.get("score"),
+                home.get("score"), team_cn.get(home_en, home_en),
             )
             send_ntfy(
-                "🏁 已完賽：%s" % matchup_cn,
+                "%s 已完賽：%s" % (emoji, matchup_cn),
                 "最終比分 %s" % score_line,
             )
             prev["notified_final"] = True
             state[event_id] = prev
             changed = True
+
+    return changed
+
+
+def check_live_alerts():
+    """One poll: find today's real recommendations across NBA/NHL/NFL,
+    check each sport's own ESPN live scoreboard, and push a notification
+    the first time a recommended matchup tips off or goes final. Safe to
+    call every ~10 minutes all day -- on a day with no qualifying
+    recommendations in any of the three sports, or outside game hours,
+    this does a couple of free HTTP calls (one per sport that actually
+    has a recommendation to watch) and exits having sent nothing.
+
+    NHL/NFL were added alongside NBA at the user's request -- previously
+    this only ever watched NBA games, so a real NHL/NFL recommendation's
+    tip-off/final never pushed a live-score alert the way NBA's always
+    has, even though the website's schedule tabs already showed live
+    status/scores for all three sports.
+    """
+    if not NTFY_TOPIC:
+        log.info("NTFY_TOPIC not set -- live score push alerts are disabled, skipping poll entirely")
+        return
+    recommended_nba = get_recommended_matchups_today()
+    recommended_nhl = get_nhl_recommended_matchups_today()
+    recommended_nfl = get_nfl_recommended_matchups_today()
+    if not recommended_nba and not recommended_nhl and not recommended_nfl:
+        log.info("No meets_threshold recommendations for today across NBA/NHL/NFL -- nothing to watch")
+        return
+
+    state   = load_live_alert_state()
+    changed = False
+
+    if recommended_nba:
+        changed |= _check_live_alerts_for_sport(
+            "🏀", "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+            TEAM_CN, normalize_team, recommended_nba, state,
+        )
+    if recommended_nhl:
+        changed |= _check_live_alerts_for_sport(
+            "🏒", "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard",
+            NHL_TEAM_CN, normalize_nhl_team, recommended_nhl, state,
+        )
+    if recommended_nfl:
+        changed |= _check_live_alerts_for_sport(
+            "🏈", "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+            NFL_TEAM_CN, normalize_nfl_team, recommended_nfl, state,
+        )
 
     if changed:
         save_live_alert_state(state)
